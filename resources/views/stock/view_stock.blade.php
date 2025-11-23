@@ -165,7 +165,7 @@
             <!-- Pagination -->
                 </div>
             </section>
-            <ul id="stock_pagination" class="flex gap-2 mt-4"></ul>
+<ul id="stock_pagination" class="flex justify-center gap-2 mt-4"></ul>
 
         </div>
 
