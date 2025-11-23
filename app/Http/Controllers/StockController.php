@@ -183,9 +183,9 @@ $stock->tailor_id = json_encode($request->tailor_id);
     $stock->mode               = $request->mode;
     $stock->save();
 
-    // StockColor::where('stock_id', $stock_id)->delete();
-    // StockSize::where('stock_id', $stock_id)->delete();
-    // ColorSize::where('stock_id', $stock_id)->delete();
+    StockColor::where('stock_id', $stock_id)->delete();
+    StockSize::where('stock_id', $stock_id)->delete();
+    ColorSize::where('stock_id', $stock_id)->delete();
 
 
     if (!empty($request->colors)) {
