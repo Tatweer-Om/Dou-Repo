@@ -113,19 +113,48 @@ $(document).ready(function() {
             $("#mobile_stock_cards").html(mobileCards);
 
             // --- Pagination ---
-            let pagination = "";
-            pagination += `<li class="${!res.prev_page_url ? "opacity-50 pointer-events-none" : "bg-gray-200 hover:bg-gray-300"}">
-                               <a href="${res.prev_page_url || '#'}">&laquo;</a>
-                           </li>`;
-            for (let i = 1; i <= res.last_page; i++) {
-                pagination += `<li class="${res.current_page==i ? "bg-[var(--primary-color)] text-white" : "bg-gray-200 hover:bg-gray-300"}">
-                                   <a href="/stock/list?page=${i}">${i}</a>
-                               </li>`;
-            }
-            pagination += `<li class="${!res.next_page_url ? "opacity-50 pointer-events-none" : "bg-gray-200 hover:bg-gray-300"}">
-                               <a href="${res.next_page_url || '#'}">&raquo;</a>
-                           </li>`;
-            $("#stock_pagination").html(pagination);
+          let pagination = "";
+
+// Previous Button
+pagination += `
+<li class="flex">
+    <a href="${res.prev_page_url || '#'}"
+       class="px-3 py-1 border rounded-lg mx-1 text-sm transition
+              ${!res.prev_page_url 
+                ? 'opacity-40 cursor-not-allowed bg-gray-200' 
+                : 'bg-white hover:bg-gray-100'}">
+        &laquo;
+    </a>
+</li>`;
+
+// Number Buttons
+for (let i = 1; i <= res.last_page; i++) {
+    pagination += `
+    <li>
+        <a href="/stock/list?page=${i}"
+           class="px-4 py-1 mx-1 text-sm font-medium border rounded-lg transition
+                  ${res.current_page == i 
+                    ? 'bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md' 
+                    : 'bg-white hover:bg-gray-100'}">
+            ${i}
+        </a>
+    </li>`;
+}
+
+// Next Button
+pagination += `
+<li class="flex">
+    <a href="${res.next_page_url || '#'}"
+       class="px-3 py-1 border rounded-lg mx-1 text-sm transition
+              ${!res.next_page_url 
+                ? 'opacity-40 cursor-not-allowed bg-gray-200' 
+                : 'bg-white hover:bg-gray-100'}">
+        &raquo;
+    </a>
+</li>`;
+
+$("#stock_pagination").html(pagination);
+
         });
     }
 

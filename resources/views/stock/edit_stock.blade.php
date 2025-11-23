@@ -205,39 +205,43 @@
 
 
           <div class="mt-5">
-          <div x-data="{ open: false, selected: @json($selectedTailors) }" class="relative">
-    <label class="text-sm font-medium mb-2 block">Tailors</label>
+            <div x-data="{ open: false, selected: [] }" class="relative">
+              <label class="text-sm font-medium mb-2 block">Tailors</label>
 
-    <!-- Dropdown button -->
-    <button @click="open = !open"
-        type="button"
-        class="w-full flex items-center justify-between border rounded-lg px-4 py-2 h-12 text-sm text-gray-700 bg-white">
-        <span x-show="selected.length === 0" class="text-gray-400">Select Tailors</span>
-        <div class="flex flex-wrap gap-2" x-show="selected.length > 0">
-            <template x-for="tailorId in selected" :key="tailorId">
-                <span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-semibold"
-                      x-text="tailors.find(t => t.id == tailorId)?.tailor_name"></span>
-            </template>
-        </div>
-        <span class="material-symbols-outlined text-gray-500 text-lg">expand_more</span>
-    </button>
+              <!-- Dropdown button -->
+              <button @click="open = !open"
+                type="button"
+                class="w-full flex items-center justify-between border rounded-lg px-4 py-2 h-12 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-primary/40 transition">
+                <span x-show="selected.length === 0" class="text-gray-400">Select Tailors</span>
+                <div class="flex flex-wrap gap-2" x-show="selected.length > 0">
+                  <template x-for="tailor in selected" :key="tailor.id">
+                    <span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-semibold"
+                      x-text="tailor.name"></span>
+                  </template>
+                </div>
+                <span class="material-symbols-outlined text-gray-500 text-lg">expand_more</span>
+              </button>
 
-    <!-- Dropdown list -->
-    <div x-show="open" @click.away="open = false"
-         class="absolute w-full mt-2 bg-white border rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto">
+              <!-- Dropdown list -->
+              <div x-show="open" @click.away="open = false"
+                class="absolute w-full mt-2 bg-white border rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto">
 
-       @foreach($tailors as $tailor)
-<label class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer transition">
-    <input type="checkbox" name="tailor_id[]" 
-           value="{{ $tailor->id }}"
-           @if(in_array($tailor->id, $selectedTailors)) checked @endif
-           class="rounded text-primary focus:ring-primary/50">
-    <span class="text-sm">{{ $tailor->tailor_name }}</span>
-</label>
-@endforeach
-    </div>
-</div>
-
+                @foreach($tailors as $tailor)
+                <label class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer transition">
+                  <input type="checkbox" name="tailor_id" id="tailor_id"
+                    value="{{ $tailor->id }}"
+                    @change="
+                           if($event.target.checked){
+                               selected.push({id: {{ $tailor->id }}, name: '{{ $tailor->tailor_name }}'});
+                           } else {
+                               selected = selected.filter(x => x.id !== {{ $tailor->id }});
+                           }"
+                    class="rounded text-primary focus:ring-primary/50">
+                  <span class="text-sm">{{ $tailor->tailor_name }}</span>
+                </label>
+                @endforeach
+              </div>
+            </div>
             <div x-data="{ mode: 'color', selectedTailors: [] }"
               class="bg-card-light dark:bg-card-dark p-6 rounded-xl border border-border-light dark:border-border-dark shadow-sm space-y-6">
 
