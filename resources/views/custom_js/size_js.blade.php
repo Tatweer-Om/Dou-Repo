@@ -117,8 +117,10 @@ $(document).on('click', '#pagination a', function(e) {
                 method: 'POST',
                 data: data,
                 success: function(res) {
-  
-                    $('#add_size_modal').hide();
+                    // Reset Alpine.js state using custom event
+                    window.dispatchEvent(new CustomEvent('close-modal'));
+                    
+                    // Reset form
                     $('#size_form')[0].reset();
                     $('#size_id').val('');
                     loadSizes();
@@ -146,7 +148,8 @@ $(document).on('click', '#pagination a', function(e) {
 
         // Close modal button
         $('#close_modal').click(function() {
-            $('#add_size_modal').hide();
+            // Reset Alpine.js state using custom event
+            window.dispatchEvent(new CustomEvent('close-modal'));
         });
 
         // Edit size
@@ -159,7 +162,9 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#size_name_ar').val(size.size_name_ar);
                 $('#size_code_en').val(size.size_code_en);
                 $('#size_code_ar').val(size.size_code_ar);
-                $('#add_size_modal').show();
+                
+                // Open modal using Alpine event
+                window.dispatchEvent(new CustomEvent('open-modal'));
             }).fail(function() {
                 show_notification('error', '<?= trans("messages.fetch_error", [], session("locale")) ?>');
             });
@@ -207,11 +212,4 @@ $(document).on('click', '#pagination a', function(e) {
         });
 
     });
-
-    document.querySelector('button[ @click="open = true" ]').addEventListener('click', function() {
-    const modal = document.querySelector('#add_size_modal');
-    if (modal && modal.__x) {
-        modal.__x.$data.open = true; // this opens the modal
-    }
-});
 </script>

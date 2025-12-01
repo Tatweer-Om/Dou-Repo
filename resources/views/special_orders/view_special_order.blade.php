@@ -13,123 +13,180 @@
        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div @click.away="showViewModal=false"
          x-transition.scale
-         class="bg-white w-full max-w-lg mx-4 rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
+         class="bg-white w-full max-w-5xl mx-4 rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
 
-      <h2 class="text-xl font-bold mb-4">{{ trans('messages.order_details', [], session('locale')) }}</h2>
+      <h2 class="text-2xl font-bold mb-6">{{ trans('messages.order_details', [], session('locale')) }}</h2>
 
       <template x-if="viewOrder">
-        <div class="space-y-4 text-sm">
+        <div class="space-y-6 text-sm">
 
-          <!-- صورة -->
-          <div class="w-full">
-            <img :src="viewOrder.image" class="w-full h-56 object-cover rounded-2xl shadow">
-          </div>
-
-          <!-- بيانات أساسية -->
-          <div class="grid grid-cols-2 gap-3 mt-4">
-            <div>
-              <p class="text-gray-500 text-xs">{{ trans('messages.order_number', [], session('locale')) }}</p>
-              <p class="font-semibold" x-text="viewOrder.id"></p>
-            </div>
-            <div>
-              <p class="text-gray-500 text-xs">{{ trans('messages.customer_name', [], session('locale')) }}</p>
-              <p class="font-semibold" x-text="viewOrder.customer"></p>
-            </div>
-
-            <div>
-              <p class="text-gray-500 text-xs">{{ trans('messages.source', [], session('locale')) }}</p>
-              <p class="font-semibold" x-text="sourceLabel(viewOrder.source)"></p>
-            </div>
-
-            <div>
-              <p class="text-gray-500 text-xs">{{ trans('messages.date', [], session('locale')) }}</p>
-              <p class="font-semibold" x-text="formatDate(viewOrder.date)"></p>
-            </div>
-          </div>
-
-          <hr>
-
-          <!-- المقاسات -->
-          <div class="space-y-2">
-            <h3 class="font-semibold text-gray-700">{{ trans('messages.sizes', [], session('locale')) }}</h3>
-
-            <div class="grid grid-cols-2 gap-3">
+          <!-- بيانات أساسية للطلب -->
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p class="text-gray-500 text-xs">{{ trans('messages.abaya_length', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.length + ' inch'"></p>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.order_number', [], session('locale')) }}</p>
+                <p class="font-bold text-lg" x-text="viewOrder.id"></p>
               </div>
               <div>
-                <p class="text-gray-500 text-xs">{{ trans('messages.bust_one_side', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.bust + ' inch'"></p>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.customer_name', [], session('locale')) }}</p>
+                <p class="font-semibold" x-text="viewOrder.customer"></p>
               </div>
               <div>
-                <p class="text-gray-500 text-xs">{{ trans('messages.sleeves_length', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.sleeves + ' inch'"></p>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.source', [], session('locale')) }}</p>
+                <p class="font-semibold" x-text="sourceLabel(viewOrder.source)"></p>
               </div>
               <div>
-                <p class="text-gray-500 text-xs">{{ trans('messages.buttons', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></p>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.date', [], session('locale')) }}</p>
+                <p class="font-semibold" x-text="formatDate(viewOrder.date)"></p>
               </div>
             </div>
           </div>
 
-          <hr>
+          <!-- جميع الأصناف -->
+          <div class="space-y-4">
+            <h3 class="text-lg font-bold text-gray-800 border-b-2 border-indigo-200 pb-2">
+              {{ trans('messages.order_items', [], session('locale')) ?: 'Order Items' }} 
+              <span class="text-indigo-600" x-text="'( ' + (viewOrder.items?.length || 0) + ' )'"></span>
+            </h3>
+
+            <template x-if="viewOrder.items && viewOrder.items.length > 0">
+              <div class="space-y-4">
+                <template x-for="(item, index) in viewOrder.items" :key="item.id">
+                  <div class="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-white">
+                    <div class="flex flex-col md:flex-row gap-4">
+                      <!-- صورة الصنف -->
+                      <div class="w-full md:w-48 flex-shrink-0">
+                        <img :src="item.image" 
+                             :alt="item.design_name"
+                             class="w-full h-48 md:h-full object-cover rounded-xl shadow-md">
+                      </div>
+
+                      <!-- تفاصيل الصنف -->
+                      <div class="flex-1 space-y-3">
+                        <div class="flex justify-between items-start">
+                          <div>
+                            <h4 class="font-bold text-lg text-gray-800" x-text="item.design_name"></h4>
+                            <p class="text-gray-500 text-xs mt-1">
+                              {{ trans('messages.code', [], session('locale')) }}: 
+                              <span class="font-semibold" x-text="item.abaya_code"></span>
+                            </p>
+                          </div>
+                          <!-- حالة الصنف -->
+                          <div class="flex flex-col items-end gap-1">
+                            <span :class="itemStatusBadge(item.tailor_status)" 
+                                  class="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                                  x-text="itemStatusLabel(item.tailor_status)"></span>
+                            <template x-if="item.tailor_name">
+                              <p class="text-xs text-gray-500 mt-1" x-text="item.tailor_name"></p>
+                            </template>
+                          </div>
+                        </div>
+
+                        <!-- الكمية والسعر -->
+                        <div class="flex flex-wrap gap-4 text-sm">
+                          <div>
+                            <span class="text-gray-500">{{ trans('messages.quantity', [], session('locale')) }}: </span>
+                            <span class="font-semibold text-indigo-600" x-text="item.quantity"></span>
+                          </div>
+                          <div>
+                            <span class="text-gray-500">{{ trans('messages.price', [], session('locale')) }}: </span>
+                            <span class="font-semibold text-green-600" x-text="item.price.toFixed(3) + ' ر.ع'"></span>
+                          </div>
+                          <div>
+                            <span class="text-gray-500">{{ trans('messages.subtotal', [], session('locale')) ?: 'Subtotal' }}: </span>
+                            <span class="font-semibold text-blue-600" x-text="(item.price * item.quantity).toFixed(3) + ' ر.ع'"></span>
+                          </div>
+                        </div>
+
+                        <!-- المقاسات -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+                          <div>
+                            <p class="text-gray-500 text-xs">{{ trans('messages.abaya_length', [], session('locale')) }}</p>
+                            <p class="font-semibold" x-text="item.length ? item.length + ' inch' : 'N/A'"></p>
+                          </div>
+                          <div>
+                            <p class="text-gray-500 text-xs">{{ trans('messages.bust_one_side', [], session('locale')) }}</p>
+                            <p class="font-semibold" x-text="item.bust ? item.bust + ' inch' : 'N/A'"></p>
+                          </div>
+                          <div>
+                            <p class="text-gray-500 text-xs">{{ trans('messages.sleeves_length', [], session('locale')) }}</p>
+                            <p class="font-semibold" x-text="item.sleeves ? item.sleeves + ' inch' : 'N/A'"></p>
+                          </div>
+                          <div>
+                            <p class="text-gray-500 text-xs">{{ trans('messages.buttons', [], session('locale')) }}</p>
+                            <p class="font-semibold" x-text="item.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></p>
+                          </div>
+                        </div>
+
+                        <!-- ملاحظات الصنف -->
+                        <template x-if="item.notes">
+                          <div class="pt-2 border-t border-gray-100">
+                            <p class="text-gray-500 text-xs mb-1">{{ trans('messages.notes', [], session('locale')) }}:</p>
+                            <p class="text-gray-700 text-sm" x-text="item.notes"></p>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+
+          <hr class="border-gray-200">
 
           <!-- المالية -->
-          <div class="space-y-2">
-            <h3 class="font-semibold text-gray-700">{{ trans('messages.financial_details', [], session('locale')) }}</h3>
+          <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+            <h3 class="font-semibold text-gray-700 mb-3">{{ trans('messages.financial_details', [], session('locale')) }}</h3>
 
-            <div class="flex justify-between">
-              <span class="text-gray-500">{{ trans('messages.total', [], session('locale')) }}:</span>
-              <span class="font-semibold text-blue-700" 
+            <div class="flex justify-between items-center">
+              <span class="text-gray-600">{{ trans('messages.total', [], session('locale')) }}:</span>
+              <span class="font-bold text-lg text-blue-700" 
                     x-text="viewOrder.total.toFixed(3) + ' ر.ع'"></span>
             </div>
 
-            <div class="flex justify-between">
-              <span class="text-gray-500">{{ trans('messages.paid', [], session('locale')) }}:</span>
-              <span class="font-semibold text-emerald-700" 
+            <div class="flex justify-between items-center">
+              <span class="text-gray-600">{{ trans('messages.paid', [], session('locale')) }}:</span>
+              <span class="font-bold text-lg text-emerald-700" 
                     x-text="viewOrder.paid.toFixed(3) + ' ر.ع'"></span>
             </div>
 
-            <div class="flex justify-between">
-              <span class="text-gray-500">{{ trans('messages.remaining', [], session('locale')) }}:</span>
-              <span class="font-semibold text-red-600"
+            <div class="flex justify-between items-center pt-2 border-t border-gray-200">
+              <span class="text-gray-700 font-semibold">{{ trans('messages.remaining', [], session('locale')) }}:</span>
+              <span class="font-bold text-xl text-red-600"
                     x-text="(viewOrder.total - viewOrder.paid).toFixed(3) + ' ر.ع'"></span>
             </div>
           </div>
 
-          <hr>
+          <!-- الخياط والحالة -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-gray-50 rounded-xl p-4">
+              <h3 class="font-semibold text-gray-700 mb-2">{{ trans('messages.tailor', [], session('locale')) }}</h3>
+              <p class="font-semibold" x-text="viewOrder.tailor || 'N/A'"></p>
+            </div>
 
-          <!-- الخياط -->
-          <div class="space-y-1">
-            <h3 class="font-semibold text-gray-700">{{ trans('messages.tailor', [], session('locale')) }}</h3>
-            <p class="font-semibold" x-text="viewOrder.tailor"></p>
+            <div class="bg-gray-50 rounded-xl p-4">
+              <h3 class="font-semibold text-gray-700 mb-2">{{ trans('messages.order_status', [], session('locale')) }}</h3>
+              <span :class="statusBadge(viewOrder.status)"
+                    x-text="statusLabel(viewOrder.status)"></span>
+            </div>
           </div>
 
-          <hr>
-
-          <!-- الحالة -->
-          <div>
-            <h3 class="font-semibold text-gray-700 mb-1">{{ trans('messages.order_status', [], session('locale')) }}</h3>
-            <span :class="statusBadge(viewOrder.status)"
-                  x-text="statusLabel(viewOrder.status)"></span>
-          </div>
-
-          <hr>
-
-          <!-- ملاحظات -->
-          <div class="space-y-1">
-            <h3 class="font-semibold text-gray-700">{{ trans('messages.notes', [], session('locale')) }}</h3>
-            <p x-text="viewOrder.notes || '{{ trans('messages.no_notes', [], session('locale')) }}'" 
-               class="text-gray-600 whitespace-pre-line"></p>
-          </div>
+          <!-- ملاحظات الطلب -->
+          <template x-if="viewOrder.notes">
+            <div class="bg-gray-50 rounded-xl p-4">
+              <h3 class="font-semibold text-gray-700 mb-2">{{ trans('messages.notes', [], session('locale')) }}</h3>
+              <p x-text="viewOrder.notes" 
+                 class="text-gray-700 whitespace-pre-line"></p>
+            </div>
+          </template>
 
         </div>
       </template>
 
-      <div class="flex justify-end mt-6">
+      <div class="flex justify-end mt-6 pt-4 border-t border-gray-200">
         <button @click="showViewModal=false"
-                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl">
+                class="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl font-semibold transition">
           {{ trans('messages.close', [], session('locale')) }}
         </button>
       </div>
@@ -272,6 +329,16 @@
     <div class="bg-white rounded-2xl p-6 text-center">
       <div class="loader border-4 border-indigo-200 border-t-indigo-600 rounded-full w-12 h-12 animate-spin mx-auto mb-4"></div>
       <p class="text-gray-700 font-semibold">{{ trans('messages.loading_details', [], session('locale')) }}</p>
+    </div>
+  </div>
+
+  <!-- Pagination Loading Indicator -->
+  <div x-show="pageLoading" 
+       x-transition.opacity
+       class="fixed inset-0 bg-black/30 flex items-center justify-center z-40">
+    <div class="bg-white rounded-2xl p-6 text-center shadow-2xl">
+      <div class="loader border-4 border-indigo-200 border-t-indigo-600 rounded-full w-12 h-12 animate-spin mx-auto mb-4"></div>
+      <p class="text-gray-700 font-semibold text-sm">{{ trans('messages.loading', [], session('locale')) ?: 'Loading...' }}</p>
     </div>
   </div>
 
@@ -552,12 +619,13 @@
       <div class="flex items-center gap-2 justify-end">
         <button @click="prevPage()" 
                 class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
-                :disabled="page===1">
+                :disabled="page===1 || pageLoading">
           {{ trans('messages.previous', [], session('locale')) }}
         </button>
 
         <template x-for="p in totalPages()" :key="p">
-          <button @click="page=p"
+          <button @click="goToPage(p)"
+                  :disabled="pageLoading"
                   :class="page===p 
                            ? 'px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm' 
                            : 'px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm'">
@@ -567,7 +635,7 @@
 
         <button @click="nextPage()" 
                 class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
-                :disabled="page===totalPages()">
+                :disabled="page===totalPages() || pageLoading">
           {{ trans('messages.next', [], session('locale')) }}
         </button>
       </div>

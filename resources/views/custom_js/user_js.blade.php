@@ -113,8 +113,10 @@ $(document).on('click', '#pagination a', function(e) {
                 method: 'POST', // Always POST
                 data: data,
                 success: function(res) {
-  
-                    $('#add_user_modal').hide();
+                    // Reset Alpine.js state using custom event
+                    window.dispatchEvent(new CustomEvent('close-modal'));
+                    
+                    // Reset form
                     $('#user_form')[0].reset();
                     $('#user_id').val('');
                     loadusers();
@@ -142,7 +144,8 @@ $(document).on('click', '#pagination a', function(e) {
 
         // Close modal button
         $('#close_modal').click(function() {
-            $('#add_user_modal').hide();
+            // Reset Alpine.js state using custom event
+            window.dispatchEvent(new CustomEvent('close-modal'));
         });
 
         // Edit user
@@ -156,7 +159,8 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#user_password').val(user.password);
                 $('#notes').val(user.notes);
 
-                $('#add_user_modal').show();
+                // Open modal using Alpine event
+                window.dispatchEvent(new CustomEvent('open-modal'));
             }).fail(function() {
                 show_notification('error', '<?= trans("messages.fetch_error", [], session("locale")) ?>');
             });

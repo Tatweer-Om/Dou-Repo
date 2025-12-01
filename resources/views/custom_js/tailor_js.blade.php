@@ -114,8 +114,10 @@ $(document).on('click', '#pagination a', function(e) {
                 method: 'POST', // Always POST
                 data: data,
                 success: function(res) {
-  
-                    $('#add_tailor_modal').hide();
+                    // Reset Alpine.js state using custom event
+                    window.dispatchEvent(new CustomEvent('close-modal'));
+                    
+                    // Reset form
                     $('#tailor_form')[0].reset();
                     $('#tailor_id').val('');
                     loadtailors();
@@ -143,7 +145,8 @@ $(document).on('click', '#pagination a', function(e) {
 
         // Close modal button
         $('#close_modal').click(function() {
-            $('#add_tailor_modal').hide();
+            // Reset Alpine.js state using custom event
+            window.dispatchEvent(new CustomEvent('close-modal'));
         });
 
         // Edit tailor
@@ -154,7 +157,9 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#tailor_name').val(tailor.tailor_name);
                 $('#tailor_phone').val(tailor.tailor_phone);
                  $('#tailor_address').val(tailor.tailor_address);
-                $('#add_tailor_modal').show();
+                
+                // Open modal using Alpine event
+                window.dispatchEvent(new CustomEvent('open-modal'));
             }).fail(function() {
                 show_notification('error', '<?= trans("messages.fetch_error", [], session("locale")) ?>');
             });

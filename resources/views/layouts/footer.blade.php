@@ -46,6 +46,8 @@
          @include('custom_js.special_order_js')
               @elseif ($route_name == 'view_special_order')
          @include('custom_js.view_orders_js')
+                  @elseif ($route_name == 'send_request')
+         @include('custom_js.send_request_js')
     @endif
          
   </body>

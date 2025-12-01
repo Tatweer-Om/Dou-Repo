@@ -204,11 +204,22 @@
           </div>
 
 
-          <div class="mt-5">
-            <div x-data="{ open: false, selected: [] }" class="relative">
+          <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Tailor Input (Half Width) -->
+            <div x-data="{ 
+    open: false, 
+    selected: [
+      @if(!empty($selectedTailors) && is_array($selectedTailors))
+        @foreach($tailors as $tailor)
+          @if(in_array($tailor->id, $selectedTailors))
+            {id: {{ $tailor->id }}, name: '{{ addslashes($tailor->tailor_name) }}'},
+          @endif
+        @endforeach
+      @endif
+    ]
+  }" class="relative">
               <label class="text-sm font-medium mb-2 block">Tailors</label>
 
-              <!-- Dropdown button -->
               <button @click="open = !open"
                 type="button"
                 class="w-full flex items-center justify-between border rounded-lg px-4 py-2 h-12 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-primary/40 transition">
@@ -227,21 +238,38 @@
                 class="absolute w-full mt-2 bg-white border rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto">
 
                 @foreach($tailors as $tailor)
-                <label class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer transition">
-                  <input type="checkbox" name="tailor_id" id="tailor_id"
-                    value="{{ $tailor->id }}"
-                    @change="
-                           if($event.target.checked){
-                               selected.push({id: {{ $tailor->id }}, name: '{{ $tailor->tailor_name }}'});
-                           } else {
-                               selected = selected.filter(x => x.id !== {{ $tailor->id }});
-                           }"
-                    class="rounded text-primary focus:ring-primary/50">
-                  <span class="text-sm">{{ $tailor->tailor_name }}</span>
-                </label>
-                @endforeach
+      <label class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 cursor-pointer transition">
+        <input type="checkbox" name="tailor_id[]" 
+          value="{{ $tailor->id }}"
+          :checked="selected.some(s => s.id === {{ $tailor->id }})"
+          @change="
+                 if($event.target.checked){
+                     if(!selected.some(s => s.id === {{ $tailor->id }})){
+                         selected.push({id: {{ $tailor->id }}, name: '{{ addslashes($tailor->tailor_name) }}'});
+                     }
+                 } else {
+                     selected = selected.filter(x => x.id !== {{ $tailor->id }});
+                 }"
+          class="rounded text-primary focus:ring-primary/50">
+        <span class="text-sm">{{ $tailor->tailor_name }}</span>
+      </label>
+      @endforeach
               </div>
             </div>
+
+            <!-- Total Quantity Input (Half Width) -->
+            <label class="flex flex-col">
+              <p class="text-sm font-medium mb-2">
+                {{ trans('messages.total_quantity', [], session('locale')) ?: 'Total Quantity' }}
+              </p>
+              <input type="number" 
+                name="total_quantity" 
+                id="total_quantity"
+                value="{{ $stock->quantity ?? '' }}"
+                placeholder="{{ trans('messages.total_quantity_placeholder', [], session('locale')) ?: 'Enter total quantity' }}"
+                class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" />
+            </label>
+          </div> <br>
             <div x-data="{ mode: 'color', selectedTailors: [] }"
               class="bg-card-light dark:bg-card-dark p-6 rounded-xl border border-border-light dark:border-border-dark shadow-sm space-y-6">
 

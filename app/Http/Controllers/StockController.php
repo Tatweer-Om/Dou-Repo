@@ -100,6 +100,7 @@ public function add_stock(Request $request)
     $stock->sales_price        = $request->sales_price;
     $stock->tailor_charges     = $request->tailor_charges;
     $stock->tailor_id          = json_encode($tailor_ids);
+    $stock->quantity           = $request->total_quantity ?? null;
     $stock->notification_limit = $request->notification_limit;
     $stock->mode               = $request->mode;
     $stock->save();
@@ -178,7 +179,8 @@ public function update_stock(Request $request)
     $stock->abaya_notes        = $request->abaya_notes;
     $stock->cost_price         = $request->cost_price;
     $stock->sales_price        = $request->sales_price;
-$stock->tailor_id = json_encode($request->tailor_id);
+    $stock->tailor_id          = json_encode($request->tailor_id);
+    $stock->quantity           = $request->total_quantity ?? null;
     $stock->notification_limit = $request->notification_limit;
     $stock->mode               = $request->mode;
     $stock->save();

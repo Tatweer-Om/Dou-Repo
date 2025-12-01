@@ -323,7 +323,8 @@
             </div>
 
 
-            <div class="mt-5">
+            <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Tailor Input (Half Width) -->
               <div x-data="{ open: false, selected: [] }" class="relative">
                 <label class="text-sm font-medium mb-2 block">Tailors</label>
 
@@ -360,6 +361,20 @@
                   @endforeach
                 </div>
               </div>
+
+              <!-- Total Quantity Input (Half Width) -->
+              <label class="flex flex-col">
+                <p class="text-sm font-medium mb-2">
+                  {{ trans('messages.total_quantity', [], session('locale')) ?: 'Total Quantity' }}
+                </p>
+                <input type="number" 
+                  name="total_quantity" 
+                  id="total_quantity"
+                  placeholder="{{ trans('messages.total_quantity_placeholder', [], session('locale')) ?: 'Enter total quantity' }}"
+                  class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" />
+              </label>
+            </div>
+            <br>
               <div x-data="{ mode: 'color', selectedTailors: [] }"
                 class="bg-card-light dark:bg-card-dark p-6 rounded-xl border border-border-light dark:border-border-dark shadow-sm space-y-6">
 

@@ -23,6 +23,7 @@ document.addEventListener('alpine:init', () => {
     deliverOrder: null,
     selectedReadyIds: [],
     loading: false,
+    pageLoading: false,
 
     /* -------- بيانات الطلبات -------- */
     orders: [],
@@ -104,11 +105,46 @@ document.addEventListener('alpine:init', () => {
     },
 
     nextPage() {
-      if (this.page < this.totalPages()) this.page++;
+      if (this.page < this.totalPages()) {
+        this.pageLoading = true;
+        setTimeout(() => {
+          this.page++;
+          this.scrollToTop();
+          setTimeout(() => {
+            this.pageLoading = false;
+          }, 300);
+        }, 200);
+      }
     },
 
     prevPage() {
-      if (this.page > 1) this.page--;
+      if (this.page > 1) {
+        this.pageLoading = true;
+        setTimeout(() => {
+          this.page--;
+          this.scrollToTop();
+          setTimeout(() => {
+            this.pageLoading = false;
+          }, 300);
+        }, 200);
+      }
+    },
+
+    goToPage(pageNum) {
+      if (pageNum !== this.page && pageNum >= 1 && pageNum <= this.totalPages()) {
+        this.pageLoading = true;
+        setTimeout(() => {
+          this.page = pageNum;
+          this.scrollToTop();
+          setTimeout(() => {
+            this.pageLoading = false;
+          }, 300);
+        }, 200);
+      }
+    },
+
+    scrollToTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     startItem() {
@@ -177,6 +213,24 @@ document.addEventListener('alpine:init', () => {
         ready: 'bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[11px] font-semibold',
         delivered: 'bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-semibold'
       }[s] || 'bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-[11px] font-semibold';
+    },
+
+    /* -------- Item Status (Tailor Status) -------- */
+    itemStatusLabel(s) {
+      const labels = {
+        new: '{{ trans('messages.not_with_tailor', [], session('locale')) ?: 'Not with Tailor' }}',
+        processing: '{{ trans('messages.with_tailor', [], session('locale')) ?: 'With Tailor' }}',
+        received: '{{ trans('messages.ready', [], session('locale')) ?: 'Ready' }}'
+      };
+      return labels[s] || s;
+    },
+
+    itemStatusBadge(s) {
+      return {
+        new: 'bg-gray-100 text-gray-700',
+        processing: 'bg-blue-100 text-blue-700',
+        received: 'bg-emerald-100 text-emerald-700'
+      }[s] || 'bg-gray-100 text-gray-600';
     },
 
     /* -------- التاريخ -------- */

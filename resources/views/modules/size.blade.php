@@ -5,7 +5,10 @@
 <title>{{ trans('messages.size_lang', [], session('locale')) }}</title>
 @endpush
 
-<main class="flex-1 p-8 bg-background-light dark:bg-background-dark overflow-y-auto" x-data="{ open: false, edit: false, del: false }">
+<main class="flex-1 p-8 bg-background-light dark:bg-background-dark overflow-y-auto" 
+      x-data="{ open: false, edit: false, del: false }"
+      @close-modal.window="open = false"
+      @open-modal.window="open = true">
 
     <div class="max-w-4xl mx-auto">
         <!-- Page title and Add button -->

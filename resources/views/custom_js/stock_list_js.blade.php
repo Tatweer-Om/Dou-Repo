@@ -29,7 +29,7 @@
                         color = stock.colors[0].color.color_name_ar; // or color_name_en
                     }
 
-                    let quantity = stock.sizes.length ? stock.sizes[0].qty : 0;
+                    let quantity = stock.quantity || (stock.sizes.length ? stock.sizes[0].qty : 0);
 
                     tableRows += `
                 <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}">
@@ -80,7 +80,7 @@
                     let image = stock.images.length ? stock.images[0].image_path : '';
                     let size = stock.sizes.length && stock.sizes[0].size ? stock.sizes[0].size.size_name_ar : '-';
                     let color = stock.colors.length && stock.colors[0].color ? stock.colors[0].color.color_name_ar : '-';
-                    let quantity = stock.sizes.length ? stock.sizes[0].qty : 0;
+                    let quantity = stock.quantity || (stock.sizes.length ? stock.sizes[0].qty : 0);
 
                     mobileCards += `
                 <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden">

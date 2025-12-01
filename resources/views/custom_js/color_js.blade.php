@@ -113,8 +113,10 @@ $(document).on('click', '#pagination a', function(e) {
                 method: 'POST', // Always POST
                 data: data,
                 success: function(res) {
-  
-                    $('#add_color_modal').hide();
+                    // Reset Alpine.js state using custom event
+                    window.dispatchEvent(new CustomEvent('close-modal'));
+                    
+                    // Reset form
                     $('#color_form')[0].reset();
                     $('#color_id').val('');
                     loadcolors();
@@ -142,7 +144,8 @@ $(document).on('click', '#pagination a', function(e) {
 
         // Close modal button
         $('#close_modal').click(function() {
-            $('#add_color_modal').hide();
+            // Reset Alpine.js state using custom event
+            window.dispatchEvent(new CustomEvent('close-modal'));
         });
 
         // Edit color
@@ -153,7 +156,9 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#color_name_en').val(color.color_name_en);
                 $('#color_name_ar').val(color.color_name_ar);
                 $('#color_code').val(color.color_code_en);
-                $('#add_color_modal').show();
+                
+                // Open modal using Alpine event
+                window.dispatchEvent(new CustomEvent('open-modal'));
             }).fail(function() {
                 show_notification('error', '<?= trans("messages.fetch_error", [], session("locale")) ?>');
             });

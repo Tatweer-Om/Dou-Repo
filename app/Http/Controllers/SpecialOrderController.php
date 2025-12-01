@@ -5,13 +5,13 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\User;
 use App\Models\Stock;
-use App\Models\SpecialOrder;
-use App\Models\SpecialOrderItem;
-use App\Models\Customer;
 use App\Models\Tailor;
+use App\Models\Customer;
+use App\Models\SpecialOrder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Models\SpecialOrderItem;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class SpecialOrderController extends Controller
 {
@@ -344,30 +344,42 @@ public function view_special_order()
 public function getOrdersList(Request $request)
 {
     try {
-        $orders = SpecialOrder::with(['customer', 'items.stock.images'])
+        $orders = SpecialOrder::with(['customer', 'items.stock.images', 'items.tailor'])
             ->orderBy('created_at', 'DESC')
             ->get();
 
         $formattedOrders = $orders->map(function($order) {
-            // Get first item image or placeholder
+            // Get first item image or placeholder (for list view)
             $firstItem = $order->items->first();
             $image = '/images/placeholder.png';
             if ($firstItem && $firstItem->stock && $firstItem->stock->images->first()) {
                 $image = $firstItem->stock->images->first()->image_path;
             }
 
-            // Get first item details for modal
-            $firstItemData = $firstItem ? [
-                'length' => $firstItem->abaya_length,
-                'bust' => $firstItem->bust,
-                'sleeves' => $firstItem->sleeves_length,
-                'buttons' => $firstItem->buttons,
-            ] : [
-                'length' => null,
-                'bust' => null,
-                'sleeves' => null,
-                'buttons' => false,
-            ];
+            // Get all items with their details
+            $items = $order->items->map(function($item) {
+                $itemImage = '/images/placeholder.png';
+                if ($item->stock && $item->stock->images->first()) {
+                    $itemImage = $item->stock->images->first()->image_path;
+                }
+
+                return [
+                    'id' => $item->id,
+                    'abaya_code' => $item->abaya_code ?? 'N/A',
+                    'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                    'quantity' => $item->quantity ?? 1,
+                    'price' => floatval($item->price ?? 0),
+                    'image' => $itemImage,
+                    'length' => $item->abaya_length,
+                    'bust' => $item->bust,
+                    'sleeves' => $item->sleeves_length,
+                    'buttons' => $item->buttons ?? false,
+                    'notes' => $item->notes ?? '',
+                    'tailor_status' => $item->tailor_status ?? 'new',
+                    'tailor_id' => $item->tailor_id,
+                    'tailor_name' => $item->tailor ? $item->tailor->tailor_name : null,
+                ];
+            });
 
             // Get tailor info (if available from items notes or order notes)
             $tailor = 'N/A';
@@ -377,19 +389,20 @@ public function getOrdersList(Request $request)
                 $tailor = $order->notes;
             }
 
+            // Calculate and update order status based on items' tailor_status
+            $this->updateOrderStatusBasedOnItems($order);
+            $calculatedStatus = $order->status;
+
             return [
                 'id' => $order->id,
                 'customer' => $order->customer->name ?? 'N/A',
                 'date' => $order->created_at->format('Y-m-d'),
-                'status' => $order->status ?? 'new',
+                'status' => $calculatedStatus,
                 'source' => $order->source,
                 'total' => floatval($order->total_amount ?? 0),
                 'paid' => floatval($order->paid_amount ?? 0),
-                'image' => $image,
-                'length' => $firstItemData['length'],
-                'bust' => $firstItemData['bust'],
-                'sleeves' => $firstItemData['sleeves'],
-                'buttons' => $firstItemData['buttons'],
+                'image' => $image, // First item image for list view
+                'items' => $items, // All items array
                 'tailor' => $tailor,
                 'notes' => $order->notes ?? '',
             ];
@@ -538,12 +551,24 @@ public function getTailorAssignmentsData(Request $request)
                 }
 
                 // Get original tailor from stock if exists
-                $originalTailor = '';
-                if ($stock && $stock->tailor_id) {
-                    $tailor = Tailor::find($stock->tailor_id);
-                    $originalTailor = $tailor ? $tailor->tailor_name : '';
-                }
+        $originalTailor = '';
 
+        if ($stock && $stock->tailor_id) {
+
+            // Convert JSON string to PHP array
+            $tailorIds = json_decode($stock->tailor_id, true);
+
+            // Ensure always an array
+            if (!is_array($tailorIds)) {
+                $tailorIds = [$tailorIds];
+            }
+
+    // Fetch all tailors
+    $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+
+    // Join names into a single string
+    $originalTailor = implode(', ', $tailors);
+}
                 return [
                     'rowId' => $item->id,
                     'orderId' => $order->id ?? 0,
@@ -627,6 +652,46 @@ public function getTailorAssignmentsData(Request $request)
     }
 }
 
+    /**
+     * Update order status based on items' tailor_status
+     */
+    private function updateOrderStatusBasedOnItems($order)
+    {
+        if ($order->status === 'delivered') {
+            return; // Don't change delivered orders
+        }
+
+        if ($order->items->count() === 0) {
+            $order->status = 'new';
+            $order->save();
+            return;
+        }
+
+        $itemStatuses = $order->items->pluck('tailor_status')->filter()->toArray();
+        
+        if (empty($itemStatuses)) {
+            $order->status = 'new';
+        } else {
+            $allNew = count(array_filter($itemStatuses, function($status) {
+                return $status === 'new';
+            })) === count($itemStatuses);
+            
+            $allReceived = count(array_filter($itemStatuses, function($status) {
+                return $status === 'received';
+            })) === count($itemStatuses);
+            
+            if ($allNew) {
+                $order->status = 'new';
+            } elseif ($allReceived) {
+                $order->status = 'ready';
+            } else {
+                $order->status = 'processing';
+            }
+        }
+        
+        $order->save();
+    }
+
 public function assignItemsToTailor(Request $request)
 {
     try {
@@ -641,6 +706,7 @@ public function assignItemsToTailor(Request $request)
 
         DB::beginTransaction();
 
+        $orderIds = [];
         foreach ($assignments as $assignment) {
             $itemId = $assignment['item_id'] ?? null;
             $tailorId = $assignment['tailor_id'] ?? null;
@@ -655,6 +721,18 @@ public function assignItemsToTailor(Request $request)
                 $item->tailor_status = 'processing';
                 $item->sent_to_tailor_at = now();
                 $item->save();
+                
+                if (!in_array($item->special_order_id, $orderIds)) {
+                    $orderIds[] = $item->special_order_id;
+                }
+            }
+        }
+
+        // Update order statuses based on items
+        foreach ($orderIds as $orderId) {
+            $order = SpecialOrder::with('items')->find($orderId);
+            if ($order) {
+                $this->updateOrderStatusBasedOnItems($order);
             }
         }
 
@@ -688,12 +766,27 @@ public function markTailorItemsReceived(Request $request)
 
         DB::beginTransaction();
 
+        // Get items before update to get order IDs
+        $items = SpecialOrderItem::whereIn('id', $itemIds)
+            ->where('tailor_status', 'processing')
+            ->get();
+        
+        $orderIds = $items->pluck('special_order_id')->unique()->toArray();
+
         $updated = SpecialOrderItem::whereIn('id', $itemIds)
             ->where('tailor_status', 'processing')
             ->update([
                 'tailor_status' => 'received',
                 'received_from_tailor_at' => now()
             ]);
+
+        // Update order statuses based on items
+        foreach ($orderIds as $orderId) {
+            $order = SpecialOrder::with('items')->find($orderId);
+            if ($order) {
+                $this->updateOrderStatusBasedOnItems($order);
+            }
+        }
 
         DB::commit();
 

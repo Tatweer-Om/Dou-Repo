@@ -64,10 +64,7 @@ $('#update_abaya').on('submit', function(e) {
         show_notification('error', '<?= trans("messages.enter_design_name", [], session("locale")) ?>');
         return;
     }
-    if (!tailor) {
-        show_notification('error', '<?= trans("messages.enter_tailor", [], session("locale")) ?>');
-        return;
-    }
+  
 
     let formData = new FormData(this);
 
