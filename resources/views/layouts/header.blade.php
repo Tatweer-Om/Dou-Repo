@@ -120,10 +120,17 @@
             </a>
               <a href="{{url('view_material')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ __('messages.view_material_lang') }}
+                {{ __('messages.raw_materials') }}
             </a>
 
-         
+             <a href="{{url('size')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.size') }}
+            </a>
+                <a href="{{url('color')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.color') }}
+            </a>
         </div>
     </div>
     <!-- Boutiques -->
@@ -162,7 +169,7 @@
         </button>
 
         <div id="tailorMenu" class="submenu mt-2 pl-8 space-y-1">
-            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+            <a href="{{url('send_request')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.order_list') }}
             </a>
