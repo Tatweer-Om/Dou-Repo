@@ -22,6 +22,8 @@
          @include('custom_js.size_js')
          @elseif ($route_name == 'color')
          @include('custom_js.color_js')
+          @elseif ($route_name == 'channel')
+         @include('custom_js.channel_js')
           @elseif ($route_name == 'tailor')
          @include('custom_js.tailor_js')
             @elseif ($route_name == 'user')

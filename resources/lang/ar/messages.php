@@ -538,5 +538,38 @@ return [
     'no_data_to_save' => 'لا توجد بيانات للحفظ',
     'settlement_saved_successfully' => 'تم حفظ التسوية بنجاح ✅',
     'no_data_to_export' => 'لا توجد بيانات للتصدير',
+        'enter_channel_name_ar' => 'يرجى إدخال اسم القناة باللغة العربية.',
+    'enter_channel_name_en' => 'يرجى إدخال اسم القناة باللغة الإنجليزية.',
+
+    // Success Messages
+    'added_success'   => 'تمت الإضافة بنجاح.',
+    'updated_success' => 'تم التحديث بنجاح.',
+    'deleted_success' => 'تم حذف العنصر بنجاح.',
+    'deleted_success_text' => 'تم حذف السجل بنجاح.',
+
+    // Generic Error
+    'generic_error' => 'حدث خطأ ما. الرجاء المحاولة مرة أخرى.',
+    'fetch_error'   => 'تعذر الحصول على البيانات.',
+    'delete_error'  => 'حدث خطأ أثناء محاولة الحذف.',
+    'delete_error_text' => 'لم نتمكن من إتمام عملية الحذف.',
+    
+    'channel_lang' => 'القنوات',
+    'manage_channels' => 'إدارة القنوات',
+    'add_new_channel' => 'إضافة قناة جديدة',
+    'search_channel' => 'البحث عن قناة',
+    'search' => 'بحث',
+    'channel_name' => 'اسم القناة',
+    'actions' => 'الإجراءات',
+
+    'add_channel' => 'إضافة قناة',
+    'channel_name_en' => 'اسم القناة (بالإنجليزية)',
+    'channel_name_placeholder_en' => 'أدخل اسم القناة باللغة الإنجليزية',
+
+    'channel_name_ar' => 'اسم القناة (بالعربية)',
+    'channel_name_placeholder_ar' => 'أدخل اسم القناة باللغة العربية',
+
+    'save' => 'حفظ',
+
+    'saved_successfully' => 'تم الحفظ بنجاح!',
 
 ];

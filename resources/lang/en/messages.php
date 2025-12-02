@@ -556,5 +556,37 @@ return [
     'no_data_to_save' => 'No data to save',
     'settlement_saved_successfully' => 'Settlement saved successfully ✅',
     'no_data_to_export' => 'No data to export',
+        'enter_channel_name_ar' => 'Please enter the channel name in Arabic.',
+    'enter_channel_name_en' => 'Please enter the channel name in English.',
+
+    // Success Messages
+    'added_success'   => 'Added successfully.',
+    'updated_success' => 'Updated successfully.',
+    'deleted_success' => 'Item deleted successfully.',
+    'deleted_success_text' => 'The record has been deleted successfully.',
+
+    // Generic Error
+    'generic_error' => 'Something went wrong. Please try again.',
+    'fetch_error'   => 'Unable to fetch data.',
+    'delete_error'  => 'An error occurred while deleting.',
+    'delete_error_text' => 'The deletion could not be completed.',
+    'channel_lang' => 'Channels',
+    'manage_channels' => 'Manage Channels',
+    'add_new_channel' => 'Add New Channel',
+    'search_channel' => 'Search Channel',
+    'search' => 'Search',
+    'channel_name' => 'Channel Name',
+    'actions' => 'Actions',
+
+    'add_channel' => 'Add Channel',
+    'channel_name_en' => 'Channel Name (English)',
+    'channel_name_placeholder_en' => 'Enter channel name in English',
+
+    'channel_name_ar' => 'Channel Name (Arabic)',
+    'channel_name_placeholder_ar' => 'Enter channel name in Arabic',
+
+    'save' => 'Save',
+
+    'saved_successfully' => 'Saved Successfully!'
 
 ];

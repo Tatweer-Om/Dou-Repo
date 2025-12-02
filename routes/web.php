@@ -8,6 +8,7 @@ use App\Http\Controllers\StockController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ResaleController;
 use App\Http\Controllers\TailorController;
+use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\WharehouseController;
@@ -67,14 +68,16 @@ Route::delete('colors/{color}', [ColorController::class, 'destroy']);
 Route::get('colors/list', [ColorController::class, 'getcolors']);
 Route::get('colors/{color}', [ColorController::class, 'show']);
 
+Route::get('channels', [ChannelController::class, 'index'])->name('channel');
+Route::post('channels', [ChannelController::class, 'store']);
+Route::put('channels/{channel}', [ChannelController::class, 'update']);
+Route::delete('channels/{channel}', [ChannelController::class, 'destroy']);
+Route::get('channels/list', [ChannelController::class, 'getchannels']);
+Route::get('channels/{channel}', [ChannelController::class, 'show']);
+
 
 
 Route::get('size', [SizeController::class, 'index'])->name('size');
-Route::post('add_size', [SizeController::class, 'add_size'])->name('add_size');
-Route::get('show_size', [SizeController::class, 'show_size'])->name('show_size');
-Route::post('edit_size', [SizeController::class, 'edit_size'])->name('edit_size');
-Route::post('update_size', [SizeController::class, 'update_size'])->name('update_size');
-Route::post('delete_size', [SizeController::class, 'delete_size'])->name('delete_size');
 
 
 

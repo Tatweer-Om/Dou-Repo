@@ -262,12 +262,12 @@
                         </div>
 
                         <!-- Footer -->
-                        <div class="p-5 border-t bg-gray-50 text-center">
+                        <!-- <div class="p-5 border-t bg-gray-50 text-center">
                             <button @click="showDetails = false"
                                 class="px-8 py-3 rounded-xl bg-[var(--primary-color)] text-white font-bold hover:opacity-90 transition">
                                 {{ __('messages.close') }}
                             </button>
-                        </div>
+                        </div> -->
                     </div>
                 </div>
 

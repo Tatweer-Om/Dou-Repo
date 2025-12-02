@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use App\Models\User;
+use App\Models\Stock;
+use App\Models\Channel;
 use App\Models\History;
+use App\Models\Boutique;
 use App\Models\Wharehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -172,10 +175,36 @@ public function delete_wharehouse(Request $request)
     return response()->json(['message' => 'Warehouse deleted successfully']);
 }
 
-public function manage_quantity(){
-    return view ('wharehouse.manage_quantity');
+public function manage_quantity()
+{
+    $locale = session('locale'); // ar or en
 
+    $total_stock = Stock::sum('quantity');
+
+    // Boutiques (only name = boutique_name)
+    $boutiques = Boutique::select('id', 'boutique_name')->get()
+        ->map(function ($item) use ($locale) {
+            $item->type = 'boutique';
+            $item->display_name = $item->boutique_name; // same for both languages
+            return $item;
+        });
+
+    // Channels (choose Arabic or English name)
+    $channels = Channel::select('id', 'channel_name_en', 'channel_name_ar')->get()
+        ->map(function ($item) use ($locale) {
+            $item->type = 'channel';
+            $item->display_name = $locale == 'ar'
+                ? $item->channel_name_ar
+                : $item->channel_name_en;
+            return $item;
+        });
+
+    // Merge both collections
+    $items = $boutiques->merge($channels);
+
+    return view('wharehouse.manage_quantity', compact('total_stock', 'items'));
 }
+
 
 public function settlement(){
     return view ('wharehouse.settlement');
