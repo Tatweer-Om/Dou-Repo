@@ -11,6 +11,12 @@ class BoutiqueController extends Controller
         return view('boutique.boutique');
     }
 
+
+     public function boutique_profile() {
+        return view('boutique.boutique_profile');
+    }
+
+
 public function getboutiques() {
     return Boutique::orderBy('id', 'DESC')->paginate(10);
 }

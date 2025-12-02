@@ -24,6 +24,7 @@ Route::post('edit_color', [ColorController::class, 'edit_color'])->name('edit_co
 Route::post('update_color', [ColorController::class, 'update_color'])->name('update_color');
 Route::post('delete_color', [ColorController::class, 'delete_color'])->name('delete_color');
 
+
 Route::get('size', [SizeController::class, 'index']);
 Route::post('sizes', [SizeController::class, 'store']);
 Route::put('sizes/{size}', [SizeController::class, 'update']);
@@ -40,6 +41,7 @@ Route::get('/boutiques/{id}', [BoutiqueController::class, 'show']);
 Route::get('edit_boutique/{id}', [BoutiqueController::class, 'edit_boutique'])->name('edit_boutique');
 Route::post('update_boutique', [BoutiqueController::class, 'update_boutique'])->name('update_boutique');
 Route::delete('boutique/{id}', [BoutiqueController::class, 'destroy'])->name('boutique.destroy');
+Route::get('boutique_profile', [BoutiqueController::class, 'boutique_profile'])->name('boutique_profile');
 
 Route::get('tailor', [TailorController::class, 'index']);
 Route::post('tailors', [TailorController::class, 'store']);
@@ -55,6 +57,8 @@ Route::put('users/{user}', [UserController::class, 'update']);
 Route::delete('users/{user}', [UserController::class, 'destroy']);
 Route::get('users/list', [UserController::class, 'getusers']);
 Route::get('users/{user}', [UserController::class, 'show']);
+Route::get('login_page', [UserController::class, 'login_page'])->name('login_page');
+Route::post('/login-user', [UserController::class, 'login_user'])->name('login_user');
 
 Route::get('colors', [ColorController::class, 'index']);
 Route::post('colors', [ColorController::class, 'store']);
@@ -72,12 +76,7 @@ Route::post('edit_size', [SizeController::class, 'edit_size'])->name('edit_size'
 Route::post('update_size', [SizeController::class, 'update_size'])->name('update_size');
 Route::post('delete_size', [SizeController::class, 'delete_size'])->name('delete_size');
 
-// Route::get('user', [UserController::class, 'index'])->name('user');
-// Route::post('add_user', [UserController::class, 'add_user'])->name('add_user');
-// Route::get('show_user', [UserController::class, 'show_user'])->name('show_user');
-// Route::post('edit_user', [UserController::class, 'edit_user'])->name('edit_user');
-// Route::post('update_user', [UserController::class, 'update_user'])->name('update_user');
-// Route::post('delete_user', [UserController::class, 'delete_user'])->name('delete_user');
+
 
 Route::get('tailor', [TailorController::class, 'index'])->name('tailor');
 Route::post('add_tailor', [TailorController::class, 'add_tailor'])->name('add_tailor');
@@ -155,3 +154,6 @@ Route::get('show_wharehouse', [WharehouseController::class, 'show_wharehouse'])-
 Route::post('edit_wharehouse', [WharehouseController::class, 'edit_wharehouse'])->name('edit_wharehouse');
 Route::post('update_wharehouse', [WharehouseController::class, 'update_wharehouse'])->name('update_wharehouse');
 Route::post('delete_wharehouse', [WharehouseController::class, 'delete_wharehouse'])->name('delete_wharehouse');
+Route::get('manage_quantity', [WharehouseController::class, 'manage_quantity'])->name('manage_quantity');
+Route::get('settlement', [WharehouseController::class, 'settlement'])->name('settlement');
+

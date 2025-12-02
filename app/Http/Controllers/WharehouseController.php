@@ -172,4 +172,13 @@ public function delete_wharehouse(Request $request)
     return response()->json(['message' => 'Warehouse deleted successfully']);
 }
 
+public function manage_quantity(){
+    return view ('wharehouse.manage_quantity');
+
+}
+
+public function settlement(){
+    return view ('wharehouse.settlement');
+}
+
 }

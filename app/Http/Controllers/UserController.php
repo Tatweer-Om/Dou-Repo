@@ -63,4 +63,47 @@ class UserController extends Controller
         $user->delete();
         return response()->json(['message' => 'Deleted']);
     }
+
+    public function login_page(Request $request)
+    {
+        return view('login.login_page');
+    }
+
+    public function login_user(Request $request)
+{
+    // Validate input
+    $request->validate([
+        'user_phone' => 'required',
+        'password'   => 'required',
+    ]);
+
+    // Try to find user by username OR phone
+    $user = User::where('user_name', $request->user_phone)
+                ->orWhere('user_phone', $request->user_phone)
+                ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'اسم المستخدم أو رقم الهاتف غير صحيح',
+        ]);
+    }
+
+    // Check password
+    if (!Hash::check($request->password, $user->password)) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'كلمة المرور غير صحيحة',
+        ]);
+    }
+
+    // Login user
+    auth()->login($user);
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'تم تسجيل الدخول بنجاح',
+    ]);
+}
+
 }
