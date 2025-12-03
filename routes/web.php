@@ -125,6 +125,7 @@ Route::get('/fetch_stock/{id}', [StockController::class, 'fetch_stock']);
 Route::delete('stock/{id}', [StockController::class, 'destroy'])->name('stock.destroy');
 Route::get('stock_detail', [StockController::class, 'stock_detail'])->name('stock_detail');
 Route::get('get_stock_quantity', [StockController::class, 'get_stock_quantity'])->name('get_stock_quantity');
+Route::get('get_full_stock_details', [StockController::class, 'get_full_stock_details'])->name('get_full_stock_details');
 Route::post('add_quantity', [StockController::class, 'add_quantity'])->name('add_quantity');
 
 Route::get('branch', [BranchController::class, 'index'])->name('branch');
@@ -158,5 +159,12 @@ Route::post('edit_wharehouse', [WharehouseController::class, 'edit_wharehouse'])
 Route::post('update_wharehouse', [WharehouseController::class, 'update_wharehouse'])->name('update_wharehouse');
 Route::post('delete_wharehouse', [WharehouseController::class, 'delete_wharehouse'])->name('delete_wharehouse');
 Route::get('manage_quantity', [WharehouseController::class, 'manage_quantity'])->name('manage_quantity');
+Route::get('get_inventory', [WharehouseController::class, 'get_inventory'])->name('get_inventory');
+Route::get('get_channel_inventory', [WharehouseController::class, 'get_channel_inventory'])->name('get_channel_inventory');
+Route::post('execute_transfer', [WharehouseController::class, 'execute_transfer'])->name('execute_transfer');
+Route::get('get_transfer_history', [WharehouseController::class, 'get_transfer_history'])->name('get_transfer_history');
+Route::get('export_transfers_excel', [WharehouseController::class, 'export_transfers_excel'])->name('export_transfers_excel');
+Route::get('get_channel_stocks', [WharehouseController::class, 'get_channel_stocks'])->name('get_channel_stocks');
+Route::get('get_stats', [WharehouseController::class, 'get_stats'])->name('get_stats');
 Route::get('settlement', [WharehouseController::class, 'settlement'])->name('settlement');
 

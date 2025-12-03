@@ -145,14 +145,18 @@
         </button>
 
         <div id="boutiquesMenu" class="submenu mt-2 pl-8 space-y-1">
-            <a href="{{url('boutique')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+            <a href="{{url('boutique_list')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.boutique_list') }}
             </a>
 
-            <a href="#" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+            <a href="{{url('boutique')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ __('messages.sub_categories') }}
+                {{ __('messages.add_boutique') }}
+            </a>
+               <a href="{{url('channels')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.add_new_channel') }}
             </a>
         </div>
     </div>
@@ -177,6 +181,29 @@
             <a href="{{url('tailor')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.tailors') }}
+            </a>
+        </div>
+    </div>
+
+     <div>
+        <button onclick="toggleSubmenu('specialordersMenu')" 
+            class="w-full flex items-center justify-between gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent transition-colors">
+            <div class="flex items-center gap-4">
+                <span class="material-symbols-outlined text-2xl">cut</span>
+                <span class="font-medium">{{ __('messages.special_orders') }}</span>
+            </div>
+            <span class="material-symbols-outlined transition-transform" id="arrow-specialordersMenu">expand_more</span>
+        </button>
+
+        <div id="specialordersMenu" class="submenu mt-2 pl-8 space-y-1">
+            <a href="{{url('view_special_order')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.special_order_list') }}
+            </a>
+
+            <a href="{{url('spcialorder')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.add_new_order') }}
             </a>
         </div>
     </div>

@@ -1,15 +1,18 @@
 <script>
-    $(document).ready(function() {
+    // Store current page globally
+    var currentStockPage = 1;
 
-        // Translations
-        const trans = {
-            details: "تفاصيل",
-            enter_quantity: "إدخال كميات",
-            edit: "تعديل",
-            delete: "حذف"
-        };
+    // Translations
+    const trans = {
+        details: "تفاصيل",
+        enter_quantity: "إدخال كميات",
+        edit: "تعديل",
+        delete: "حذف"
+    };
 
-        function loadStock(page = 1) {
+    // Make loadStock globally accessible
+    function loadStock(page = 1) {
+        currentStockPage = page || currentStockPage || 1;
             $.get("/stock/list", {
                 page: page
             }, function(res) {
@@ -19,17 +22,18 @@
                 $.each(res.data, function(index, stock) {
                     let image = stock.images.length ? stock.images[0].image_path : '';
 
+                  // Get first color_size combination if available
                     let size = '-';
-                    if (stock.sizes.length && stock.sizes[0].size) {
-                        size = stock.sizes[0].size.size_name_ar; // or size_name_en
-                    }
-
                     let color = '-';
-                    if (stock.colors.length && stock.colors[0].color) {
-                        color = stock.colors[0].color.color_name_ar; // or color_name_en
+                    let quantity = 0;
+                    
+                    if (stock.color_sizes && stock.color_sizes.length > 0) {
+                        const first = stock.color_sizes[0];
+                        size = first.size ? (first.size.size_name_ar || first.size.size_name_en || '-') : '-';
+                        color = first.color ? (first.color.color_name_ar || first.color.color_name_en || '-') : '-';
+                        // Calculate total quantity from all color_sizes
+                        quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
                     }
-
-                    let quantity = stock.quantity || (stock.sizes.length ? stock.sizes[0].qty : 0);
 
                     tableRows += `
                 <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}">
@@ -43,19 +47,23 @@
                     <td class="px-3 py-3 font-bold">${quantity}</td>
                     <td class="px-3 py-3 text-center">
                         <div class="flex justify-center gap-5 text-[12px] font-semibold text-gray-700">
-<button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition"
-        x-on:click="$dispatch('open-stock-details', ${stock.id})">
-    <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-    ${trans.details}
-</button>
-           <button class="openQuantityBtn flex flex-col items-center"
-        data-bs-toggle="modal"
-        data-bs-target="#quantityModal"
-        onclick="openStockQuantity(${stock.id})">
-    <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
-    Enter Quantity
-</button>
-
+                           <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"
+                                    onclick="openFullStockDetails(${stock.id})">
+                            <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
+                                ${trans.details}
+                            </button>
+                        <button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition d-none"
+                                x-on:click="$dispatch('open-stock-details', ${stock.id})">
+                            <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
+                            ${trans.details}
+                        </button>
+                                <button class="openQuantityBtn flex flex-col items-center"
+                                data-bs-toggle="modal"
+                                data-bs-target="#quantityModal"
+                                onclick="openStockQuantity(${stock.id})">
+                            <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
+                            Enter Quantity
+                        </button>
 
 
                             <button class="flex flex-col items-center gap-1 hover:text-blue-600 transition"
@@ -64,10 +72,10 @@
                                 ${trans.edit}
                             </button>
 
-                              <button class="flex flex-col items-center gap-1 hover:text-red-600 transition delete-stock-btn">
-        <span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>
-        ${trans.delete}
-    </button>
+                            <button class="flex flex-col items-center gap-1 hover:text-red-600 transition delete-stock-btn">
+                            <span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>
+                            ${trans.delete}
+                        </button>
                         </div>
                     </td>
                 </tr>`;
@@ -78,9 +86,18 @@
                 let mobileCards = '';
                 $.each(res.data, function(index, stock) {
                     let image = stock.images.length ? stock.images[0].image_path : '';
-                    let size = stock.sizes.length && stock.sizes[0].size ? stock.sizes[0].size.size_name_ar : '-';
-                    let color = stock.colors.length && stock.colors[0].color ? stock.colors[0].color.color_name_ar : '-';
-                    let quantity = stock.quantity || (stock.sizes.length ? stock.sizes[0].qty : 0);
+                    // Get first color_size combination if available
+                    let size = '-';
+                    let color = '-';
+                    let quantity = 0;
+                    
+                    if (stock.color_sizes && stock.color_sizes.length > 0) {
+                        const first = stock.color_sizes[0];
+                        size = first.size ? (first.size.size_name_ar || first.size.size_name_en || '-') : '-';
+                        color = first.color ? (first.color.color_name_ar || first.color.color_name_en || '-') : '-';
+                        // Calculate total quantity from all color_sizes
+                        quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
+                    }
 
                     mobileCards += `
                 <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden">
@@ -90,17 +107,22 @@
                     <p>اللون: ${color}</p>
                     <p>الكمية: ${quantity}</p>
                     <div class="flex justify-around mt-3 text-xs font-semibold">
-<button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition"
-        @click="$store.modals.showDetails = true">
-    <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-    تفاصيل
-</button>
-
-
+                    <button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition d-none"
+                            @click="$store.modals.showDetails = true">
+                        <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
+                        تفاصيل
+                    </button>
+                        <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"
+                                onclick="openFullStockDetails(${stock.id})">
+                        <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
+                            ${trans.details}
+                        </button>
                         <button class="flex flex-col items-center gap-1 hover:text-green-600 transition"
                             <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
                             ${trans.enter_quantity}
                         </button>
+
+                    
 
                         <button class="flex flex-col items-center gap-1 hover:text-blue-600 transition"
                                 onclick="window.location.href='/edit_stock/${stock.id}'">
@@ -162,8 +184,9 @@
                 $("#stock_pagination").html(pagination);
 
             });
-        }
+    }
 
+    $(document).ready(function() {
         // Pagination click
         $(document).on("click", "#stock_pagination a", function(e) {
             e.preventDefault();
@@ -249,6 +272,12 @@ function openStockQuantity(stockId) {
     $('#save_qty')[0].reset();
     $('#stock_id').val(stockId); // Set again after reset
     $('input[name="qtyType"][value="add"]').prop('checked', true);
+    
+    // Re-enable submit button and restore original text
+    var submitBtn = $('#save_qty').find('button[type="submit"]');
+    submitBtn.prop('disabled', false);
+    var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
+    submitBtn.html(originalBtnText);
     
     // Ensure modal structure is visible
     $('#quantityModal .modal-footer').css('display', 'flex');
@@ -393,41 +422,56 @@ function show_notification(type, message) {
             url: "{{ route('add_quantity') }}", // your Laravel route
             type: 'POST',
             data: formData,
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            },
+         
             success: function(response) {
                 // Restore scroll position
                 modalBody.scrollTop(scrollTop);
                 
-                if(response.success){
-                    // Show success message
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'نجح!',
-                        text: 'تم حفظ الكميات بنجاح',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                    
-                    // Reload stock data
-                    if(typeof loadStock === 'function') {
-                        loadStock();
-                    }
-                    
-                    // Close the modal after a short delay
-                    setTimeout(function() {
-                        var bsModal = bootstrap.Modal.getInstance(modal[0]);
-                        if(bsModal) {
-                            bsModal.hide();
-                        } else {
-                            modal.modal('hide');
-                        }
-                    }, 500);
-                } else {
-                    alert('Error: ' + (response.message || 'حدث خطأ ما'));
-                    submitBtn.prop('disabled', false).html('<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}');
-                }
+              if (response.status === "success") {
+    // Re-enable submit button before closing modal
+    var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
+    submitBtn.prop('disabled', false).html(originalBtnText);
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'نجح!',
+        text: response.message,
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    // Reload stock list with current page
+    if (typeof loadStock === 'function') {
+        // Reload the current page to show updated quantities
+        loadStock(currentStockPage);
+    } else {
+        // Fallback: reload the page
+        location.reload();
+    }
+
+    // Close modal
+    setTimeout(() => {
+        var bsModal = bootstrap.Modal.getInstance(modal[0]);
+        if (bsModal) {
+            bsModal.hide();
+        } else {
+            modal.modal('hide');
+        }
+    }, 500);
+
+} else {
+
+    Swal.fire({
+        icon: 'error',
+        title: 'خطأ!',
+        text: response.message || 'حدث خطأ ما'
+    });
+
+    submitBtn.prop('disabled', false).html(
+        '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}'
+    );
+}
+
             },
             error: function(xhr, status, error) {
                 // Restore scroll position
@@ -459,6 +503,158 @@ function show_notification(type, message) {
         
         return false; // Additional prevention
     });
+    
+    // Ensure button is enabled when modal is shown
+    $('#quantityModal').on('show.bs.modal', function() {
+        var submitBtn = $('#save_qty').find('button[type="submit"]');
+        submitBtn.prop('disabled', false);
+        var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
+        submitBtn.html(originalBtnText);
+    });
+    
+    // Ensure button is enabled when modal is hidden (in case it was left disabled)
+    $('#quantityModal').on('hidden.bs.modal', function() {
+        var submitBtn = $('#save_qty').find('button[type="submit"]');
+        submitBtn.prop('disabled', false);
+        var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
+        submitBtn.html(originalBtnText);
+    });
+});
+$.ajaxSetup({
+    headers: {
+        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+    }
 });
 
+// Full Stock Details Modal Function
+function openFullStockDetails(stockId) {
+    const modal = new bootstrap.Modal(document.getElementById('fullStockDetailsModal'));
+    const loader = document.getElementById('fullStockDetailsLoader');
+    const body = document.getElementById('fullStockDetailsBody');
+
+    // Show modal and loader
+    modal.show();
+    loader.classList.remove('d-none');
+    body.classList.add('d-none');
+
+    // Clear previous data
+    $('#full_modal_abaya_code').text('...');
+    $('#full_abaya_code').text('-');
+    $('#full_design_name').text('-');
+    $('#full_barcode').text('-');
+    $('#full_description').text('-');
+    $('#full_cost_price').text('-');
+    $('#full_sales_price').text('-');
+    $('#full_tailor_charges').text('-');
+    $('#full_tailor_names').text('-');
+    $('#full_total_quantity').text('0');
+    $('#full_stock_images_container').html('');
+    $('#full_size_color_container').html('');
+
+    // Fetch full stock details
+    $.ajax({
+        url: '{{ url("get_full_stock_details") }}',
+        method: 'GET',
+        data: { id: stockId },
+        success: function(response) {
+            if (response) {
+                // Populate basic info
+                $('#full_abaya_code').text(response.abaya_code || '-');
+                $('#full_modal_abaya_code').text(response.abaya_code || '...');
+                $('#full_design_name').text(response.design_name || '-');
+                $('#full_barcode').text(response.barcode || '-');
+                $('#full_description').text(response.abaya_notes || '-');
+
+                // Pricing info
+                const costPrice = response.cost_price ? parseFloat(response.cost_price).toFixed(2) : '0.00';
+                const salesPrice = response.sales_price ? parseFloat(response.sales_price).toFixed(2) : '0.00';
+                const tailorCharges = response.tailor_charges ? parseFloat(response.tailor_charges).toFixed(2) : '0.00';
+                
+                $('#full_cost_price').text(costPrice);
+                $('#full_sales_price').text(salesPrice);
+                $('#full_tailor_charges').text(tailorCharges);
+
+                // Tailor names
+                const tailorNames = response.tailor_names && response.tailor_names.length > 0 
+                    ? response.tailor_names.join(', ') 
+                    : '-';
+                $('#full_tailor_names').text(tailorNames);
+
+                // Total quantity
+                $('#full_total_quantity').text(response.total_quantity || 0);
+
+                // Populate images
+                if (response.images && response.images.length > 0) {
+                    let imagesHtml = '';
+                    response.images.forEach(function(imagePath, index) {
+                        imagesHtml += `
+                            <div class="col-md-4 col-lg-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-img-top position-relative" style="height: 200px; overflow: hidden;">
+                                        <img src="${imagePath}" 
+                                             class="w-100 h-100 object-cover" 
+                                             alt="Stock Image ${index + 1}"
+                                             onerror="this.src='/images/placeholder.png'">
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    $('#full_stock_images_container').html(imagesHtml);
+                } else {
+                    $('#full_stock_images_container').html(`
+                        <div class="col-12">
+                            <p class="text-muted text-center">{{ trans('messages.no_images_available', [], session('locale')) }}</p>
+                        </div>
+                    `);
+                }
+
+                // Populate color-size combinations
+                if (response.color_size_details && response.color_size_details.length > 0) {
+                    let colorSizeHtml = '';
+                    response.color_size_details.forEach(function(item) {
+                        colorSizeHtml += `
+                            <div class="col-md-6 col-lg-4">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <h6 class="mb-1 fw-bold text-gray-900">${item.size_name}</h6>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="rounded-circle border border-2" 
+                                                         style="width: 24px; height: 24px; background-color: ${item.color_code};"></div>
+                                                    <span class="text-muted small">${item.color_name}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-primary fs-6 px-3 py-2">${item.quantity} {{ trans('messages.pieces', [], session('locale')) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    $('#full_size_color_container').html(colorSizeHtml);
+                } else {
+                    $('#full_size_color_container').html(`
+                        <div class="col-12">
+                            <p class="text-muted text-center">{{ trans('messages.no_data_available', [], session('locale')) }}</p>
+                        </div>
+                    `);
+                }
+            }
+
+            // Hide loader and show body
+            loader.classList.add('d-none');
+            body.classList.remove('d-none');
+        },
+        error: function(err) {
+            console.error('Error:', err);
+            alert('{{ trans("messages.error_loading_details", [], session("locale")) }}');
+            loader.classList.add('d-none');
+            body.classList.remove('d-none');
+        }
+    });
+}
 </script>

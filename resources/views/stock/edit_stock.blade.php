@@ -270,7 +270,7 @@
                 class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" />
             </label>
           </div> <br>
-            <div x-data="{ mode: 'color', selectedTailors: [] }"
+            <div x-data="{ mode: 'color_size', selectedTailors: [] }"
               class="bg-card-light dark:bg-card-dark p-6 rounded-xl border border-border-light dark:border-border-dark shadow-sm space-y-6">
 
               <div class="flex justify-between items-center mb-2">
@@ -296,22 +296,9 @@
                   class="form-input h-11 w-32 sm:w-40 rounded-lg text-center border border-yellow-400 focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400 bg-white shadow-sm" />
               </div>
               <!-- Tabs -->
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition hover:bg-secondary/50"
-                  :class="mode === 'color' ? 'border-primary bg-secondary/40' : 'border-gray-300'">
-                  <input type="radio" name="mode" value="color" x-model="mode" />
-                  <span>{{ trans('messages.by_color', [], session('locale')) }}</span>
-                </label>
-
-                <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition hover:bg-secondary/50"
-                  :class="mode === 'size' ? 'border-primary bg-secondary/40' : 'border-gray-300'">
-                  <input type="radio" name="mode" value="size" x-model="mode" />
-                  <span>{{ trans('messages.by_size', [], session('locale')) }}</span>
-                </label>
-
-                <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition hover:bg-secondary/50"
-                  :class="mode === 'color_size' ? 'border-primary bg-secondary/40' : 'border-gray-300'">
-                  <input type="radio" name="mode" value="color_size" x-model="mode" />
+              <div class="w-full">
+                <label class="flex items-center gap-2 p-3 border border-primary bg-secondary/40 rounded-lg cursor-pointer transition hover:bg-secondary/50 w-full">
+                  <input type="radio" name="mode" value="color_size" x-model="mode" checked/>
                   <span>{{ trans('messages.by_color_and_size', [], session('locale')) }}</span>
                 </label>
               </div>

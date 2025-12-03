@@ -234,20 +234,18 @@
                         <h3 class="text-lg font-bold text-[var(--primary-color)]">{{ __('messages.quantity_details') }}</h3>
 
                         <!-- By Size -->
-                        <div>
+                        <!-- <div>
                             <h4 class="font-semibold mb-3">{{ __('messages.by_size') }}</h4>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="size_container">
-                                <!-- Sizes will be injected here -->
                             </div>
-                        </div>
+                        </div> -->
 
                         <div>
-                            <div>
+                            <!-- <div>
                                 <h4 class="font-semibold mb-3">By Color</h4>
                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="color_container">
-                                    <!-- Sizes will be injected here -->
                                 </div>
-                            </div>
+                            </div> -->
 
                             <div>
                                 <h4 class="font-semibold mb-2">By Size and Color</h4>
@@ -331,7 +329,7 @@
                     </div>
 
                     <!-- 1. By Size -->
-                    <section class="mb-5">
+                    <section class="mb-5 d-none">
                         <h6 class="fw-bold text-primary mb-3">
                             <span class="badge bg-primary rounded-pill me-2">1</span>
                             {{ trans('stock.by_size', [], session('locale')) }}
@@ -353,7 +351,7 @@
                     <hr class="my-5">
 
                     <!-- 3. By Color Only -->
-                    <section class="mb-5">
+                    <section class="mb-5 d-none">
                         <h6 class="fw-bold text-primary mb-3">
                             <span class="badge bg-primary rounded-pill me-2">3</span>
                             {{ trans('stock.by_color_only', [], session('locale')) }}
@@ -397,6 +395,121 @@
 
 
 
+
+<!-- Full Stock Details Modal -->
+<div class="modal fade" id="fullStockDetailsModal" tabindex="-1" aria-labelledby="fullStockDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0 rounded-4 overflow-hidden">
+            <!-- Header -->
+            <div class="modal-header border-0 bg-gradient-to-r from-pink-50 to-purple-50">
+                <h5 class="modal-title text-[var(--primary-color)] fw-bold fs-4" id="fullStockDetailsModalLabel">
+                    {{ __('messages.abaya_details') }}: <span id="full_modal_abaya_code"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <!-- Loader -->
+            <div id="fullStockDetailsLoader" class="d-flex flex-column align-items-center justify-content-center p-5 d-none">
+                <div class="spinner-border text-[var(--primary-color)]" role="status">
+                    <span class="visually-hidden">{{ __('messages.loading') }}...</span>
+                </div>
+                <p class="mt-3 text-muted">{{ __('messages.loading_details') }}</p>
+            </div>
+            
+            <!-- Body -->
+            <div class="modal-body p-4 p-lg-5" id="fullStockDetailsBody">
+                <!-- Total Quantity Badge at Top -->
+                <div class="text-center mb-4">
+                    <div class="d-inline-block p-3 rounded-4 shadow-sm" style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
+                        <h6 class="text-white mb-1 fw-semibold">{{ __('messages.total_quantity') }}</h6>
+                        <h3 class="text-white mb-0 fw-bold" id="full_total_quantity">0</h3>
+                    </div>
+                </div>
+
+                <!-- Images Gallery -->
+                <div class="mb-5">
+                    <h6 class="fw-bold text-[var(--primary-color)] mb-3">
+                        <i class="bi bi-images me-2"></i>{{ __('messages.images') }}
+                    </h6>
+                    <div id="full_stock_images_container" class="row g-3">
+                        <!-- Images will be injected here -->
+                    </div>
+                </div>
+
+                <hr class="my-4 border-dashed border-gray-300">
+
+                <!-- Basic Information -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card card-body h-100 border-0 shadow-sm p-4">
+                            <h6 class="fw-bold text-[var(--primary-color)] mb-3">{{ __('messages.basic_info') }}</h6>
+                            <div class="space-y-2">
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.code') }}:</strong> 
+                                    <span id="full_abaya_code" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.design') }}:</strong> 
+                                    <span id="full_design_name" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.description') }}:</strong> 
+                                    <span id="full_description" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.barcode') }}:</strong> 
+                                    <span id="full_barcode" class="text-gray-900">-</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card card-body h-100 border-0 shadow-sm p-4">
+                            <h6 class="fw-bold text-[var(--primary-color)] mb-3">{{ __('messages.price_info') }}</h6>
+                            <div class="space-y-2">
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.cost_price') }}:</strong> 
+                                    <span id="full_cost_price" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.sales_price') }}:</strong> 
+                                    <span id="full_sales_price" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.tailor_charges') }}:</strong> 
+                                    <span id="full_tailor_charges" class="text-gray-900">-</span>
+                                </p>
+                                <p class="mb-2">
+                                    <strong class="text-gray-700">{{ __('messages.tailors') }}:</strong> 
+                                    <span id="full_tailor_names" class="text-gray-900">-</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4 border-dashed border-gray-300">
+
+                <!-- Color-Size Combinations -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-[var(--primary-color)] mb-3">
+                        <i class="bi bi-palette me-2"></i>{{ __('messages.by_color_and_size') }}
+                    </h6>
+                    <div class="row g-3" id="full_size_color_container">
+                        <!-- Dynamic items will be injected here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="modal-footer border-0 bg-light px-5 py-4">
+                <button type="button" class="btn btn-lg btn-outline-secondary px-5" data-bs-dismiss="modal">
+                    {{ __('messages.close') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @include('layouts.footer')
 @endsection

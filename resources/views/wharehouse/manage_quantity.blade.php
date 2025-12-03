@@ -5,6 +5,7 @@
 <title>{{ trans('messages.transfer_quantities_between_channels', [], session('locale')) }}</title>
 @endpush
 
+
 <main class="flex-1 p-4 md:p-6" x-data="transferPage()" x-init="init()">
   <div class="w-full max-w-screen-xl mx-auto space-y-6">
 
@@ -48,38 +49,50 @@
       <div class="flex flex-wrap gap-3 mb-5">
         <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
                :class="mode==='main_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="main_to_channel">
+          <input type="radio" class="sr-only" x-model="mode" value="main_to_channel" @change="resetChannelsForMode()">
           <span class="material-symbols-outlined text-[var(--primary-color)]">call_made</span> {{ trans('messages.from_warehouse_to_channel', [], session('locale')) }}
         </label>
         <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
                :class="mode==='channel_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="channel_to_channel">
+          <input type="radio" class="sr-only" x-model="mode" value="channel_to_channel" @change="resetChannelsForMode()">
           <span class="material-symbols-outlined text-[var(--primary-color)]">swap_horiz</span> {{ trans('messages.from_channel_to_channel', [], session('locale')) }}
         </label>
         <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
                :class="mode==='channel_to_main' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="channel_to_main">
+          <input type="radio" class="sr-only" x-model="mode" value="channel_to_main" @change="resetChannelsForMode()">
           <span class="material-symbols-outlined text-[var(--primary-color)]">call_received</span> {{ trans('messages.from_channel_to_warehouse', [], session('locale')) }}
         </label>
       </div>
 
-      <!-- Step 2: from/to -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Step 2: from/to/transfer date -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <!-- From -->
         <div>
           <label class="text-sm font-semibold text-gray-700">{{ trans('messages.from', [], session('locale')) }}</label>
           <select class="w-full h-11 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
                   x-model="fromChannel">
             <option value="" disabled selected>{{ trans('messages.select_channel', [], session('locale')) }}</option>
-            <template x-if="mode!=='main_to_channel'">
-              <optgroup label="{{ trans('messages.channels', [], session('locale')) }}">
-                <template x-for="c in channels" :key="'from-'+c.id">
-                  <option :value="c.id" x-text="c.name"></option>
-                </template>
-              </optgroup>
-            </template>
             <template x-if="mode==='main_to_channel'">
               <option value="main">{{ trans('messages.main_warehouse', [], session('locale')) }}</option>
+            </template>
+            <template x-if="mode!=='main_to_channel'">
+              <template x-if="channelsOnly.length > 0">
+                <optgroup label="{{ trans('messages.channels_and_boutiques', [], session('locale')) }}">
+                  <template x-for="item in channelsOnly" :key="'from-channel-'+item.id">
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                   <template x-for="item in boutiquesOnly" :key="'from-boutique-'+item.id" >
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                </optgroup>
+              </template>
+              <!-- <template x-if="boutiquesOnly.length > 0">
+                <optgroup label="{{ trans('messages.boutiques', [], session('locale')) }}">
+                  <template x-for="item in boutiquesOnly" :key="'from-boutique-'+item.id" >
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                </optgroup>
+              </template> -->
             </template>
           </select>
         </div>
@@ -94,21 +107,52 @@
               <option value="main">{{ trans('messages.main_warehouse', [], session('locale')) }}</option>
             </template>
             <template x-if="mode!=='channel_to_main'">
-              <optgroup label="{{ trans('messages.channels', [], session('locale')) }}">
-                <template x-for="c in channels" :key="'to-'+c.id">
-                  <option :value="c.id" x-text="c.name"></option>
-                </template>
-              </optgroup>
+              <template x-if="availableToChannels.length > 0">
+                <optgroup label="{{ trans('messages.channels_and_boutiques', [], session('locale')) }}">
+                  <template x-for="item in availableToChannels" :key="'to-channel-'+item.id">
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                    <template x-for="item in availableToBoutiques" :key="'to-boutique-'+item.id">
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                </optgroup>
+              </template>
+              <!-- <template x-if="availableToBoutiques.length > 0">
+                <optgroup label="{{ trans('messages.boutiques', [], session('locale')) }}">
+                  <template x-for="item in availableToBoutiques" :key="'to-boutique-'+item.id">
+                    <option :value="item.type + '-' + item.id" x-text="item.display_name"></option>
+                  </template>
+                </optgroup>
+              </template> -->
             </template>
           </select>
+        </div>
+
+        <!-- Transfer Date -->
+        <div>
+          <label class="text-sm font-semibold text-gray-700">{{ trans('messages.transfer_date', [], session('locale')) }}</label>
+          <input type="date" 
+                 class="w-full h-11 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
+                 x-model="transferDate">
         </div>
       </div>
 
       <!-- Step 3: pick items -->
       <div class="mt-5">
-        <button @click="openPicker()" class="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 font-semibold">
-          <span class="material-symbols-outlined align-middle text-base">add_shopping_cart</span> {{ trans('messages.select_abayas_from_warehouse', [], session('locale')) }}
-        </button>
+        <!-- Button for main warehouse (main_to_channel mode) -->
+        <template x-if="mode==='main_to_channel'">
+          <button @click="openPicker('main')" class="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 font-semibold">
+            <span class="material-symbols-outlined align-middle text-base">add_shopping_cart</span> {{ trans('messages.select_abayas_from_warehouse', [], session('locale')) }}
+          </button>
+        </template>
+        
+        <!-- Button for channel/boutique (channel_to_channel and channel_to_main modes) -->
+        <template x-if="(mode==='channel_to_channel' || mode==='channel_to_main') && fromChannel && fromChannel !== 'main'">
+          <button @click="openPicker(fromChannel)" class="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 font-semibold">
+            <span class="material-symbols-outlined align-middle text-base">add_shopping_cart</span> 
+            <span x-text="'{{ trans('messages.select_abayas_from', [], session('locale')) }} ' + channelName(fromChannel)"></span>
+          </button>
+        </template>
       </div>
 
       <!-- Basket -->
@@ -188,10 +232,11 @@
         <h3 class="font-bold text-[var(--primary-color)]">{{ trans('messages.movements_log', [], session('locale')) }}</h3>
         <div class="ml-auto flex gap-2 w-full sm:w-auto">
           <input type="search" class="h-10 px-3 border border-pink-200 rounded-lg flex-1 sm:w-64"
-                 placeholder="{{ trans('messages.search_by_operation_number', [], session('locale')) }}" x-model="historySearch" @input="filterHistory()">
-          <input type="date" class="h-10 px-2 border border-pink-200 rounded-lg" x-model="dateFromH" @change="filterHistory()">
-          <input type="date" class="h-10 px-2 border border-pink-200 rounded-lg" x-model="dateToH" @change="filterHistory()">
-          <button class="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 text-sm hover:bg-purple-200">
+                 placeholder="{{ trans('messages.search_by_operation_number', [], session('locale')) }}" x-model="historySearch" @input="loadHistory()">
+          <input type="date" class="h-10 px-2 border border-pink-200 rounded-lg" x-model="dateFromH" @change="loadHistory()">
+          <input type="date" class="h-10 px-2 border border-pink-200 rounded-lg" x-model="dateToH" @change="loadHistory()">
+          <button @click="exportToExcel()" 
+                  class="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 text-sm hover:bg-purple-200 inline-flex items-center gap-1">
             <span class="material-symbols-outlined text-base align-middle">download</span> Excel
           </button>
         </div>
@@ -248,7 +293,14 @@
     <div @click.away="showPicker=false"
          class="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden">
       <div class="flex justify-between items-center p-4 border-b">
-        <h3 class="text-lg font-bold text-[var(--primary-color)]">{{ trans('messages.select_abayas_from_warehouse', [], session('locale')) }}</h3>
+        <h3 class="text-lg font-bold text-[var(--primary-color)]">
+          <template x-if="pickerSource === 'main'">
+            <span>{{ trans('messages.select_abayas_from_warehouse', [], session('locale')) }}</span>
+          </template>
+          <template x-if="pickerSource !== 'main'">
+            <span x-text="'{{ trans('messages.select_abayas_from', [], session('locale')) }} ' + channelName(pickerSource)"></span>
+          </template>
+        </h3>
         <button @click="showPicker=false" class="text-gray-500 hover:text-gray-700">✖</button>
       </div>
 
@@ -284,16 +336,26 @@
               </tr>
             </thead>
             <tbody>
+              <template x-if="inventoryLoading">
+                <tr><td colspan="9" class="text-center text-gray-400 py-8">
+                  <span class="material-symbols-outlined text-4xl animate-spin">refresh</span><div>{{ trans('messages.loading', [], session('locale')) }}...</div>
+                </td></tr>
+              </template>
+              <template x-if="!inventoryLoading && pickerFiltered.length===0">
+                <tr><td colspan="9" class="text-center text-gray-400 py-8">
+                  <span class="material-symbols-outlined text-4xl">inventory_2</span><div>{{ trans('messages.no_items_found', [], session('locale')) }}</div>
+                </td></tr>
+              </template>
               <template x-for="row in pickerFiltered" :key="row.uid">
                 <tr class="border-t hover:bg-pink-50/60"
                     :class="selectedUids.includes(row.uid) ? 'bg-purple-50' : ''">
-                  <td class="px-3 py-2 font-semibold" x-text="row.code"></td>
-                  <td class="px-3 py-2" x-text="row.name"></td>
+                  <td class="px-3 py-2 font-semibold" x-text="row.code || '—'"></td>
+                  <td class="px-3 py-2" x-text="row.name || '—'"></td>
                   <td class="px-3 py-2" x-text="typeLabel(row.type)"></td>
                   <td class="px-3 py-2">
                     <template x-if="row.color">
                       <span class="inline-flex items-center gap-2">
-                        <span class="w-4 h-4 rounded-full border" :style="'background:'+row.color_code"></span>
+                        <span class="w-4 h-4 rounded-full border" :style="'background:'+(row.color_code || '#000000')"></span>
                         <span x-text="row.color"></span>
                       </span>
                     </template>
@@ -303,13 +365,15 @@
 
                   <!-- Qty in source -->
                   <td class="px-3 py-2 text-center" x-show="mode!=='main_to_channel'"
-                      x-text="getQtyInChannel(fromChannel, row)"></td>
+                      x-text="getQtyInChannel(fromChannel, row)"
+                      @load="loadChannelStocks(fromChannel)"></td>
 
                   <!-- Qty in destination -->
                   <td class="px-3 py-2 text-center" x-show="mode!=='channel_to_main'"
-                      x-text="getQtyInChannel(toChannel, row)"></td>
+                      x-text="getQtyInChannel(toChannel, row)"
+                      @load="loadChannelStocks(toChannel)"></td>
 
-                  <td class="px-3 py-2" x-text="row.available"></td>
+                  <td class="px-3 py-2" x-text="row.available || 0"></td>
                   <td class="px-3 py-2 text-center">
                     <template x-if="!selectedUids.includes(row.uid)">
                       <button @click="addToBasket(row)"
@@ -350,6 +414,14 @@
           <span class="font-semibold">{{ trans('messages.to', [], session('locale')) }}:</span> <span x-text="channelName(currentHistory.to)"></span> •
           <span class="font-semibold">{{ trans('messages.date', [], session('locale')) }}:</span> <span x-text="currentHistory.date"></span>
         </p>
+        <template x-if="currentHistory.note">
+          <div class="mb-3 p-3 bg-gray-50 rounded-lg">
+            <p class="text-sm">
+              <span class="font-semibold text-gray-700">{{ trans('messages.operation_notes', [], session('locale')) }}:</span>
+              <span class="text-gray-600" x-text="currentHistory.note"></span>
+            </p>
+          </div>
+        </template>
         <div class="overflow-x-auto">
           <table class="w-full text-sm min-w-[600px]">
             <thead class="bg-pink-50 text-gray-700">
@@ -384,65 +456,109 @@
 <script>
 function transferPage() {
   return {
-    // Stats (dummy)
-    stats: { main: 520, website: 120, pos: 65, boutiques: 180 },
+    // Stats - loaded from backend
+    stats: { main: 0, website: 0, pos: 0, boutiques: 0 },
 
-    // Channels
-    channels: [
-      {id:'web', name:'الموقع الإلكتروني'},
-      {id:'pos', name:'نقطة بيع - المكتب'},
-      {id:'btk-noor', name:'بوتيك النور'},
-      {id:'btk-almouj', name:'بوتيك الموج'}
-    ],
+    // Items from controller (channels + boutiques)
+    items: @json($items ?? []),
+
+
+    get channelsOnly() {
+      return this.items.filter(i => i.type === 'channel');
+    },
+
+    // Computed: Boutiques only
+    get boutiquesOnly() {
+      return this.items.filter(i => i.type === 'boutique');
+    },
+
+    // Computed: Available items for "To" select (excludes selected "from" in channel_to_channel mode)
+    get availableToItems() {
+      // For channel_to_channel mode, show all items (don't exclude the selected "from")
+      return this.items;
+    },
+
+    // Computed: Available channels for "To" select
+    get availableToChannels() {
+      return this.availableToItems.filter(i => i.type === 'channel');
+    },
+
+    // Computed: Available boutiques for "To" select
+    get availableToBoutiques() {
+      return this.availableToItems.filter(i => i.type === 'boutique');
+    },
 
     // Mode & selections
     mode: 'main_to_channel',
     fromChannel: 'main',
     toChannel: '',
+    transferDate: '',
+    
+    // Reset channels when mode changes
+    resetChannelsForMode() {
+      if (this.mode === 'main_to_channel') {
+        this.fromChannel = 'main';
+        this.toChannel = '';
+      } else if (this.mode === 'channel_to_channel') {
+        this.fromChannel = '';
+        this.toChannel = '';
+      } else if (this.mode === 'channel_to_main') {
+        this.fromChannel = '';
+        this.toChannel = 'main';
+      }
+    },
 
-    // Inventory (from main) - dummy
+    // Inventory (from main) - loaded from API
     picker: { q:'', type:'' },
-    inventory: [
-      // type: size | color | color_size
-      {uid:'1', code:'ABY101', name:'عباية خليجية', type:'size', size:'M', color:null, color_code:'#000000', available:22},
-      {uid:'2', code:'ABY101', name:'عباية خليجية', type:'size', size:'L', color:null, color_code:'#000000', available:15},
-      {uid:'3', code:'ABY205', name:'عباية فاخرة', type:'color', size:null, color:'أسود', color_code:'#000000', available:30},
-      {uid:'4', code:'ABY205', name:'عباية فاخرة', type:'color', size:null, color:'بيج', color_code:'#f5deb3', available:12},
-      {uid:'5', code:'ABY330', name:'عباية مودرن', type:'color_size', size:'S', color:'أسود', color_code:'#000000', available:10},
-      {uid:'6', code:'ABY330', name:'عباية مودرن', type:'color_size', size:'M', color:'بيج', color_code:'#f5deb3', available:8},
-      {uid:'7', code:'ABY447', name:'عباية كلاسيك', type:'color_size', size:'L', color:'رمادي', color_code:'#b0b0b0', available:6},
-    ],
+    inventory: [],
+    inventoryLoading: false,
     get pickerFiltered() {
       const q = this.picker.q.toLowerCase();
       return this.inventory.filter(r => {
-        const matchQ = !q || r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q);
+        const matchQ = !q || (r.code && r.code.toLowerCase().includes(q)) || (r.name && r.name.toLowerCase().includes(q));
         const matchType = !this.picker.type || r.type===this.picker.type;
         return matchQ && matchType;
       });
     },
+    async loadInventory() {
+      this.inventoryLoading = true;
+      try {
+        const response = await fetch('/get_inventory');
+        const data = await response.json();
+        this.inventory = data || [];
+      } catch (error) {
+        console.error('Error loading inventory:', error);
+        this.inventory = [];
+        this.toast.msg = '{{ trans('messages.error_loading_inventory', [], session('locale')) }}';
+        this.toast.show = true;
+        setTimeout(() => this.toast.show = false, 3000);
+      } finally {
+        this.inventoryLoading = false;
+      }
+    },
 
-    // Channel stocks (source/destination) - dummy
-    channelStocks: {
-      "btk-noor": [
-        { code:"ABY101", color:null, size:"M", qty:6 },
-        { code:"ABY101", color:null, size:"L", qty:2 },
-        { code:"ABY205", color:"أسود", size:null, qty:3 },
-        { code:"ABY330", color:"أسود", size:"S", qty:1 }
-      ],
-      "btk-almouj": [
-        { code:"ABY101", color:null, size:"M", qty:1 },
-        { code:"ABY205", color:"رمادي", size:null, qty:4 },
-        { code:"ABY330", color:"بيج", size:"M", qty:2 }
-      ],
-      "pos": [
-        { code:"ABY101", color:null, size:"M", qty:1 }
-      ],
-      "web": []
+    // Channel stocks (source/destination) - loaded from backend
+    channelStocks: {},
+
+    // Load channel stocks
+    async loadChannelStocks(channelId) {
+      if (!channelId || channelId === 'main') return;
+      if (this.channelStocks[channelId]) return; // Already loaded
+      
+      try {
+        const response = await fetch(`/get_channel_stocks?channel_id=${channelId}`);
+        const data = await response.json();
+        this.channelStocks[channelId] = data || [];
+      } catch (error) {
+        console.error('Error loading channel stocks:', error);
+        this.channelStocks[channelId] = [];
+      }
     },
 
     // Helpers to get qty in a channel for a row
     getQtyInChannel(channelId, row) {
       if (!channelId || channelId === 'main') return '-';
+      // channelId format: "type-id" (e.g., "channel-1" or "boutique-2")
       const list = this.channelStocks[channelId] || [];
       const found = list.find(x =>
         x.code === row.code &&
@@ -460,11 +576,12 @@ function transferPage() {
     transferNote: '',
     typeLabel(t){ return t==='size' ? '{{ trans('messages.by_size', [], session('locale')) }}' : t==='color' ? '{{ trans('messages.by_color', [], session('locale')) }}' : '{{ trans('messages.by_color_and_size', [], session('locale')) }}'; },
     addToBasket(row){
-      const uid = `${row.code}|${row.size||''}|${row.color||''}`;
+      // Use the uid from the row (generated by API) or create one if missing
+      const uid = row.uid || `${row.code}|${row.size||''}|${row.color||''}`;
       const exists = this.basket.find(b => b.uid===uid);
       if (!exists){
         this.basket.push({...row, uid, qty: 1});
-        if (!this.selectedUids.includes(row.uid)) this.selectedUids.push(row.uid);
+        if (!this.selectedUids.includes(uid)) this.selectedUids.push(uid);
       }
     },
     removeFromBasket(idx){
@@ -488,13 +605,50 @@ function transferPage() {
 
     // Picker open
     showPicker: false,
-    openPicker(){ this.showPicker = true; },
+    pickerSource: 'main', // Track which source we're picking from
+    async openPicker(source = 'main'){ 
+      this.pickerSource = source;
+      this.showPicker = true;
+      
+      // Load inventory based on source
+      if (source === 'main') {
+        if (this.inventory.length === 0) {
+          await this.loadInventory();
+        }
+      } else {
+        // Load from channel/boutique
+        await this.loadChannelInventory(source);
+      }
+      
+      // Load channel stocks when picker opens (for displaying quantities)
+      if (this.fromChannel && this.fromChannel !== 'main') {
+        await this.loadChannelStocks(this.fromChannel);
+      }
+      if (this.toChannel && this.toChannel !== 'main') {
+        await this.loadChannelStocks(this.toChannel);
+      }
+    },
+    
+    // Load inventory from a specific channel/boutique
+    async loadChannelInventory(channelId) {
+      this.inventoryLoading = true;
+      try {
+        const response = await fetch(`/get_channel_inventory?channel_id=${channelId}`);
+        const data = await response.json();
+        this.inventory = data || [];
+      } catch (error) {
+        console.error('Error loading channel inventory:', error);
+        this.inventory = [];
+        this.toast.msg = '{{ trans('messages.error_loading_inventory', [], session('locale')) }}';
+        this.toast.show = true;
+        setTimeout(() => this.toast.show = false, 3000);
+      } finally {
+        this.inventoryLoading = false;
+      }
+    },
 
-    // History
-    history: [
-      {no:'TR-2025-001', date:'2025-11-10', from:'main', to:'btk-noor', total:12,
-        items:[{code:'ABY101',color:null,size:'M',qty:6},{code:'ABY205',color:'أسود',size:null,qty:6}]}
-    ],
+    // History - loaded from backend
+    history: [],
     filteredHistory: [],
     historySearch: '',
     dateFromH: '', dateToH: '',
@@ -502,10 +656,29 @@ function transferPage() {
     currentHistory:{no:'', items:[], from:'', to:'', date:'', total:0},
     channelName(id){
       if (id==='main') return '{{ trans('messages.main_warehouse', [], session('locale')) }}';
-      const f = this.channels.find(c=>c.id===id);
-      return f ? f.name : id;
+      const f = this.items.find(item => {
+        const itemValue = item.type + '-' + item.id;
+        return itemValue === id;
+      });
+      return f ? f.display_name : id;
     },
     openHistoryDetails(row){ this.currentHistory = row; this.showHistory = true; },
+    async loadHistory(){
+      try {
+        const params = new URLSearchParams();
+        if (this.historySearch) params.append('search', this.historySearch);
+        if (this.dateFromH) params.append('date_from', this.dateFromH);
+        if (this.dateToH) params.append('date_to', this.dateToH);
+        
+        const response = await fetch(`/get_transfer_history?${params.toString()}`);
+        const data = await response.json();
+        this.history = data || [];
+        this.filterHistory();
+      } catch (error) {
+        console.error('Error loading history:', error);
+        this.history = [];
+      }
+    },
     filterHistory(){
       const q = this.historySearch.toLowerCase();
       const from = this.dateFromH ? new Date(this.dateFromH) : null;
@@ -523,49 +696,107 @@ function transferPage() {
     // Toast
     toast:{show:false, msg:''},
 
-    // Execute transfer (dummy adjust stats + add to history)
-    executeTransfer(){
+    // Execute transfer - call backend
+    async executeTransfer(){
       if (!this.canExecute) return;
 
-      const total = this.basket.reduce((s,b)=>s+Number(b.qty||0),0);
-      const no = 'TR-' + new Date().toISOString().slice(0,10).replaceAll('-','') + '-' + String(this.history.length+1).padStart(3,'0');
-      const items = this.basket.map(b=>({code:b.code, color:b.color, size:b.size, qty:Number(b.qty)}));
+      try {
+        const response = await fetch('/execute_transfer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          },
+          body: JSON.stringify({
+            mode: this.mode,
+            from: this.fromChannel,
+            to: this.toChannel,
+            transfer_date: this.transferDate || new Date().toISOString().slice(0,10),
+            note: this.transferNote,
+            basket: this.basket.map(b => ({
+              code: b.code,
+              color: b.color,
+              size: b.size,
+              qty: Number(b.qty),
+              type: b.type,
+              available: Number(b.available),
+              uid: b.uid
+            }))
+          })
+        });
 
-      // Update dummy stats visually (not persisted)
-      const isBoutique = id => ['btk-noor','btk-almouj'].includes(id);
-      if (this.fromChannel==='main') this.stats.main -= total;
-      if (this.toChannel==='main') this.stats.main += total;
-      if (this.fromChannel==='web') this.stats.website -= total;
-      if (this.toChannel==='web') this.stats.website += total;
-      if (this.fromChannel==='pos') this.stats.pos -= total;
-      if (this.toChannel==='pos') this.stats.pos += total;
-      if (isBoutique(this.fromChannel)) this.stats.boutiques -= total;
-      if (isBoutique(this.toChannel)) this.stats.boutiques += total;
+        const result = await response.json();
 
-      // record history
-      this.history.unshift({
-        no, date:new Date().toISOString().slice(0,10),
-        from:this.fromChannel, to:this.toChannel, total, items, note:this.transferNote
-      });
-      this.filterHistory();
+        if (result.status === 'success') {
+          // Reload stats and history
+          await this.loadStats();
+          await this.loadHistory();
+          
+          // Clear channel stocks cache to force reload
+          this.channelStocks = {};
 
-      // reset
-      this.basket = [];
-      this.selectedUids = [];
-      this.transferNote = '';
-      if (this.mode==='main_to_channel'){ this.fromChannel='main'; this.toChannel=''; }
-      if (this.mode==='channel_to_channel'){ this.fromChannel=''; this.toChannel=''; }
-      if (this.mode==='channel_to_main'){ this.fromChannel=''; this.toChannel='main'; }
+          // reset
+          this.basket = [];
+          this.selectedUids = [];
+          this.transferNote = '';
+          this.transferDate = '';
+          if (this.mode==='main_to_channel'){ this.fromChannel='main'; this.toChannel=''; }
+          if (this.mode==='channel_to_channel'){ this.fromChannel=''; this.toChannel=''; }
+          if (this.mode==='channel_to_main'){ this.fromChannel=''; this.toChannel='main'; }
 
-      this.toast.msg = '{{ trans('messages.transfer_executed_successfully', [], session('locale')) }}';
-      this.toast.show = true;
-      setTimeout(()=> this.toast.show=false, 2000);
+          this.toast.msg = result.message || '{{ trans('messages.transfer_executed_successfully', [], session('locale')) }}';
+          this.toast.show = true;
+          setTimeout(()=> this.toast.show=false, 2000);
+        } else {
+          this.toast.msg = result.message || '{{ trans('messages.error_executing_transfer', [], session('locale')) }}';
+          this.toast.show = true;
+          setTimeout(()=> this.toast.show=false, 3000);
+        }
+      } catch (error) {
+        console.error('Error executing transfer:', error);
+        this.toast.msg = '{{ trans('messages.error_executing_transfer', [], session('locale')) }}';
+        this.toast.show = true;
+        setTimeout(()=> this.toast.show=false, 3000);
+      }
     },
 
-    init(){
+    // Load stats from backend
+    async loadStats(){
+      try {
+        const response = await fetch('/get_stats');
+        const data = await response.json();
+        this.stats = data || { main: 0, website: 0, pos: 0, boutiques: 0 };
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    },
+
+    // Export to Excel
+    exportToExcel(){
+      const params = new URLSearchParams();
+      if (this.historySearch) params.append('search', this.historySearch);
+      if (this.dateFromH) params.append('date_from', this.dateFromH);
+      if (this.dateToH) params.append('date_to', this.dateToH);
+      
+      const url = '/export_transfers_excel' + (params.toString() ? '?' + params.toString() : '');
+      window.location.href = url;
+    },
+
+    async init(){
       // defaults
       this.fromChannel='main'; this.toChannel='';
-      this.filterHistory();
+      
+      // Load data on page load
+      await Promise.all([
+        this.loadInventory(),
+        this.loadStats(),
+        this.loadHistory()
+      ]);
+      
+      // Debug: Log items to console
+      console.log('All items:', this.items);
+      console.log('Channels:', this.channelsOnly);
+      console.log('Boutiques:', this.boutiquesOnly);
     }
   }
 }

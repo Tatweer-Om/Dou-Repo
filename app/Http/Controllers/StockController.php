@@ -10,6 +10,7 @@ use App\Models\ColorSize;
 use App\Models\StockSize;
 use App\Models\StockColor;
 use App\Models\StockImage;
+use Illuminate\Support\Str;
 use App\Models\StockHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -76,9 +77,13 @@ public function edit_stock($id)
 public function getstock()
 {
     // Eager load relationships
-    $stocks = Stock::with(['colors.color', 'sizes.size', 'images'])
-                   ->orderBy('id', 'DESC')
-                   ->paginate(10);
+   $stocks = Stock::with([
+    'colorSizes.size',
+    'colorSizes.color',
+    'images'
+])
+->orderBy('id', 'DESC')
+->paginate(10);
 
     return response()->json($stocks);
 }
@@ -90,6 +95,15 @@ public function getstock()
 public function add_stock(Request $request)
 {
 
+    $totalQty = 0;
+if (!empty($request->color_sizes)) {
+    foreach ($request->color_sizes as $color_id => $sizes) {
+        foreach ($sizes as $size_id => $data) {
+            $totalQty += $data['qty'] ?? 0;
+        }
+    }
+}
+
     $tailor_ids = $request->input('tailor_id');
     $stock = new Stock();
     $stock->abaya_code         = $request->abaya_code;
@@ -100,7 +114,7 @@ public function add_stock(Request $request)
     $stock->sales_price        = $request->sales_price;
     $stock->tailor_charges     = $request->tailor_charges;
     $stock->tailor_id          = json_encode($tailor_ids);
-    $stock->quantity           = $request->total_quantity ?? null;
+    $stock->quantity           = $totalQty;
     $stock->notification_limit = $request->notification_limit;
     $stock->mode               = $request->mode;
     $stock->save();
@@ -378,7 +392,73 @@ $qty = $item->qty ?? 0;
     return response()->json($data);
 }
 
+public function get_full_stock_details(Request $request)
+{
+    $locale = session('locale');
+    $stock = Stock::with([
+        'colorSizes.size',
+        'colorSizes.color',
+        'images'
+    ])->findOrFail($request->id);
 
+    // Calculate total quantity from all color_sizes
+    $totalQuantity = 0;
+    $colorSizeDetails = [];
+    
+    foreach ($stock->colorSizes as $item) {
+        $size_name = $locale === 'ar' 
+            ? ($item->size?->size_name_ar ?? '-') 
+            : ($item->size?->size_name_en ?? '-');
+        
+        $color_name = $locale === 'ar' 
+            ? ($item->color?->color_name_ar ?? '-') 
+            : ($item->color?->color_name_en ?? '-');
+        
+        $qty = (int)($item->qty ?? 0);
+        $totalQuantity += $qty;
+        
+        $colorSizeDetails[] = [
+            'size_name' => $size_name,
+            'color_name' => $color_name,
+            'color_code' => $item->color?->color_code ?? '#000000',
+            'quantity' => $qty,
+        ];
+    }
+
+    // Get all images
+    $images = $stock->images->map(function($img) {
+        return $img->image_path;
+    })->toArray();
+
+    // Get tailor names
+    $tailorNames = [];
+    if ($stock->tailor_id) {
+        $tailorIds = json_decode($stock->tailor_id, true);
+        if (is_array($tailorIds)) {
+            $tailors = Tailor::whereIn('id', $tailorIds)->get();
+            foreach ($tailors as $tailor) {
+                $tailorNames[] = $tailor->tailor_name;
+            }
+        }
+    }
+
+    $data = [
+        'stock_id' => $stock->id,
+        'abaya_code' => $stock->abaya_code ?? '-',
+        'design_name' => $stock->design_name ?? '-',
+        'barcode' => $stock->barcode ?? '-',
+        'abaya_notes' => $stock->abaya_notes ?? '-',
+        'cost_price' => $stock->cost_price ?? 0,
+        'sales_price' => $stock->sales_price ?? 0,
+        'tailor_charges' => $stock->tailor_charges ?? 0,
+        'tailor_names' => $tailorNames,
+        'total_quantity' => $totalQuantity,
+        'images' => $images,
+        'color_size_details' => $colorSizeDetails,
+    ];
+
+    return response()->json($data);
+}
 
   public function get_stock_quantity(Request $request)
     {
@@ -408,29 +488,56 @@ foreach ($stock_sizescolor as $item) {
     $color_code = $item->color?->color_code ?? '#000'; // fallback to black if null
     $qty = $item->qty ?? 0;
 
-    $htmlSizeColor .= '
-    <div class="col-6 col-md-4 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm hover-shadow transition">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge bg-light text-dark fs-6"> <strong>' . htmlspecialchars($size_name) . '</strong>
-                        <input type="hidden" name="stock_size_id[]" value="' . htmlspecialchars($item->size_id) . '">
+ $htmlSizeColor .= '
+<div class="col-6 col-md-4 col-lg-3">
+    <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden">
 
-                    </span>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="rounded-circle border border-2"
-                              style="width:40px;height:40px;background-color:' . htmlspecialchars($color_code) . ';"></div>
-                        <span class="fw-semibold">' . htmlspecialchars($color_name) . '</span>
-                                            <input type="hidden" name="stock_color_id[]" value="' . htmlspecialchars($item->color_id) . '">
+        <div class="card-body p-3">
 
-                    </div>
-                </div>
-                <input type="number" min="0" value="' . htmlspecialchars($qty) . '" name="size_color_qty[]"
-                       class="form-control form-control-lg text-center rounded-pill"
-                       placeholder="0">
+            <!-- Color Circle + Color Name -->
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <div class="rounded-circle border border-2 shadow-sm"
+                    style="width:18px;height:18px;background-color:' . htmlspecialchars($color_code) . ';"></div>
+
+                <span class="fw-semibold text-secondary" style="font-size: 0.8rem;">
+                    ' . htmlspecialchars($color_name) . '
+                </span>
             </div>
+
+            <!-- Size badge -->
+            <div class="mb-2 text-center">
+                <span class="badge bg-dark text-light px-2 py-1 rounded-pill"
+                      style="font-size: 0.75rem;">
+                    Size: ' . htmlspecialchars($size_name) . '
+                </span>
+
+                <input type="hidden" name="stock_size_id[]" value="' . htmlspecialchars($item->size_id) . '">
+                <input type="hidden" name="stock_color_id[]" value="' . htmlspecialchars($item->color_id) . '">
+            </div>
+
+            <!-- Previous Qty -->
+            <div class="mb-2 text-center">
+                <span class="badge bg-info text-dark px-3 py-1"
+                      style="font-size: 0.75rem;">
+                    Previous: <strong>' . htmlspecialchars($qty) . '</strong>
+                </span>
+            </div>
+
+            <!-- Add Quantity Title -->
+            <p class="text-center text-muted mb-2" style="font-size: 0.75rem;">
+                Add Quantity
+            </p>
+
+            <!-- Input -->
+            <input type="number" 
+                min="0" 
+                name="size_color_qty[]" 
+                class="form-control form-control-sm text-center rounded-pill shadow-sm"
+                placeholder="0">
         </div>
-    </div>';
+    </div>
+</div>';
+
 }
 
 $htmlSizeColor .= '</div>'; // end row
@@ -520,72 +627,10 @@ public function add_quantity(Request $request)
     $isPull   = $request->qtyType === "pull";
     $actionType = $isPull ? 2 : 1;
 
-    // ---------------------------
-    // 1) SIZE BASED QTY
-    // ---------------------------
-    if ($request->filled('size_id')) {
-        foreach ($request->size_id as $i => $sizeId) {
-
-            $item = StockSize::where('stock_id', $stock_id)
-                             ->where('size_id', $sizeId)
-                             ->first();
-
-            if (!$item) continue;
-
-            $old = $item->qty;
-            $change = (int) $request->size_qty[$i];
-            $new = $isPull ? $old - $change : $old + $change;
-
-            $item->update(['qty' => $new]);
-
-            StockHistory::create([
-                'stock_id'    => $stock_id,
-                'size_id'     => $sizeId,
-                'color_id'    => null,
-                'old_qty'     => $old,
-                'changed_qty' => $change,
-                'new_qty'     => $new,
-                'action_type' => $actionType,
-            ]);
-        }
-    }
-
-    // ---------------------------
-    // 2) COLOR BASED QTY
-    // ---------------------------
-    if ($request->filled('color_id')) {
-        foreach ($request->color_id as $i => $colorId) {
-
-            $item = StockColor::where('stock_id', $stock_id)
-                              ->where('color_id', $colorId)
-                              ->first();
-
-            if (!$item) continue;
-
-            $old = $item->qty;
-            $change = (int) $request->color_qty[$i];
-            $new = $isPull ? $old - $change : $old + $change;
-
-            $item->update(['qty' => $new]);
-
-            StockHistory::create([
-                'stock_id'    => $stock_id,
-                'size_id'     => null,
-                'color_id'    => $colorId,
-                'old_qty'     => $old,
-                'changed_qty' => $change,
-                'new_qty'     => $new,
-                'action_type' => $actionType,
-            ]);
-        }
-    }
-
-    // ---------------------------
-    // 3) SIZE + COLOR (ColorSize)
-    // ---------------------------
     if ($request->filled('stock_size_id')) {
 
         foreach ($request->stock_size_id as $i => $sizeId) {
+
 
             $colorId = $request->stock_color_id[$i];
 
@@ -599,6 +644,11 @@ public function add_quantity(Request $request)
             $change = (int) $request->size_color_qty[$i];
             $new = $isPull ? $old - $change : $old + $change;
 
+            if ($isPull) {
+                Stock::where('id', $stock_id)->decrement('quantity', $change);
+            } else {
+                Stock::where('id', $stock_id)->increment('quantity', $change);
+            }
             $item->update(['qty' => $new]);
 
             StockHistory::create([
