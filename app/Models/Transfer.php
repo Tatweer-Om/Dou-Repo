@@ -13,6 +13,7 @@ class Transfer extends Model
         'channel_type',
         'date',
         'quantity',
+        'sellable',
         'from',
         'to',
         'stock_id',

@@ -47,6 +47,8 @@
             <th class="px-3 py-3 text-right font-bold">{{ trans('messages.monthly_rent', [], session('locale')) }}</th>
             <th class="px-3 py-3 text-right font-bold">{{ trans('messages.rent_date', [], session('locale')) }}</th>
             <th class="px-3 py-3 text-right font-bold">{{ trans('messages.address', [], session('locale')) }}</th>
+            <th class="px-3 py-3 text-right font-bold">{{ trans('messages.status', [], session('locale')) }}</th>
+            <th class="px-3 py-3 text-right font-bold">{{ trans('messages.rent_invoice_status', [], session('locale')) }}</th>
             <th class="px-3 py-3 text-center font-bold">{{ trans('messages.actions', [], session('locale')) }}</th>
           </tr>
         </thead>
@@ -59,6 +61,58 @@
 
     <!-- Pagination -->
     <ul id="pagination" class="flex gap-2 justify-center mt-4"></ul>
+
+    <!-- Rent Invoice History Modal -->
+    <div id="rent_invoice_modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex justify-between items-center p-6 border-b">
+                <h3 class="text-xl font-bold text-gray-900" id="rent_invoice_modal_title">{{ trans('messages.rent_invoice_history', [], session('locale')) }}</h3>
+                <button id="close_rent_invoice_modal" class="text-gray-400 hover:text-gray-600">
+                    <span class="material-symbols-outlined text-2xl">close</span>
+                </button>
+            </div>
+            <input type="hidden" id="rent_invoice_boutique_id" value="">
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="rent_invoice_loading" class="text-center py-8">
+                    <span class="material-symbols-outlined text-4xl animate-spin text-[var(--primary-color)]">refresh</span>
+                    <p class="mt-2 text-gray-600">{{ trans('messages.loading', [], session('locale')) }}...</p>
+                </div>
+                <div id="rent_invoice_content" class="hidden">
+                    <div class="mb-4 p-3 bg-pink-50 rounded-lg border border-pink-100">
+                        <p class="text-sm text-gray-700">
+                            <span class="font-semibold">{{ trans('messages.boutique', [], session('locale')) }}:</span>
+                            <span id="rent_invoice_boutique_name"></span>
+                        </p>
+                        <p class="text-sm text-gray-700 mt-1">
+                            <span class="font-semibold">{{ trans('messages.monthly_rent', [], session('locale')) }}:</span>
+                            <span id="rent_invoice_monthly_rent"></span> ر.ع
+                        </p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800">
+                                <tr>
+                                    <th class="px-4 py-3 text-right font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
+                                    <th class="px-4 py-3 text-center font-bold">{{ trans('messages.status', [], session('locale')) }}</th>
+                                    <th class="px-4 py-3 text-right font-bold">{{ trans('messages.amount', [], session('locale')) }}</th>
+                                    <th class="px-4 py-3 text-right font-bold">{{ trans('messages.payment_date', [], session('locale')) }}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rent_invoice_table_body">
+                                <!-- Invoice rows will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button id="save_invoice_payments_btn" class="px-6 py-2 bg-[var(--primary-color)] hover:bg-pink-700 text-white font-bold rounded-lg transition flex items-center gap-2">
+                            <span class="material-symbols-outlined">save</span>
+                            {{ trans('messages.save_payments', [], session('locale')) }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
   </div>
 </main>

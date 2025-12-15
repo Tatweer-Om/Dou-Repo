@@ -136,4 +136,30 @@ public function delete_material($id)
         'message' => 'Material deleted successfully!'
     ]);
 }
+
+public function getAllMaterials()
+{
+    $materials = Material::select('id', 'material_name', 'unit', 'category')
+        ->orderBy('material_name', 'ASC')
+        ->get();
+    
+    return response()->json($materials);
+}
+
+public function getMaterial33($id)
+{
+    $material = Material::find($id);
+    
+    if (!$material) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Material not found'
+        ], 404);
+    }
+    
+    return response()->json([
+        'status' => 'success',
+        'material' => $material
+    ]);
+}
 }

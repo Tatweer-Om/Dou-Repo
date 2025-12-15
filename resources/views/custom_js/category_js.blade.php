@@ -1,32 +1,28 @@
 <script>
     $(document).ready(function() {
 
-    function loadtailors(page = 1) {
-    $.get("{{ url('tailors/list') }}?page=" + page, function(res) {
+       function loadCategories(page = 1) {
+    $.get("{{ url('categories/list') }}?page=" + page, function(res) {
 
         // ---- Table Rows ----
         let rows = '';
-        $.each(res.data, function(i, tailor) {
+        $.each(res.data, function(i, category) {
+            const notesPreview = category.notes ? 
+                (category.notes.length > 50 ? category.notes.substring(0, 50) + '...' : category.notes) : 
+                '-';
+            
             rows += `
-            <tr class="hover:bg-pink-50/50 transition-tailors" data-id="${tailor.id}">
-              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_name}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_phone}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_address}</td>
-
+            <tr class="hover:bg-pink-50/50 transition-colors" data-id="${category.id}">
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${category.category_name || '-'}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${notesPreview}</td>
                 <td class="px-4 sm:px-6 py-5 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
-    <button class="edit-btn icon-btn">
-        <span class="material-symbols-outlined">{{ trans('messages.edit', [], session('locale')) }}</span>
-    </button>
-    <button class="delete-btn icon-btn hover:text-red-500">
-        <span class="material-symbols-outlined">{{ trans('messages.delete', [], session('locale')) }}</span>
-    </button>
-    <button 
-        title="{{ trans('messages.view_profile', [], session('locale')) }}" 
-        class="view-profile-btn p-2 rounded-lg text-white bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] transition shadow-sm">
-        <span class="material-symbols-outlined text-[22px]">person</span>
-    </button>
-
+                        <button class="edit-btn icon-btn">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button class="delete-btn icon-btn hover:text-red-500">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
                     </div>
                 </td>
             </tr>
@@ -47,7 +43,7 @@
         for (let i = 1; i <= res.last_page; i++) {
             pagination += `
             <li class="px-3 py-1 rounded-full ${res.current_page == i ? ' text-white' : 'bg-gray-200 hover:bg-gray-300'}">
-                <a href="{{ url('tailors/list') }}?page=${i}">${i}</a>
+                <a href="{{ url('categories/list') }}?page=${i}">${i}</a>
             </li>
             `;
         }
@@ -68,15 +64,14 @@ $(document).on('click', '#pagination a', function(e) {
     let href = $(this).attr('href');
     if (href && href !== '#') {
         let page = new URL(href).searchParams.get('page');
-        if (page) loadtailors(page);
+        if (page) loadCategories(page);
     }
 });
 
-
         // Initial load
-        loadtailors();
+        loadCategories();
 
-        $('#search_tailor').on('keyup', function() {
+        $('#search_category').on('keyup', function() {
             let value = $(this).val().toLowerCase();
 
             $('tbody tr').filter(function() {
@@ -85,42 +80,45 @@ $(document).on('click', '#pagination a', function(e) {
                 );
             });
         });
-        // Add / Update tailor
-        $('#tailor_form').submit(function(e) {
+        
+        // Add / Update category
+        $('#category_form').submit(function(e) {
             e.preventDefault();
-            let id = $('#tailor_id').val();
-            let tailor_name = $('#tailor_name').val().trim();
-            let tailor_phone = $('#tailor_phone').val().trim();
+            let id = $('#category_id').val();
+            let category_name = $('#category_name').val().trim();
+            let notes = $('#notes').val().trim();
 
             // Simple validation
-            if (!tailor_name) {
-                show_notification('error', '<?= trans("messages.enter_tailor_name_ar", [], session("locale")) ?>');
-                return;
-            }
-        
-            if (!tailor_phone) {
-                show_notification('error', '<?= trans("messages.enter_tailor_phone", [], session("locale")) ?>');
+            if (!category_name) {
+                show_notification('error', '<?= trans("messages.enter_category_name", [], session("locale")) ?>');
                 return;
             }
 
-            let url = id ? `{{ url('tailors') }}/${id}` : "{{ url('tailors') }}";
+            let url = id ? `{{ url('categories') }}/${id}` : "{{ url('categories') }}";
 
             // Serialize form data
-            let data = $(this).serialize();
-            if (id) data += '&_method=PUT'; // Important for Laravel to recognize PUT
-
+            let data = {
+                category_name: category_name,
+                notes: notes,
+                _token: '{{ csrf_token() }}'
+            };
+            
+            if (id) {
+                data._method = 'PUT';
+            }
+            
             $.ajax({
                 url: url,
-                method: 'POST', // Always POST
+                method: 'POST',
                 data: data,
                 success: function(res) {
                     // Reset Alpine.js state using custom event
                     window.dispatchEvent(new CustomEvent('close-modal'));
                     
                     // Reset form
-                    $('#tailor_form')[0].reset();
-                    $('#tailor_id').val('');
-                    loadtailors();
+                    $('#category_form')[0].reset();
+                    $('#category_id').val('');
+                    loadCategories();
                     show_notification(
                         'success',
                         id ?
@@ -136,12 +134,10 @@ $(document).on('click', '#pagination a', function(e) {
                         });
                     } else {
                         show_notification('error', '<?= trans("messages.generic_error", [], session("locale")) ?>');
-
                     }
                 }
             });
         });
-
 
         // Close modal button
         $('#close_modal').click(function() {
@@ -149,14 +145,14 @@ $(document).on('click', '#pagination a', function(e) {
             window.dispatchEvent(new CustomEvent('close-modal'));
         });
 
-        // Edit tailor
+        // Edit category
         $(document).on('click', '.edit-btn', function() {
             let id = $(this).closest('tr').data('id');
-            $.get("{{ url('tailors') }}/" + id, function(tailor) {
-                $('#tailor_id').val(tailor.id);
-                $('#tailor_name').val(tailor.tailor_name);
-                $('#tailor_phone').val(tailor.tailor_phone);
-                 $('#tailor_address').val(tailor.tailor_address);
+
+            $.get("{{ url('categories') }}/" + id, function(category) {
+                $('#category_id').val(category.id);
+                $('#category_name').val(category.category_name);
+                $('#notes').val(category.notes);
                 
                 // Open modal using Alpine event
                 window.dispatchEvent(new CustomEvent('open-modal'));
@@ -165,13 +161,7 @@ $(document).on('click', '#pagination a', function(e) {
             });
         });
 
-        // View tailor profile
-        $(document).on('click', '.view-profile-btn', function() {
-            let id = $(this).closest('tr').data('id');
-            window.location.href = "{{ url('tailor_profile') }}/" + id;
-        });
-
-        // Delete tailor
+        // Delete category
         $(document).on('click', '.delete-btn', function() {
             let id = $(this).closest('tr').data('id');
 
@@ -180,20 +170,20 @@ $(document).on('click', '#pagination a', function(e) {
                 text: '<?= trans("messages.confirm_delete_text", [], session("locale")) ?>',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtontailor: '#3085d6',
-                cancelButtontailor: '#d33',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
                 confirmButtonText: '<?= trans("messages.yes_delete", [], session("locale")) ?>',
                 cancelButtonText: '<?= trans("messages.cancel", [], session("locale")) ?>'
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.ajax({
-                        url: '<?= url("tailors") ?>/' + id,
+                        url: '<?= url("categories") ?>/' + id,
                         method: 'DELETE',
                         data: {
                             _token: '<?= csrf_token() ?>'
                         },
                         success: function(data) {
-                            loadtailors(); // reload table
+                            loadCategories(); // reload table
                             Swal.fire(
                                 '<?= trans("messages.deleted_success", [], session("locale")) ?>',
                                 '<?= trans("messages.deleted_success_text", [], session("locale")) ?>',
@@ -214,3 +204,4 @@ $(document).on('click', '#pagination a', function(e) {
 
     });
 </script>
+

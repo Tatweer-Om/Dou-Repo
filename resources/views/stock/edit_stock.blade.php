@@ -144,13 +144,24 @@
 </div>
 
 <input type="hidden" value="{{$stock->id}}" name="stock_id" id="stock_id"/>
+              <!-- Category -->
+              <label class="flex flex-col">
+                <p class="text-sm font-medium mb-2">{{ trans('messages.category', [], session('locale')) }}</p>
+                <select class="form-select h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" name="category_id" id="category_id">
+                  <option value="">{{ trans('messages.choose', [], session('locale')) }}</option>
+                  @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ $stock->category_id == $category->id ? 'selected' : '' }}>{{ $category->category_name }}</option>
+                  @endforeach
+                </select>
+              </label>
+
               <!-- Description (spans all columns) -->
-          <label class="flex flex-col col-span-3">
+              <label class="flex flex-col col-span-3">
     <p class="text-sm font-medium mb-2">{{ trans('messages.description', [], session('locale')) }}</p>
     <textarea rows="3" name="abaya_notes" id="abaya_notes"
       placeholder="{{ trans('messages.description_placeholder', [], session('locale')) }}"
       class="form-textarea rounded-lg border px-4 py-3 focus:ring-2 focus:ring-primary/50">{{ $stock->abaya_notes ?? '' }}</textarea>
-</label>
+              </label>
 
 
           </div>

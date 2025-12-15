@@ -6,6 +6,7 @@ use App\Models\Size;
 use App\Models\Color;
 use App\Models\Stock;
 use App\Models\Tailor;
+use App\Models\Category;
 use App\Models\ColorSize;
 use App\Models\StockSize;
 use App\Models\StockColor;
@@ -23,8 +24,9 @@ class StockController extends Controller
         $tailors = Tailor::all();
         $colors = Color::all();
         $sizes = Size::all();
+        $categories = Category::all();
 
-        return view('stock.add_stock', compact('tailors', 'colors', 'sizes'));
+        return view('stock.add_stock', compact('tailors', 'colors', 'sizes', 'categories'));
     }
 
 public function edit_stock($id)
@@ -32,18 +34,19 @@ public function edit_stock($id)
     $tailors = Tailor::all();
     $colors  = Color::all();
     $sizes   = Size::all();
-
+    $categories = Category::all();
 
     $stock = Stock::with([
         'colors',    
         'sizes',        
         'colorSizes',  
-        'images'      
+        'images',
+        'category'
     ])->findOrFail($id);
 
     $selectedTailors = json_decode($stock->tailor_id, true) ?? [];
 
-    return view('stock.edit_stock', compact('tailors', 'colors', 'sizes', 'id', 'stock', 'selectedTailors'));
+    return view('stock.edit_stock', compact('tailors', 'colors', 'sizes', 'categories', 'id', 'stock', 'selectedTailors'));
 }
 
 
@@ -80,7 +83,8 @@ public function getstock()
    $stocks = Stock::with([
     'colorSizes.size',
     'colorSizes.color',
-    'images'
+    'images',
+    'category'
 ])
 ->orderBy('id', 'DESC')
 ->paginate(10);
@@ -110,6 +114,7 @@ if (!empty($request->color_sizes)) {
     $stock->design_name        = $request->design_name;
     $stock->barcode            = $request->barcode;
     $stock->abaya_notes        = $request->abaya_notes;
+    $stock->category_id        = $request->category_id;
     $stock->cost_price         = $request->cost_price;
     $stock->sales_price        = $request->sales_price;
     $stock->tailor_charges     = $request->tailor_charges;
@@ -191,6 +196,7 @@ public function update_stock(Request $request)
     $stock->design_name        = $request->design_name;
     $stock->barcode            = $request->barcode;
     $stock->abaya_notes        = $request->abaya_notes;
+    $stock->category_id        = $request->category_id;
     $stock->cost_price         = $request->cost_price;
     $stock->sales_price        = $request->sales_price;
     $stock->tailor_id          = json_encode($request->tailor_id);

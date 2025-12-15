@@ -13,6 +13,7 @@ use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\WharehouseController;
 use App\Http\Controllers\SpecialOrderController;
+use App\Http\Controllers\CategoryController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -42,7 +43,10 @@ Route::get('/boutiques/{id}', [BoutiqueController::class, 'show']);
 Route::get('edit_boutique/{id}', [BoutiqueController::class, 'edit_boutique'])->name('edit_boutique');
 Route::post('update_boutique', [BoutiqueController::class, 'update_boutique'])->name('update_boutique');
 Route::delete('boutique/{id}', [BoutiqueController::class, 'destroy'])->name('boutique.destroy');
-Route::get('boutique_profile', [BoutiqueController::class, 'boutique_profile'])->name('boutique_profile');
+Route::get('boutique_profile/{id}', [BoutiqueController::class, 'boutique_profile'])->name('boutique_profile');
+Route::post('update_rent_invoice_status', [BoutiqueController::class, 'update_rent_invoice_status'])->name('update_rent_invoice_status');
+Route::get('get_boutique_invoices', [BoutiqueController::class, 'get_boutique_invoices'])->name('get_boutique_invoices');
+Route::post('update_invoice_payment', [BoutiqueController::class, 'update_invoice_payment'])->name('update_invoice_payment');
 
 Route::get('tailor', [TailorController::class, 'index']);
 Route::post('tailors', [TailorController::class, 'store']);
@@ -50,6 +54,7 @@ Route::put('tailors/{tailor}', [TailorController::class, 'update']);
 Route::delete('tailors/{tailor}', [TailorController::class, 'destroy']);
 Route::get('tailors/list', [TailorController::class, 'gettailors']);
 Route::get('tailors/{tailor}', [TailorController::class, 'show']);
+Route::get('tailor_profile/{id}', [TailorController::class, 'tailor_profile'])->name('tailor_profile');
 
 
 Route::get('user', [UserController::class, 'index'])->name('user');
@@ -74,6 +79,13 @@ Route::put('channels/{channel}', [ChannelController::class, 'update']);
 Route::delete('channels/{channel}', [ChannelController::class, 'destroy']);
 Route::get('channels/list', [ChannelController::class, 'getchannels']);
 Route::get('channels/{channel}', [ChannelController::class, 'show']);
+
+Route::get('categories', [CategoryController::class, 'index'])->name('category');
+Route::post('categories', [CategoryController::class, 'store']);
+Route::put('categories/{category}', [CategoryController::class, 'update']);
+Route::delete('categories/{category}', [CategoryController::class, 'destroy']);
+Route::get('categories/list', [CategoryController::class, 'getCategories']);
+Route::get('categories/{category}', [CategoryController::class, 'show']);
 
 
 
@@ -105,10 +117,13 @@ Route::delete('del_img', [ResaleController::class, 'del_img'])->name('del_img');
 Route::get('material', [MaterialController::class, 'index'])->name('material');
 Route::post('add_material', [MaterialController::class, 'add_material'])->name('add_material');
 Route::get('material/list', [MaterialController::class, 'getmaterial']);
+Route::get('materials/all', [MaterialController::class, 'getAllMaterials'])->name('materials.all');
+Route::get('materials/{id}', [MaterialController::class, 'getMaterial33'])->where('id', '[0-9]+')->name('materials.get');
 Route::get('edit_material/{id}', [MaterialController::class, 'edit_material'])->name('edit_material');
 Route::post('update_material', [MaterialController::class, 'update_material'])->name('update_material');
 Route::delete('/delete_material/{id}', [MaterialController::class, 'delete_material'])->name('delete_material');
 Route::get('view_material', [MaterialController::class, 'view_material'])->name('view_material');
+Route::post('send_material_to_tailor', [TailorController::class, 'send_material_to_tailor'])->name('send_material_to_tailor');
 
 Route::get('stock', [StockController::class, 'index'])->name('stock');
 Route::post('add_stock', [StockController::class, 'add_stock'])->name('add_stock');
@@ -165,6 +180,12 @@ Route::post('execute_transfer', [WharehouseController::class, 'execute_transfer'
 Route::get('get_transfer_history', [WharehouseController::class, 'get_transfer_history'])->name('get_transfer_history');
 Route::get('export_transfers_excel', [WharehouseController::class, 'export_transfers_excel'])->name('export_transfers_excel');
 Route::get('get_channel_stocks', [WharehouseController::class, 'get_channel_stocks'])->name('get_channel_stocks');
+Route::get('get_settlement_data', [WharehouseController::class, 'get_settlement_data'])->name('get_settlement_data');
+Route::get('get_settlement_transfer_details', [WharehouseController::class, 'get_settlement_transfer_details'])->name('get_settlement_transfer_details');
+Route::get('get_settlement_history', [WharehouseController::class, 'get_settlement_history'])->name('get_settlement_history');
+Route::get('get_settlement_details', [WharehouseController::class, 'get_settlement_details'])->name('get_settlement_details');
+Route::post('save_settlement', [WharehouseController::class, 'save_settlement'])->name('save_settlement');
+Route::get('get_boutiques_list', [WharehouseController::class, 'get_boutiques_list'])->name('get_boutiques_list');
 Route::get('get_stats', [WharehouseController::class, 'get_stats'])->name('get_stats');
 Route::get('settlement', [WharehouseController::class, 'settlement'])->name('settlement');
 

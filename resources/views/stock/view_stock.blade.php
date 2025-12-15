@@ -150,6 +150,7 @@
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }}</th>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
+                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.category', [], session('locale')) }}</th>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>

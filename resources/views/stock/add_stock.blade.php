@@ -237,17 +237,17 @@
 
               <!-- Generate Barcode -->
               <label class="flex flex-col">
-                <p class="text-sm font-medium mb-2">Generate Barcode</p>
+                <p class="text-sm font-medium mb-2">{{ trans('messages.generate_barcode', [], session('locale')) }}</p>
                 <div class="flex gap-2">
                   <input type="text" name="barcode" id="barcode"
                     x-model="barcode"
-                    placeholder="Click button to generate"
+                    placeholder="{{ trans('messages.barcode_placeholder', [], session('locale')) }}"
                     class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" readonly />
                   <button type="button"
                     @click="barcode = Math.floor(100000000000 + Math.random() * 900000000000)"
                     class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-1">
                     <span class="material-icons">qr_code</span>
-                    Generate
+                    {{ trans('messages.generate', [], session('locale')) }}
                   </button>
                 </div>
               </label>
@@ -272,6 +272,17 @@
                   </template>
                 </div>
               </div>
+              <!-- Category -->
+              <label class="flex flex-col">
+                <p class="text-sm font-medium mb-2">{{ trans('messages.category', [], session('locale')) }}</p>
+                <select class="form-select h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" name="category_id" id="category_id">
+                  <option value="">{{ trans('messages.choose', [], session('locale')) }}</option>
+                  @foreach($categories as $category)
+                    <option value="{{ $category->id }}">{{ $category->category_name }}</option>
+                  @endforeach
+                </select>
+              </label>
+
               <!-- Description (spans all columns) -->
               <label class="flex flex-col col-span-3">
                 <p class="text-sm font-medium mb-2">{{ trans('messages.description', [], session('locale')) }}</p>
@@ -361,18 +372,6 @@
                   @endforeach
                 </div>
               </div>
-
-              <!-- Total Quantity Input (Half Width) -->
-              <label class="flex flex-col">
-                <p class="text-sm font-medium mb-2">
-                  {{ trans('messages.total_quantity', [], session('locale')) ?: 'Total Quantity' }}
-                </p>
-                <input type="number" 
-                  name="total_quantity" 
-                  id="total_quantity"
-                  placeholder="{{ trans('messages.total_quantity_placeholder', [], session('locale')) ?: 'Enter total quantity' }}"
-                  class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" />
-              </label>
             </div>
             <br>
               <div x-data="{ mode: 'color_size', selectedTailors: [] }"

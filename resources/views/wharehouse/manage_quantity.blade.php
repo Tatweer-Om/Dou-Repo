@@ -331,18 +331,18 @@
                 <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold" x-show="mode!=='main_to_channel'">{{ trans('messages.in_source', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold" x-show="mode!=='channel_to_main'">{{ trans('messages.in_destination', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.available_warehouse', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-right font-bold" x-show="mode!=='channel_to_channel'">{{ trans('messages.available_warehouse', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.add', [], session('locale')) }}</th>
               </tr>
             </thead>
             <tbody>
               <template x-if="inventoryLoading">
-                <tr><td colspan="9" class="text-center text-gray-400 py-8">
+                <tr><td :colspan="mode === 'channel_to_channel' ? 8 : 9" class="text-center text-gray-400 py-8">
                   <span class="material-symbols-outlined text-4xl animate-spin">refresh</span><div>{{ trans('messages.loading', [], session('locale')) }}...</div>
                 </td></tr>
               </template>
               <template x-if="!inventoryLoading && pickerFiltered.length===0">
-                <tr><td colspan="9" class="text-center text-gray-400 py-8">
+                <tr><td :colspan="mode === 'channel_to_channel' ? 8 : 9" class="text-center text-gray-400 py-8">
                   <span class="material-symbols-outlined text-4xl">inventory_2</span><div>{{ trans('messages.no_items_found', [], session('locale')) }}</div>
                 </td></tr>
               </template>
@@ -373,7 +373,7 @@
                       x-text="getQtyInChannel(toChannel, row)"
                       @load="loadChannelStocks(toChannel)"></td>
 
-                  <td class="px-3 py-2" x-text="row.available || 0"></td>
+                  <td class="px-3 py-2" x-show="mode!=='channel_to_channel'" x-text="getWarehouseAvailable(row)"></td>
                   <td class="px-3 py-2 text-center">
                     <template x-if="!selectedUids.includes(row.uid)">
                       <button @click="addToBasket(row)"
@@ -511,6 +511,7 @@ function transferPage() {
     // Inventory (from main) - loaded from API
     picker: { q:'', type:'' },
     inventory: [],
+    warehouseInventory: [], // Main warehouse inventory (for showing available warehouse qty when transferring from channel)
     inventoryLoading: false,
     get pickerFiltered() {
       const q = this.picker.q.toLowerCase();
@@ -526,15 +527,44 @@ function transferPage() {
         const response = await fetch('/get_inventory');
         const data = await response.json();
         this.inventory = data || [];
+        // Also store in warehouseInventory for reference
+        this.warehouseInventory = data || [];
       } catch (error) {
         console.error('Error loading inventory:', error);
         this.inventory = [];
+        this.warehouseInventory = [];
         this.toast.msg = '{{ trans('messages.error_loading_inventory', [], session('locale')) }}';
         this.toast.show = true;
         setTimeout(() => this.toast.show = false, 3000);
       } finally {
         this.inventoryLoading = false;
       }
+    },
+    
+    // Load warehouse inventory separately (for showing available warehouse qty)
+    async loadWarehouseInventory() {
+      try {
+        const response = await fetch('/get_inventory');
+        const data = await response.json();
+        this.warehouseInventory = data || [];
+      } catch (error) {
+        console.error('Error loading warehouse inventory:', error);
+        this.warehouseInventory = [];
+      }
+    },
+    
+    // Get warehouse available quantity for an item
+    getWarehouseAvailable(row) {
+      if (this.mode !== 'channel_to_main') {
+        return row.available || 0;
+      }
+      // When transferring from channel to warehouse, show warehouse stock
+      const found = this.warehouseInventory.find(x =>
+        x.code === row.code &&
+        ((x.color || null) === (row.color || null)) &&
+        ((x.size || null) === (row.size || null))
+      );
+      return found ? (found.available || 0) : 0;
     },
 
     // Channel stocks (source/destination) - loaded from backend
@@ -580,7 +610,9 @@ function transferPage() {
       const uid = row.uid || `${row.code}|${row.size||''}|${row.color||''}`;
       const exists = this.basket.find(b => b.uid===uid);
       if (!exists){
-        this.basket.push({...row, uid, qty: 1});
+        // When transferring from channel to warehouse, use warehouse available quantity
+        const availableQty = this.mode === 'channel_to_main' ? this.getWarehouseAvailable(row) : row.available;
+        this.basket.push({...row, uid, qty: 1, available: availableQty});
         if (!this.selectedUids.includes(uid)) this.selectedUids.push(uid);
       }
     },
@@ -618,6 +650,13 @@ function transferPage() {
       } else {
         // Load from channel/boutique
         await this.loadChannelInventory(source);
+        
+        // If transferring from channel to warehouse, also load warehouse inventory
+        if (this.mode === 'channel_to_main') {
+          if (this.warehouseInventory.length === 0) {
+            await this.loadWarehouseInventory();
+          }
+        }
       }
       
       // Load channel stocks when picker opens (for displaying quantities)

@@ -35,6 +35,8 @@
                         quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
                     }
 
+                    const categoryName = stock.category ? stock.category.category_name : '-';
+                    
                     tableRows += `
                 <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}">
                     <td class="px-3 py-3">
@@ -42,6 +44,7 @@
                     </td>
                     <td class="px-3 py-3 font-bold">${stock.abaya_code}</td>
                     <td class="px-3 py-3">${stock.design_name ?? '-'}</td>
+                    <td class="px-3 py-3">${categoryName}</td>
                     <td class="px-3 py-3">${size}</td>
                     <td class="px-3 py-3">${color}</td>
                     <td class="px-3 py-3 font-bold">${quantity}</td>
@@ -99,10 +102,13 @@
                         quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
                     }
 
+                    const categoryName = stock.category ? stock.category.category_name : '-';
+                    
                     mobileCards += `
                 <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden">
                     <h3 class="font-bold text-gray-900 truncate">${stock.abaya_code}</h3>
                     <p>تصميم: ${stock.design_name ?? '-'}</p>
+                    <p>الفئة: ${categoryName}</p>
                     <p>المقاس: ${size}</p>
                     <p>اللون: ${color}</p>
                     <p>الكمية: ${quantity}</p>

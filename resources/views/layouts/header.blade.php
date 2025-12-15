@@ -131,6 +131,10 @@
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.color') }}
             </a>
+                <a href="{{url('categories')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.category') }}
+            </a>
         </div>
     </div>
     <!-- Boutiques -->

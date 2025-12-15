@@ -41,7 +41,7 @@
           <div class="md:col-span-3">
             <label class="text-sm font-semibold text-gray-700">{{ trans('messages.boutique', [], session('locale')) }}</label>
             <select class="w-full h-12 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
-                    x-model="filters.boutique">
+                    x-model="filters.boutique" :disabled="loading">
               <option value="" disabled>{{ trans('messages.select_boutique', [], session('locale')) }}</option>
               <template x-for="b in boutiques" :key="b.id">
                 <option :value="b.id" x-text="b.name"></option>
@@ -59,8 +59,11 @@
                    x-model="filters.to">
           </div>
           <div class="md:col-span-3 flex items-end gap-2">
-            <button @click="loadTransfers()" class="flex-1 h-12 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-700 font-semibold">
-              {{ trans('messages.load_shipments_data', [], session('locale')) }}
+            <button @click="loadTransfers()" 
+                    :disabled="loading"
+                    class="flex-1 h-12 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+              <span x-show="!loading">{{ trans('messages.load_shipments_data', [], session('locale')) }}</span>
+              <span x-show="loading">{{ trans('messages.loading', [], session('locale')) }}...</span>
             </button>
             <label class="flex items-center gap-2 h-12 px-3 rounded-xl border border-pink-200 cursor-pointer text-sm">
               <span class="material-symbols-outlined">attach_file_add</span>
@@ -122,6 +125,9 @@
               <template x-for="(r,idx) in rows" :key="r.uid">
                 <tr class="border-t"
                     :class="rowClass(r)">
+                  <!-- Hidden inputs for color_id and size_id -->
+                  <input type="hidden" :name="'items_data[' + idx + '][color_id]'" :value="r.color_id || ''">
+                  <input type="hidden" :name="'items_data[' + idx + '][size_id]'" :value="r.size_id || ''">
                   <td class="px-3 py-2 font-semibold" x-text="r.code"></td>
                   <td class="px-3 py-2">
                     <template x-if="r.color">
@@ -180,7 +186,6 @@
             {{ trans('messages.settlement_actions_note', [], session('locale')) }}
           </div>
           <div class="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
-            <button class="px-4 py-3 rounded-lg bg-white border hover:bg-gray-50 w-full sm:w-auto">{{ trans('messages.preview_invoice', [], session('locale')) }}</button>
             <button @click="saveSettlement()" class="px-6 py-3 rounded-lg bg-[var(--primary-color)] text-white font-bold hover:opacity-90 w-full sm:w-auto">
               {{ trans('messages.save_settlement', [], session('locale')) }}
             </button>
@@ -192,8 +197,10 @@
       <section x-show="tab==='history'" class="p-4 space-y-4" x-cloak>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <input type="search" class="h-12 px-3 border border-pink-200 rounded-lg w-full"
-                 placeholder="{{ trans('messages.search_by_month_boutique', [], session('locale')) }}" x-model="histSearch">
-          <input type="month" class="h-12 px-2 border border-pink-200 rounded-lg w-full" x-model="histMonth">
+                 placeholder="{{ trans('messages.search_by_month_boutique', [], session('locale')) }}" 
+                 x-model="histSearch" @input="loadHistory()">
+          <input type="month" class="h-12 px-2 border border-pink-200 rounded-lg w-full" 
+                 x-model="histMonth" @change="loadHistory()">
           <div class="flex items-center justify-end">
             <button @click="exportHistoryCSV()"
                     class="px-3 py-2 rounded-lg bg-white border hover:bg-gray-50 text-sm flex items-center gap-1 w-full sm:w-auto justify-center">
@@ -203,9 +210,10 @@
         </div>
 
         <div class="overflow-x-auto rounded-2xl border border-pink-100">
-          <table class="w-full text-sm min-w-[900px]">
+          <table class="w-full text-sm min-w-[1100px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
+                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.operation_number', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-right font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-right font-bold">{{ trans('messages.boutique', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-right font-bold">{{ trans('messages.number_of_items', [], session('locale')) }}</th>
@@ -217,17 +225,27 @@
             </thead>
             <tbody>
               <template x-if="history.length===0">
-                <tr><td colspan="7" class="text-center text-gray-400 py-10">{{ trans('messages.no_record_yet', [], session('locale')) }}</td></tr>
+                <tr><td colspan="8" class="text-center text-gray-400 py-10">{{ trans('messages.no_record_yet', [], session('locale')) }}</td></tr>
               </template>
               <template x-for="h in historyFiltered" :key="h.no">
                 <tr class="border-t hover:bg-pink-50/60">
+                  <td class="px-3 py-2 font-semibold text-[var(--primary-color)]" x-text="h.no"></td>
                   <td class="px-3 py-2" x-text="h.month"></td>
-                  <td class="px-3 py-2" x-text="boutiqueName(h.boutique)"></td>
+                  <td class="px-3 py-2" x-text="h.boutique_name || boutiqueName(h.boutique)"></td>
                   <td class="px-3 py-2" x-text="h.items"></td>
                   <td class="px-3 py-2 font-bold" x-text="formatCurrency(h.amount)"></td>
                   <td class="px-3 py-2" x-text="h.diff"></td>
                   <td class="px-3 py-2 text-center">
-                    <button class="px-3 py-1 rounded-lg bg-white border hover:bg-gray-50 text-xs">{{ trans('messages.view', [], session('locale')) }}</button>
+                    <template x-if="h.attachment_path">
+                      <a :href="'/' + h.attachment_path" target="_blank" 
+                         class="px-3 py-1 rounded-lg bg-white border hover:bg-gray-50 text-xs inline-flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">download</span>
+                        {{ trans('messages.view', [], session('locale')) }}
+                      </a>
+                    </template>
+                    <template x-if="!h.attachment_path">
+                      <span class="text-gray-400 text-xs">—</span>
+                    </template>
                   </td>
                   <td class="px-3 py-2 text-center">
                     <button class="px-3 py-1 rounded-lg bg-pink-100 hover:bg-pink-200 text-[var(--primary-color)] text-xs" @click="openHistoryDetails(h)">{{ trans('messages.view_details', [], session('locale')) }}</button>
@@ -246,7 +264,14 @@
     <div @click.away="showMov=false" class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden">
       <div class="flex justify-between items-center p-4 border-b">
         <h3 class="text-lg font-bold text-[var(--primary-color)]">
-          {{ trans('messages.movements_details_for_code', [], session('locale')) }} <span x-text="movRow.code"></span>
+          {{ trans('messages.movements_details_for_code', [], session('locale')) }} 
+          <span x-text="movRow.code"></span>
+          <template x-if="movRow.color">
+            <span class="text-sm font-normal text-gray-600"> - <span x-text="movRow.color"></span></span>
+          </template>
+          <template x-if="movRow.size">
+            <span class="text-sm font-normal text-gray-600"> - <span x-text="movRow.size"></span></span>
+          </template>
         </h3>
         <button @click="showMov=false" class="text-gray-500 hover:text-gray-700">✖</button>
       </div>
@@ -263,13 +288,20 @@
               </tr>
             </thead>
             <tbody>
+              <template x-if="movDetails.length === 0">
+                <tr>
+                  <td colspan="5" class="px-3 py-4 text-center text-gray-400">
+                    {{ trans('messages.loading', [], session('locale')) }}...
+                  </td>
+                </tr>
+              </template>
               <template x-for="m in movDetails" :key="m.id">
-                <tr class="border-t">
+                <tr class="border-t" :class="m.id === 'loading' || m.id === 'no-data' || m.id === 'error' ? 'bg-gray-50' : ''">
                   <td class="px-3 py-2" x-text="m.date"></td>
                   <td class="px-3 py-2" x-text="m.type"></td>
                   <td class="px-3 py-2" x-text="m.from"></td>
                   <td class="px-3 py-2" x-text="m.to"></td>
-                  <td class="px-3 py-2" x-text="m.qty"></td>
+                  <td class="px-3 py-2 font-semibold" x-text="m.qty"></td>
                 </tr>
               </template>
             </tbody>
@@ -287,65 +319,95 @@
 function settlementPage(){
   return {
     tab: 'new',
-    boutiques: [
-      {id:'btk-noor', name:'بوتيك النور'},
-      {id:'btk-almouj', name:'بوتيك الموج'},
-      {id:'btk-salam', name:'بوتيك السلام'}
-    ],
+    boutiques: [],
     filters: {boutique:'', from:'', to:''},
-    attachment: {name:'', sizeLabel:''},
+    attachment: {name:'', sizeLabel:'', file: null},
     rows: [],
 
-    // Dummy transfers & pulls (would come from backend)
-    transfers: [
-      // code, color, color_code, size, sent, pulled
-      {code:'ABY101', color:null, color_code:'#000000', size:'M', sent:10, pulled:2, price:16.5},
-      {code:'ABY205', color:'أسود', color_code:'#000000', size:null, sent:8, pulled:0, price:18},
-      {code:'ABY330', color:'بيج', color_code:'#f5deb3', size:'M', sent:6, pulled:1, price:20},
-      {code:'ABY330', color:'رمادي', color_code:'#b0b0b0', size:'L', sent:4, pulled:0, price:20},
-    ],
-
-    // Movements log (dummy)
-    movements: [
-      {id:1, code:'ABY101', date:'2025-11-01', type:'إرسال', from:'المخزن', to:'بوتيك النور', qty:6},
-      {id:2, code:'ABY101', date:'2025-11-05', type:'إرسال', from:'المخزن', to:'بوتيك النور', qty:4},
-      {id:3, code:'ABY101', date:'2025-11-20', type:'سحب', from:'بوتيك النور', to:'المخزن', qty:2},
-      {id:4, code:'ABY205', date:'2025-11-08', type:'إرسال', from:'المخزن', to:'بوتيك النور', qty:8},
-      {id:5, code:'ABY330', date:'2025-11-10', type:'إرسال', from:'المخزن', to:'بوتيك النور', qty:6},
-      {id:6, code:'ABY330', date:'2025-11-20', type:'سحب', from:'بوتيك النور', to:'بوتيك الموج', qty:1},
-      {id:7, code:'ABY330', date:'2025-11-22', type:'إرسال', from:'المخزن', to:'بوتيك النور', qty:4},
-    ],
-
-    // History (dummy)
-    history: [
-      {no:'STL-2025-10-01', month:'2025-10', boutique:'btk-noor', items:32, amount:510.5, diff:0},
-      {no:'STL-2025-10-02', month:'2025-10', boutique:'btk-almouj', items:21, amount:360.0, diff:2},
-    ],
+    // Movements log (dummy - can be enhanced later)
+    movements: [],
+    history: [],
     histSearch: '', histMonth: '',
 
     showMov:false, movRow:{}, movDetails:[],
+    showSettlementDetails: false,
+    settlementDetails: {},
+    settlementDetailsLoading: false,
+    loading: false,
 
     // Helpers
     formatCurrency(n){ const v=Number(n||0); return v.toLocaleString('ar-EG',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' ر.ع'; },
-    boutiqueName(id){ const b=this.boutiques.find(x=>x.id===id); return b?b.name:id; },
+    boutiqueName(id){ 
+      if (!id) return '';
+      const b = this.boutiques.find(x => x.id == id || 'boutique-' + x.id == id);
+      return b ? b.name : id; 
+    },
 
-    // Load transfers based on filters (dummy: we just map transfers)
-    loadTransfers(){
+    // Load boutiques from backend
+    async loadBoutiques(){
+      try {
+        const response = await fetch('/get_boutiques_list');
+        const data = await response.json();
+        this.boutiques = data || [];
+      } catch (error) {
+        console.error('Error loading boutiques:', error);
+        this.boutiques = [];
+      }
+    },
+
+    // Load transfers based on filters from backend
+    async loadTransfers(){
       if(!this.filters.boutique || !this.filters.from || !this.filters.to){
         alert('{{ trans('messages.please_select_boutique_and_period', [], session('locale')) }}');
         return;
       }
-      this.rows = this.transfers.map((t,i)=>{
-        const sellable = Math.max(0, (t.sent||0) - (t.pulled||0));
-        return {
-          uid: t.code + '|' + (t.size||'') + '|' + (t.color||''),
-          code: t.code, color: t.color, color_code: t.color_code, size: t.size,
-          sent: t.sent, pulled: t.pulled, sellable,
-          sold: 0, price: t.price||0, diff: 0, total: 0
-        };
-      });
-      // small UX toast
-      this.toast('{{ trans('messages.shipments_data_loaded', [], session('locale')) }}');
+
+      this.loading = true;
+      try {
+        // Extract boutique ID (handle both 'boutique-{id}' and just '{id}' formats)
+        let boutiqueId = this.filters.boutique;
+        if (boutiqueId.toString().startsWith('boutique-')) {
+          boutiqueId = boutiqueId.replace('boutique-', '');
+        }
+
+        const params = new URLSearchParams({
+          boutique_id: boutiqueId,
+          date_from: this.filters.from,
+          date_to: this.filters.to
+        });
+
+        const response = await fetch('/get_settlement_data?' + params.toString());
+        const data = await response.json();
+
+        if (response.ok && Array.isArray(data)) {
+          this.rows = data.map(item => ({
+            uid: item.uid || (item.code + '|' + (item.size || '') + '|' + (item.color || '')),
+            code: item.code,
+            color: item.color,
+            color_id: item.color_id || null,
+            color_code: item.color_code || '#000000',
+            size: item.size,
+            size_id: item.size_id || null,
+            sent: item.sent || 0,
+            pulled: item.pulled || 0,
+            sellable: item.sellable || 0,
+            sold: item.sold || 0,
+            price: item.price || 0,
+            diff: item.diff || 0,
+            total: item.total || 0
+          }));
+          this.toast('{{ trans('messages.shipments_data_loaded', [], session('locale')) }}');
+        } else {
+          this.rows = [];
+          alert(data.error || '{{ trans('messages.error_loading_data', [], session('locale')) }}');
+        }
+      } catch (error) {
+        console.error('Error loading settlement data:', error);
+        this.rows = [];
+        alert('{{ trans('messages.error_loading_data', [], session('locale')) }}');
+      } finally {
+        this.loading = false;
+      }
     },
 
     recalc(idx){
@@ -369,10 +431,45 @@ function settlementPage(){
       return '';
     },
 
-    openMovement(r){
+    async openMovement(r){
       this.movRow = r;
-      this.movDetails = this.movements.filter(m => m.code===r.code);
       this.showMov = true;
+      this.movDetails = []; // Clear previous data
+      
+      // Show loading state
+      this.movDetails = [{id: 'loading', date: '...', type: '...', from: '...', to: '...', qty: '...'}];
+      
+      try {
+        // Extract boutique ID
+        let boutiqueId = this.filters.boutique;
+        if (boutiqueId.toString().startsWith('boutique-')) {
+          boutiqueId = boutiqueId.replace('boutique-', '');
+        }
+
+        const params = new URLSearchParams({
+          boutique_id: boutiqueId,
+          date_from: this.filters.from,
+          date_to: this.filters.to,
+          code: r.code,
+          color: r.color || '',
+          size: r.size || ''
+        });
+
+        const response = await fetch('/get_settlement_transfer_details?' + params.toString());
+        const data = await response.json();
+
+        if (response.ok && Array.isArray(data)) {
+          this.movDetails = data;
+          if (data.length === 0) {
+            this.movDetails = [{id: 'no-data', date: '-', type: '{{ trans('messages.no_data_available', [], session('locale')) }}', from: '-', to: '-', qty: '-'}];
+          }
+        } else {
+          this.movDetails = [{id: 'error', date: '-', type: data.error || '{{ trans('messages.error_loading_data', [], session('locale')) }}', from: '-', to: '-', qty: '-'}];
+        }
+      } catch (error) {
+        console.error('Error loading transfer details:', error);
+        this.movDetails = [{id: 'error', date: '-', type: '{{ trans('messages.error_loading_data', [], session('locale')) }}', from: '-', to: '-', qty: '-'}];
+      }
     },
 
     onAttach(e){
@@ -381,33 +478,125 @@ function settlementPage(){
       const size = f.size >= 1024*1024
         ? (f.size/1024/1024).toFixed(2)+' MB'
         : (f.size/1024).toFixed(1)+' KB';
-      this.attachment = {name:f.name, sizeLabel:size};
+      this.attachment = {name:f.name, sizeLabel:size, file: f};
     },
-    removeAttachment(){ this.attachment = {name:'', sizeLabel:''}; },
+    removeAttachment(){ this.attachment = {name:'', sizeLabel:'', file: null}; },
 
-    saveSettlement(){
-      if(this.rows.length===0){ alert('{{ trans('messages.no_data_to_save', [], session('locale')) }}'); return; }
+    async saveSettlement(){
+      if(this.rows.length===0){ 
+        alert('{{ trans('messages.no_data_to_save', [], session('locale')) }}'); 
+        return; 
+      }
+
       const month = (this.filters.from||'').slice(0,7) || new Date().toISOString().slice(0,7);
       const amount = this.sum('total');
       const items  = this.sum('sold');
       const diff   = this.sum('diff');
-      const no = 'STL-' + month + '-' + String(this.history.length+1).padStart(2,'0');
-      this.history.unshift({no, month, boutique:this.filters.boutique, items, amount, diff});
-      this.toast('{{ trans('messages.settlement_saved_successfully', [], session('locale')) }}');
-      // reset editable values
-      this.rows.forEach(r=>{ r.sold=0; r.diff=0; r.total=0; });
+
+      // Extract boutique ID and name
+      let boutiqueId = this.filters.boutique;
+      let boutiqueName = this.boutiqueName(boutiqueId);
+      if (boutiqueId.toString().startsWith('boutique-')) {
+        boutiqueId = boutiqueId.replace('boutique-', '');
+      }
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('boutique_id', boutiqueId);
+      formData.append('boutique_name', boutiqueName);
+      formData.append('month', month);
+      formData.append('date_from', this.filters.from);
+      formData.append('date_to', this.filters.to);
+      formData.append('number_of_items', items);
+      formData.append('total_sales', amount);
+      formData.append('total_difference', diff);
+      formData.append('items_data', JSON.stringify(this.rows));
+      
+      if (this.attachment.file) {
+        formData.append('attachment', this.attachment.file);
+      }
+
+      try {
+        const response = await fetch('/save_settlement', {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+          },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          this.toast('{{ trans('messages.settlement_saved_successfully', [], session('locale')) }}');
+          // Reset editable values
+          this.rows.forEach(r=>{ r.sold=0; r.diff=0; r.total=0; });
+          // Clear attachment
+          this.attachment = {name:'', sizeLabel:'', file: null};
+          // Reload history
+          await this.loadHistory();
+        } else {
+          alert(result.message || '{{ trans('messages.error_saving_settlement', [], session('locale')) }}');
+        }
+      } catch (error) {
+        console.error('Error saving settlement:', error);
+        alert('{{ trans('messages.error_saving_settlement', [], session('locale')) }}');
+      }
     },
 
-    // History filter
+    // Load settlement history from backend
+    async loadHistory(){
+      try {
+        const params = new URLSearchParams();
+        if (this.histSearch) params.append('search', this.histSearch);
+        if (this.histMonth) params.append('month', this.histMonth);
+
+        const response = await fetch('/get_settlement_history?' + params.toString());
+        const data = await response.json();
+
+        if (response.ok && Array.isArray(data)) {
+          this.history = data;
+        } else {
+          this.history = [];
+        }
+      } catch (error) {
+        console.error('Error loading settlement history:', error);
+        this.history = [];
+      }
+    },
+
+    // History filter (now just returns history since filtering is done on backend)
     get historyFiltered(){
-      const q = this.histSearch.toLowerCase();
-      const m = this.histMonth;
-      return this.history.filter(h=>{
-        const txt = `${h.month} ${this.boutiqueName(h.boutique)}`.toLowerCase();
-        const qOk = !q || txt.includes(q);
-        const mOk = !m || h.month===m;
-        return qOk && mOk;
-      });
+      return this.history;
+    },
+
+    // Open history details modal
+    async openHistoryDetails(h){
+      this.showSettlementDetails = true;
+      this.settlementDetails = {};
+      this.settlementDetailsLoading = true;
+
+      try {
+        const params = new URLSearchParams({
+          settlement_code: h.no
+        });
+
+        const response = await fetch('/get_settlement_details?' + params.toString());
+        const data = await response.json();
+
+        if (response.ok && data.settlement_code) {
+          this.settlementDetails = data;
+        } else {
+          alert(data.error || '{{ trans('messages.error_loading_data', [], session('locale')) }}');
+          this.showSettlementDetails = false;
+        }
+      } catch (error) {
+        console.error('Error loading settlement details:', error);
+        alert('{{ trans('messages.error_loading_data', [], session('locale')) }}');
+        this.showSettlementDetails = false;
+      } finally {
+        this.settlementDetailsLoading = false;
+      }
     },
 
     // CSV Export
@@ -466,13 +655,23 @@ function settlementPage(){
       this._t = setTimeout(()=> el.classList.add('hidden'), 2000);
     },
 
-    init(){
-      // Prefill month range (dummy)
+    async init(){
+      // Load boutiques from backend
+      await this.loadBoutiques();
+      
+      // Load settlement history
+      await this.loadHistory();
+      
+      // Prefill month range
       const now = new Date();
       const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
       this.filters.from = `${y}-${m}-01`;
       this.filters.to   = `${y}-${m}-30`;
-      this.filters.boutique = 'btk-noor';
+      
+      // Set default boutique if available
+      if (this.boutiques.length > 0) {
+        this.filters.boutique = this.boutiques[0].id;
+      }
     }
   }
 }

@@ -11,21 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('transfers', function (Blueprint $table) {
+        Schema::create('categories', function (Blueprint $table) {
             $table->id();
-            $table->string('transfer_code');
-            $table->string('transfer_type'); //add minus
-            $table->string('channel_type'); //boutique pos
-            $table->date('date');
-            $table->string('quantity');
-            $table->string('from');
-            $table->string('to');
-            $table->string('stock_id')->nullable();
-            $table->string('boutique_id')->nullable();
-            $table->string('channel_id')->nullable();
+            $table->boolean('abaya')->default(false);
+            $table->string('category_name');
             $table->longText('notes')->nullable();
             $table->string('added_by')->nullable();
             $table->integer('user_id')->nullable();
+            $table->string('updated_by')->nullable();
             $table->timestamps();
         });
     }
@@ -35,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('transfers');
+        Schema::dropIfExists('categories');
     }
 };
