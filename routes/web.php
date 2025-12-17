@@ -15,6 +15,9 @@ use App\Http\Controllers\WharehouseController;
 use App\Http\Controllers\SpecialOrderController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AreaController;
+use App\Http\Controllers\CityController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -87,6 +90,30 @@ Route::put('categories/{category}', [CategoryController::class, 'update']);
 Route::delete('categories/{category}', [CategoryController::class, 'destroy']);
 Route::get('categories/list', [CategoryController::class, 'getCategories']);
 Route::get('categories/{category}', [CategoryController::class, 'show']);
+
+Route::get('accounts', [AccountController::class, 'index'])->name('account');
+Route::post('accounts', [AccountController::class, 'store']);
+Route::put('accounts/{account}', [AccountController::class, 'update']);
+Route::delete('accounts/{account}', [AccountController::class, 'destroy']);
+Route::get('accounts/list', [AccountController::class, 'getAccounts']);
+Route::get('accounts/all', [AccountController::class, 'all']);
+Route::get('accounts/{account}', [AccountController::class, 'show']);
+
+Route::get('areas', [AreaController::class, 'index'])->name('area');
+Route::post('areas', [AreaController::class, 'store']);
+Route::put('areas/{area}', [AreaController::class, 'update']);
+Route::delete('areas/{area}', [AreaController::class, 'destroy']);
+Route::get('areas/list', [AreaController::class, 'getAreas']);
+Route::get('areas/all', [AreaController::class, 'all']);
+Route::get('areas/{area}', [AreaController::class, 'show']);
+
+Route::get('cities', [CityController::class, 'index'])->name('city');
+Route::post('cities', [CityController::class, 'store']);
+Route::put('cities/{city}', [CityController::class, 'update']);
+Route::delete('cities/{city}', [CityController::class, 'destroy']);
+Route::get('cities/list', [CityController::class, 'getCities']);
+Route::get('cities/by-area', [CityController::class, 'byArea']);
+Route::get('cities/{city}', [CityController::class, 'show']);
 
 
 
@@ -192,3 +219,6 @@ Route::get('settlement', [WharehouseController::class, 'settlement'])->name('set
 
 Route::get('pos', [PosController::class, 'index'])->name('pos');
 Route::get('pos/stock/{id}', [PosController::class, 'getStockDetails'])->name('pos.stock.details');
+Route::get('pos/customers', [PosController::class, 'searchCustomers'])->name('pos.customers.search');
+Route::post('pos/orders', [PosController::class, 'store'])->name('pos.orders.store');
+Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.cities.by_area');

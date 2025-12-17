@@ -54,6 +54,14 @@
          @include('custom_js.view_orders_js')
                   @elseif ($route_name == 'send_request')
          @include('custom_js.send_request_js')
+          @elseif ($route_name == 'account')
+         @include('custom_js.account_js')
+          @elseif ($route_name == 'area')
+         @include('custom_js.area_js')
+          @elseif ($route_name == 'city')
+         @include('custom_js.city_js')
+            @elseif ($route_name == 'pos')
+         @include('custom_js.pos_js')
     @endif
          
   </body>

@@ -3,14 +3,21 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('tailorApp', () => ({
     showModal: false,
     shipping_fee: 0,
-    availableAreas: [],
+    governorates: [],
+    availableCities: [],
+    areasMap: [], // [{id,name}]
+    areaCityMap: {
+      'مسقط': ['السيب', 'بوشر', 'مطرح'],
+      'الداخلية': ['نزوى', 'بهلاء', 'الحمراء'],
+      'الشرقية': ['إبراء', 'صور', 'بدية'],
+    },
     loading: false,
     customer: { 
       source: '', 
       name: '', 
       phone: '', 
       governorate: '', 
-      area: '', 
+      city: '', 
       is_gift: 'no', 
       gift_message: '' 
     },
@@ -28,33 +35,70 @@ document.addEventListener('alpine:init', () => {
       notes: '' 
     }],
 
-    updateAreas() {
-      if (this.customer.governorate === 'مسقط') {
-        this.availableAreas = ['السيب', 'بوشر', 'مطرح'];
-      } else if (this.customer.governorate === 'الداخلية') {
-        this.availableAreas = ['نزوى', 'بهلاء', 'الحمراء'];
-      } else if (this.customer.governorate === 'الشرقية') {
-        this.availableAreas = ['إبراء', 'صور', 'بدية'];
-      } else {
-        this.availableAreas = [];
+    async init() {
+      await this.fetchAreas();
+      // Fallback to static map keys if API returns empty
+      if (this.governorates.length === 0) {
+        this.governorates = Object.keys(this.areaCityMap).map(name => ({id: name, name}));
       }
-      this.customer.area = ''; // Reset area when governorate changes
+    },
+
+    async fetchAreas() {
+      try {
+        const response = await fetch('{{ url('areas/all') }}');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          this.areasMap = data.map(a => ({
+            id: a.id,
+            name: a.area_name_ar || a.area_name_en
+          })).filter(a => !!a.name);
+          this.governorates = this.areasMap;
+        }
+      } catch (error) {
+        console.error('Error loading areas list:', error);
+      }
+    },
+
+    updateCities(areaId) {
+      this.availableCities = [];
+      this.customer.city = '';
+      this.customer.city_id = '';
+      this.customer.governorate_name = this.areasMap.find(a => a.id == areaId)?.name || '';
+      this.customer.governorate_id = areaId || '';
+
+      if (areaId) {
+        this.fetchCities(areaId);
+      } else {
+        // fallback to static map if no area id match
+        this.availableCities = (this.areaCityMap[this.customer.governorate_name] || []).map(n => ({id: n, name: n, charge: 0}));
+        this.updateShipping();
+      }
+    },
+
+    async fetchCities(areaId) {
+      try {
+        const response = await fetch(`{{ url('pos/cities') }}?area_id=${areaId}`);
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          this.availableCities = data.map(c => ({
+            id: c.id,
+            name: c.city_name_ar || c.city_name_en,
+            charge: Number(c.delivery_charges || 0)
+          })).filter(c => !!c.name);
+        }
+      } catch (error) {
+        console.error('Error loading cities:', error);
+        this.availableCities = [];
+      } finally {
+        this.updateShipping();
+      }
     },
     
-    updateShipping() {
-      const area = this.customer.area;
-      const fees = { 
-        'السيب': 2, 
-        'بوشر': 1.5, 
-        'مطرح': 1.5, 
-        'نزوى': 3, 
-        'بهلاء': 3, 
-        'الحمراء': 3, 
-        'إبراء': 2.5, 
-        'صور': 2.5, 
-        'بدية': 2.5 
-      };
-      this.shipping_fee = fees[area] ?? 0;
+    selectCity(cityId) {
+      const city = this.availableCities.find(c => c.id == cityId);
+      this.customer.city_id = cityId || '';
+      this.customer.city = city ? city.name : '';
+      this.shipping_fee = city ? city.charge : 0;
     },
     
     addOrder() {
@@ -112,8 +156,9 @@ document.addEventListener('alpine:init', () => {
             name: this.customer.name,
             phone: this.customer.phone,
             source: this.customer.source,
-            governorate: this.customer.governorate,
-            area: this.customer.area,
+            governorate: this.customer.governorate_name || '',
+            area: this.customer.city, // backend currently stores area, map city into area
+            city: this.customer.city,
             is_gift: this.customer.is_gift,
             gift_message: this.customer.gift_message
           },
@@ -165,8 +210,10 @@ document.addEventListener('alpine:init', () => {
                 source: '', 
                 name: '', 
                 phone: '', 
-                governorate: '', 
-                area: '', 
+                governorate_name: '', 
+              governorate_id: '',
+              city: '', 
+              city_id: '',
                 is_gift: 'no', 
                 gift_message: '' 
               };
@@ -184,7 +231,7 @@ document.addEventListener('alpine:init', () => {
                 notes: '' 
               }];
               this.shipping_fee = 0;
-              this.availableAreas = [];
+            this.availableCities = [];
             });
           } else {
             alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');

@@ -122,6 +122,9 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
 
         // Create or find customer
         $phone = $request->input('customer.phone');
+        $governorate = $request->input('customer.governorate');
+        $city = $request->input('customer.city');
+        $area = $city ?: $request->input('customer.area');
         
         if (!empty($phone)) {
             // If phone exists, find or create by phone
@@ -129,16 +132,16 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
                 ['phone' => $phone],
                 [
                     'name' => $request->input('customer.name'),
-                    'governorate' => $request->input('customer.governorate'),
-                    'area' => $request->input('customer.area'),
+                    'governorate' => $governorate,
+                    'area' => $area,
                 ]
             );
 
             // Update customer if phone exists but name/governorate/area changed
             if ($customer->wasRecentlyCreated === false) {
                 $customer->name = $request->input('customer.name');
-                $customer->governorate = $request->input('customer.governorate');
-                $customer->area = $request->input('customer.area');
+                $customer->governorate = $governorate;
+                $customer->area = $area;
                 $customer->save();
             }
         } else {
@@ -146,8 +149,8 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
             $customer = new Customer();
             $customer->name = $request->input('customer.name');
             $customer->phone = null;
-            $customer->governorate = $request->input('customer.governorate');
-            $customer->area = $request->input('customer.area');
+            $customer->governorate = $governorate;
+            $customer->area = $area;
             $customer->save();
         }
 
@@ -389,13 +392,21 @@ public function getOrdersList(Request $request)
                 $tailor = $order->notes;
             }
 
+            $customer = $order->customer;
+            $governorate = optional($customer)->governorate ?? '';
+            $city = optional($customer)->area ?? '';
+            $location = trim($governorate . ($city ? ' - ' . $city : ''));
+
             // Calculate and update order status based on items' tailor_status
             $this->updateOrderStatusBasedOnItems($order);
             $calculatedStatus = $order->status;
 
             return [
                 'id' => $order->id,
-                'customer' => $order->customer->name ?? 'N/A',
+                'customer' => optional($customer)->name ?? 'N/A',
+                'governorate' => $governorate,
+                'city' => $city,
+                'location' => $location,
                 'date' => $order->created_at->format('Y-m-d'),
                 'status' => $calculatedStatus,
                 'source' => $order->source,
