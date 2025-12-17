@@ -12,6 +12,9 @@ class Customer extends Model
         'phone',
         'governorate',
         'area',
+        'area_id',
+        'city_id',
+        'address',
     ];
 
     /**

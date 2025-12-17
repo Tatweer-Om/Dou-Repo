@@ -36,19 +36,20 @@
 
       <div>
         <label class="block text-sm font-medium mb-1">{{ trans('messages.governorate', [], session('locale')) }}</label>
-        <select x-model="customer.governorate" class="form-select w-full border-gray-300 rounded-lg" @change="updateAreas()">
+        <select x-model="customer.governorate_id" class="form-select w-full border-gray-300 rounded-lg" @change="updateCities($event.target.value)">
           <option value="">{{ trans('messages.select_governorate', [], session('locale')) }}</option>
-          <option value="مسقط">{{ trans('messages.muscat', [], session('locale')) }}</option>
-          <option value="الداخلية">{{ trans('messages.ad_dakhiliyah', [], session('locale')) }}</option>
-          <option value="الشرقية">{{ trans('messages.ash_sharqiyah', [], session('locale')) }}</option>
+          <template x-for="area in governorates" :key="area.id">
+            <option :value="area.id" x-text="area.name"></option>
+          </template>
         </select>
       </div>
 
       <div>
         <label class="block text-sm font-medium mb-1">{{ trans('messages.state_area', [], session('locale')) }}</label>
-        <select x-model="customer.area" class="form-select w-full border-gray-300 rounded-lg" @change="updateShipping()">
-          <template x-for="area in availableAreas" :key="area">
-            <option x-text="area"></option>
+        <select x-model="customer.city_id" class="form-select w-full border-gray-300 rounded-lg" @change="selectCity($event.target.value)">
+          <option value="">{{ trans('messages.select', [], session('locale')) }}</option>
+          <template x-for="city in availableCities" :key="city.id">
+            <option :value="city.id" x-text="city.name + (city.charge ? ' - ' + city.charge + ' ر.ع' : '')"></option>
           </template>
         </select>
       </div>
@@ -206,7 +207,7 @@
       <h2 class="text-xl font-bold mb-4">{{ trans('messages.order_summary', [], session('locale')) }}</h2>
       <p class="mb-3 text-sm text-gray-700">{{ trans('messages.customer', [], session('locale')) }}: <strong x-text="customer.name"></strong> — <span x-text="customer.phone"></span></p>
       <p class="text-sm mb-2 text-gray-600">{{ trans('messages.source', [], session('locale')) }}: <span x-text="customer.source"></span></p>
-      <p class="text-sm mb-2 text-gray-600">{{ trans('messages.area', [], session('locale')) }}: <span x-text="customer.governorate + ' - ' + customer.area"></span></p>
+      <p class="text-sm mb-2 text-gray-600">{{ trans('messages.area', [], session('locale')) }}: <span x-text="(customer.governorate_name || '') + ' - ' + (customer.city || '')"></span></p>
       <p class="text-sm mb-3 text-gray-600">{{ trans('messages.shipping', [], session('locale')) }}: <span x-text="shipping_fee + ' ر.ع (' + '{{ trans('messages.on_delivery', [], session('locale')) }}' + ')'"></span></p>
 
       <template x-for="(order, i) in orders" :key="i">

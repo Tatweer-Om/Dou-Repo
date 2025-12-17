@@ -22,7 +22,7 @@
 
           <!-- بيانات أساسية للطلب -->
           <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.order_number', [], session('locale')) }}</p>
                 <p class="font-bold text-lg" x-text="viewOrder.id"></p>
@@ -38,6 +38,14 @@
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.date', [], session('locale')) }}</p>
                 <p class="font-semibold" x-text="formatDate(viewOrder.date)"></p>
+              </div>
+              <div>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.governorate', [], session('locale')) }}</p>
+                <p class="font-semibold" x-text="viewOrder.governorate || '—'"></p>
+              </div>
+              <div>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.state_area', [], session('locale')) }}</p>
+                <p class="font-semibold" x-text="viewOrder.city || '—'"></p>
               </div>
             </div>
           </div>

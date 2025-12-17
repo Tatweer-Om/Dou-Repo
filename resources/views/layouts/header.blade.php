@@ -135,6 +135,14 @@
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ __('messages.category') }}
             </a>
+                <a href="{{url('areas')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.areas') }}
+            </a>
+                <a href="{{url('cities')}}" class="flex items-center gap-2 px-4 py-2 text-sm rounded-lg hover:bg-secondary hover:text-accent">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ __('messages.cities') }}
+            </a>
         </div>
     </div>
     <!-- Boutiques -->
@@ -226,6 +234,11 @@
     <a href="#" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
         <span class="material-symbols-outlined text-2xl">receipt_long</span> 
         {{ __('messages.expenses') }}
+    </a>
+
+    <a href="{{url('accounts')}}" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
+        <span class="material-symbols-outlined text-2xl">account_balance</span> 
+        {{ __('messages.accounts') }}
     </a>
 
     <a href="{{url('user')}}" class="flex items-center gap-4 px-4 py-2.5 rounded-lg hover:bg-secondary hover:text-accent">
