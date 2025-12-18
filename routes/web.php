@@ -18,6 +18,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\CityController;
+use App\Http\Controllers\CustomerController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -115,6 +116,13 @@ Route::get('cities/list', [CityController::class, 'getCities']);
 Route::get('cities/by-area', [CityController::class, 'byArea']);
 Route::get('cities/{city}', [CityController::class, 'show']);
 
+Route::get('customers', [CustomerController::class, 'index'])->name('customer');
+Route::post('customers', [CustomerController::class, 'store']);
+Route::put('customers/{customer}', [CustomerController::class, 'update']);
+Route::delete('customers/{customer}', [CustomerController::class, 'destroy']);
+Route::get('customers/list', [CustomerController::class, 'getCustomers']);
+Route::get('customers/{customer}', [CustomerController::class, 'show']);
+
 
 
 Route::get('size', [SizeController::class, 'index'])->name('size');
@@ -158,6 +166,8 @@ Route::post('add_stock', [StockController::class, 'add_stock'])->name('add_stock
 Route::get('view_stock', [StockController::class, 'view_stock'])->name('view_stock');
 Route::post('update_stock', [StockController::class, 'update_stock'])->name('update_stock');
 Route::delete('/delete_stock/{id}', [StockController::class, 'delete_stock'])->name('delete_stock');
+Route::get('stock/audit', [StockController::class, 'stockAudit'])->name('stock.audit');
+Route::get('stock/audit/list', [StockController::class, 'getStockAuditList'])->name('stock.audit.list');
 
 Route::get('stock/list', [StockController::class, 'getstock']);
 Route::get('stock/{id}', [StockController::class, 'show'])->name('stock.show');
@@ -222,3 +232,5 @@ Route::get('pos/stock/{id}', [PosController::class, 'getStockDetails'])->name('p
 Route::get('pos/customers', [PosController::class, 'searchCustomers'])->name('pos.customers.search');
 Route::post('pos/orders', [PosController::class, 'store'])->name('pos.orders.store');
 Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.cities.by_area');
+Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
+Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');

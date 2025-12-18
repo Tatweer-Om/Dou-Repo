@@ -11,6 +11,8 @@ use App\Models\PosPayment;
 use App\Models\PosPaymentExpence;
 use App\Models\Area;
 use App\Models\City;
+use App\Models\ColorSize;
+use App\Models\Account;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -86,14 +88,14 @@ class PosController extends Controller
             return response()->json([]);
         }
 
-        $customers = Customer::query()
+        $customers = Customer::with(['city', 'area'])
             ->where(function ($q) use ($search) {
                 $q->where('phone', 'LIKE', "%{$search}%")
                   ->orWhere('name', 'LIKE', "%{$search}%");
             })
             ->orderBy('id', 'DESC')
             ->limit(10)
-            ->get(['id', 'name', 'phone', 'governorate', 'area']);
+            ->get(['id', 'name', 'phone', 'city_id', 'area_id']);
 
         return response()->json($customers);
     }
@@ -134,11 +136,6 @@ class PosController extends Controller
         'customer.address' => 'nullable|string|max:1000',
         'customer.area' => 'nullable|string|max:255',
         'customer.wilayah' => 'nullable|string|max:255',
-            'delivery.area_id' => 'nullable|integer',
-            'delivery.city_id' => 'nullable|integer',
-            'delivery.address' => 'nullable|string|max:2000',
-            'delivery.fee' => 'nullable|numeric',
-            'delivery.paid' => 'nullable|boolean',
     ]);
 
     if ($validator->fails()) {
@@ -159,7 +156,6 @@ class PosController extends Controller
         $payments = $request->input('payments', []);
         $totals = $request->input('totals', []);
         $customerInput = $request->input('customer', []);
-        $deliveryInput = $request->input('delivery', []);
 
         // Human friendly order number: sequential, padded to 6 digits
         $orderNoInt = (PosOrders::max('order_no') ?? 0) + 1;
@@ -170,27 +166,28 @@ class PosController extends Controller
         $customerId = null;
 
         if (!empty($customerInput['phone']) || !empty($customerInput['name'])) {
+            // Get area_id and city_id from customer input (area = area_id, wilayah = city_id)
+            // Convert to integers if they exist, otherwise null
+            $areaId = !empty($customerInput['area']) ? (int)$customerInput['area'] : null;
+            $cityId = !empty($customerInput['wilayah']) ? (int)$customerInput['wilayah'] : null;
+            $addressNotes = $customerInput['address'] ?? null;
 
             if (!empty($customerInput['phone'])) {
                 $customer = Customer::firstOrCreate(
                     ['phone' => $customerInput['phone']],
                     [
                         'name' => $customerInput['name'] ?? '',
-                        'governorate' => $customerInput['area'] ?? null,
-                        'area' => $customerInput['wilayah'] ?? null,
-                        'area_id' => $deliveryInput['area_id'] ?? null,
-                        'city_id' => $deliveryInput['city_id'] ?? null,
-                        'address' => $customerInput['address'] ?? null,
+                        'city_id' => $cityId,
+                        'area_id' => $areaId,
+                        'notes' => $addressNotes,
                     ]
                 );
             } else {
                 $customer = Customer::create([
                     'name' => $customerInput['name'] ?? '',
-                    'governorate' => $customerInput['area'] ?? null,
-                    'area' => $customerInput['wilayah'] ?? null,
-                    'area_id' => $deliveryInput['area_id'] ?? null,
-                    'city_id' => $deliveryInput['city_id'] ?? null,
-                    'address' => $customerInput['address'] ?? null,
+                    'city_id' => $cityId,
+                    'area_id' => $areaId,
+                    'notes' => $addressNotes,
                 ]);
             }
 
@@ -198,11 +195,9 @@ class PosController extends Controller
             if (!$customer->wasRecentlyCreated) {
                 $customer->update([
                     'name' => $customerInput['name'] ?? $customer->name,
-                    'governorate' => $customerInput['area'] ?? $customer->governorate,
-                    'area' => $customerInput['wilayah'] ?? $customer->area,
-                    'area_id' => $deliveryInput['area_id'] ?? $customer->area_id,
-                    'city_id' => $deliveryInput['city_id'] ?? $customer->city_id,
-                    'address' => $customerInput['address'] ?? $customer->address,
+                    'city_id' => $cityId ?? $customer->city_id,
+                    'area_id' => $areaId ?? $customer->area_id,
+                    'notes' => $addressNotes ?? $customer->notes,
                 ]);
             }
 
@@ -214,11 +209,6 @@ class PosController extends Controller
         $order = PosOrders::create([
             'customer_id' => $customerId,
             'order_type' => $request->input('order_type', 'direct'),
-            'delivery_area_id' => $deliveryInput['area_id'] ?? null,
-            'delivery_city_id' => $deliveryInput['city_id'] ?? null,
-            'delivery_address' => $deliveryInput['address'] ?? null,
-            'delivery_fee' => $deliveryInput['fee'] ?? 0,
-            'delivery_fee_paid' => !empty($deliveryInput['paid']),
             'item_count' => count($items),
             'paid_amount' => collect($payments)->sum('amount'),
             'total_amount' => $totals['total'] ?? 0,
@@ -259,12 +249,25 @@ class PosController extends Controller
             $itemProfit = ($unitEffectivePrice - $unitCost) * $qty;
             $totalProfit += $itemProfit;
 
+            // Handle color_id and size_id - convert to int or null
+            $colorId = null;
+            if (!empty($item['color_id']) && is_numeric($item['color_id'])) {
+                $colorId = (int)$item['color_id'];
+            }
+            
+            $sizeId = null;
+            if (!empty($item['size_id']) && is_numeric($item['size_id'])) {
+                $sizeId = (int)$item['size_id'];
+            }
+
             PosOrdersDetail::create([
                 'order_id' => $order->id,
                 'order_no' => $orderNoFormatted,
                 'item_id' => $item['id'],
                 'item_barcode' => $stock['barcode'] ?? '',
                 'item_quantity' => $qty,
+                'color_id' => $colorId,
+                'size_id' => $sizeId,
                 'item_discount_price' => $discountShare, // store total discount for this line
                 'item_price' => $linePrice,
                 'item_total' => $effectiveLine,
@@ -274,6 +277,26 @@ class PosController extends Controller
                 'user_id' => $userId,
                 'branch_id' => $item['branch_id'] ?? null,
             ]);
+
+            // Reduce stock quantity from ColorSize table
+            if ($colorId && $sizeId) {
+                $colorSize = ColorSize::where('stock_id', $item['id'])
+                    ->where('color_id', $colorId)
+                    ->where('size_id', $sizeId)
+                    ->first();
+
+                if ($colorSize) {
+                    $currentQty = (int)($colorSize->qty ?? 0);
+                    $newQty = max(0, $currentQty - $qty);
+                    $colorSize->qty = $newQty;
+                    $colorSize->save();
+
+                    // Also update the stock total quantity
+                    $stockTotalQty = ColorSize::where('stock_id', $item['id'])->sum('qty');
+                    $stock->quantity = $stockTotalQty;
+                    $stock->save();
+                }
+            }
         }
 
         // Update total profit on order
@@ -299,17 +322,45 @@ class PosController extends Controller
                 'user_id' => $userId,
             ]);
 
+            // Get account to check commission
+            $account = Account::find($pay['account_id']);
+            $accountTax = null;
+            $accountTaxFee = null;
+
+            // Calculate commission if account has commission > 0
+            if ($account && $account->commission && (float)$account->commission > 0) {
+                $commissionPercentage = (float)$account->commission;
+                $paymentAmount = (float)$pay['amount'];
+                
+                // Calculate commission amount: (commission% / 100) * payment amount
+                $commissionAmount = ($commissionPercentage / 100) * $paymentAmount;
+                
+                // Save commission percentage in account_tax
+                $accountTax = $commissionPercentage;
+                
+                // Save calculated commission amount in account_tax_fee
+                $accountTaxFee = $commissionAmount;
+            }
+
             PosPaymentExpence::create([
                 'order_id' => $order->id,
                 'order_no' => $orderNoFormatted,
                 'total_amount' => $pay['amount'],
                 'accoun_id' => $pay['account_id'], // column name in migration
-                'account_tax' => $pay['tax'] ?? null,
-                'account_tax_fee' => $pay['tax_fee'] ?? null,
+                'account_tax' => $accountTax,
+                'account_tax_fee' => $accountTaxFee,
                 'added_by' => $userName,
                 'updated_by' => $userName,
                 'user_id' => $userId,
             ]);
+
+            // Update account opening balance
+            if ($account) {
+                $currentBalance = (float)($account->opening_balance ?? 0);
+                $newBalance = $currentBalance + (float)$pay['amount'];
+                $account->opening_balance = $newBalance;
+                $account->save();
+            }
         }
 
         DB::commit();
@@ -329,6 +380,119 @@ class PosController extends Controller
             'line' => $e->getLine(),
         ], 500);
     }
-
 }
+
+    /**
+     * Show POS orders list page
+     */
+    public function ordersList()
+    {
+        return view('pos.orders_list');
+    }
+
+    /**
+     * Get all POS orders with details
+     */
+    public function getOrdersList(Request $request)
+    {
+        try {
+            $orders = PosOrders::with([
+                'customer',
+                'details.stock.images',
+                'details.color',
+                'details.size',
+                'payments.account'
+            ])
+            ->orderBy('id', 'DESC')
+            ->paginate(20);
+
+            $formattedOrders = $orders->map(function($order) {
+                // Format order number
+                $orderNo = str_pad($order->order_no ?? $order->id, 6, '0', STR_PAD_LEFT);
+                
+                // Customer name
+                $customerName = $order->customer ? $order->customer->name : '-';
+                
+                // Format date and time
+                $date = $order->created_at ? $order->created_at->format('Y-m-d') : '-';
+                $time = $order->created_at ? $order->created_at->format('H:i:s') : '-';
+                
+                // Items count
+                $itemsCount = $order->details->count();
+                
+                // Total price (before discount)
+                $subtotal = (float)($order->total_amount ?? 0) + (float)($order->total_discount ?? 0);
+                
+                // Discount
+                $discount = (float)($order->total_discount ?? 0);
+                
+                // Paid amount
+                $paidAmount = (float)($order->paid_amount ?? 0);
+                
+                // Payment methods (get from payments)
+                $paymentMethods = $order->payments->map(function($payment) {
+                    return $payment->account ? $payment->account->account_name : 'Unknown';
+                })->unique()->implode(', ');
+
+                // Order type label
+                $orderTypeLabel = $order->order_type === 'delivery' ? 
+                    trans('messages.delivery', [], session('locale')) : 
+                    trans('messages.direct', [], session('locale'));
+
+                return [
+                    'id' => $order->id,
+                    'order_no' => $orderNo,
+                    'customer_name' => $customerName,
+                    'order_type' => $orderTypeLabel,
+                    'date' => $date,
+                    'time' => $time,
+                    'items_count' => $itemsCount,
+                    'subtotal' => $subtotal,
+                    'discount' => $discount,
+                    'total_amount' => (float)($order->total_amount ?? 0),
+                    'paid_amount' => $paidAmount,
+                    'payment_methods' => $paymentMethods ?: '-',
+                    'items' => $order->details->map(function($detail) {
+                        $locale = session('locale', 'en');
+                        $stock = $detail->stock;
+                        $colorName = $detail->color ? 
+                            ($locale === 'ar' ? ($detail->color->color_name_ar ?? $detail->color->color_name_en) : ($detail->color->color_name_en ?? $detail->color->color_name_ar)) : 
+                            '-';
+                        $sizeName = $detail->size ? 
+                            ($locale === 'ar' ? ($detail->size->size_name_ar ?? $detail->size->size_name_en) : ($detail->size->size_name_en ?? $detail->size->size_name_ar)) : 
+                            '-';
+                        
+                        return [
+                            'id' => $detail->id,
+                            'stock_id' => $detail->item_id,
+                            'abaya_code' => $stock ? ($stock->abaya_code ?? '-') : '-',
+                            'design_name' => $stock ? ($stock->design_name ?? '-') : '-',
+                            'barcode' => $detail->item_barcode ?? '-',
+                            'quantity' => (int)($detail->item_quantity ?? 0),
+                            'price' => (float)($detail->item_price ?? 0),
+                            'total' => (float)($detail->item_total ?? 0),
+                            'color_id' => $detail->color_id,
+                            'color_name' => $colorName,
+                            'size_id' => $detail->size_id,
+                            'size_name' => $sizeName,
+                            'image' => $stock && $stock->images->first() ? asset($stock->images->first()->image_path) : null,
+                        ];
+                    })
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'orders' => $formattedOrders,
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'total' => $orders->total(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

@@ -42,6 +42,8 @@
          @include('custom_js.stock_js')
             @elseif ($route_name == 'view_stock')
          @include('custom_js.stock_list_js')
+          @elseif ($routeName == 'stock.audit')
+         @include('custom_js.stock_audit_js')
               @elseif ($route_name == 'edit_stock')
          @include('custom_js.edit_stock_js')
           @elseif ($route_name == 'view_material')
@@ -60,6 +62,8 @@
          @include('custom_js.area_js')
           @elseif ($route_name == 'city')
          @include('custom_js.city_js')
+          @elseif ($routeName == 'pos.orders.list')
+         @include('custom_js.pos_orders_list_js')
             @elseif ($route_name == 'pos')
          @include('custom_js.pos_js')
     @endif

@@ -68,6 +68,7 @@
         let cart = [];
         let currentProduct = {};
         let selectedSize = null;
+        let selectedSizeId = null;
         let selectedColor = null;
         let modalQty = 1;
 
@@ -106,6 +107,7 @@
         ================================ */
         function resetProductSelectionUI() {
           selectedSize = null;
+          selectedSizeId = null;
           selectedColor = null;
 
           // Reset old size/color buttons if they exist
@@ -273,6 +275,7 @@
           // Reset selection when closing
           resetProductSelectionUI();
           modalQty = 1;
+          selectedSizeId = null;
         }
 
         function confirmAddToCart() {
@@ -310,6 +313,7 @@
           const colorCode = selectedElement.dataset.colorCode || '#000000';
 
           // Build cart item
+          const sizeId = selectedElement.dataset.sizeId || selectedSizeId;
           const item = {
             id: currentProduct.id,
             name: currentProduct.name,
@@ -317,6 +321,7 @@
             image: currentProduct.image,
             barcode: currentProduct.barcode || '',
             size: sizeName,
+            sizeId: sizeId,
             color: colorName,
             colorId: selectedColor,
             colorCode: colorCode,
@@ -324,10 +329,10 @@
             qty: modalQty
           };
 
-          // Merge logic - match by id, size name, and color id
+          // Merge logic - match by id, size id, and color id
           const existing = cart.find((i) =>
             i.id === item.id &&
-            i.size === item.size &&
+            i.sizeId === item.sizeId &&
             i.colorId === item.colorId
           );
 
@@ -610,6 +615,9 @@
            PAYMENT MODAL
         ================================ */
         function openPaymentModal() {
+          // Reset selected payment method when opening modal
+          selectedPayMethod = null;
+          
           if (!cart.length) {
             if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -635,7 +643,8 @@
           renderPaymentAccounts();
           renderPartialInputs();
 
-          initPaymentButtons();
+          // Note: bindPaymentAccountButtons() is called inside renderPaymentAccounts()
+          // so we don't need to call initPaymentButtons() here
           initOrderTypeButtons();
           initCustomerAutocomplete();
           initPartialPaymentInputs();
@@ -1352,10 +1361,13 @@
           const singleInput = $("singlePaymentAmount");
 
           buttons.forEach((btn) => {
-            btn.onclick = () => {
+            btn.onclick = function() {
+              // Remove active from all buttons
               buttons.forEach((b) => b.classList.remove("active"));
+              // Add active to clicked button
               btn.classList.add("active");
 
+              // IMPORTANT: Update selectedPayMethod with the account ID from the button
               selectedPayMethod = btn.dataset.method;
 
               if (selectedPayMethod === 'partial') {
@@ -1374,22 +1386,26 @@
             };
           });
 
-          // Default: first account or partial if none
-          if (buttons.length) {
-            const defaultBtn = buttons[0];
-            defaultBtn.classList.add('active');
-            selectedPayMethod = defaultBtn.dataset.method;
+          // Set default selection only if no method is currently selected
+          // This preserves user's selection if they clicked a button
+          if (buttons.length && selectedPayMethod === null) {
+            // Find first non-partial button for default
+            const defaultBtn = Array.from(buttons).find(btn => btn.dataset.method !== 'partial') || buttons[0];
+            if (defaultBtn) {
+              defaultBtn.classList.add('active');
+              selectedPayMethod = defaultBtn.dataset.method;
 
-            // Trigger display for default selection
-            if (selectedPayMethod === 'partial') {
-              partialBox?.classList.remove("hidden");
-              singleBox?.classList.add("hidden");
-            } else {
-              partialBox?.classList.add("hidden");
-              singleBox?.classList.remove("hidden");
-              const payable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
-              if (singleInput) {
-                singleInput.value = payable.toFixed(3);
+              // Trigger display for default selection
+              if (selectedPayMethod === 'partial') {
+                partialBox?.classList.remove("hidden");
+                singleBox?.classList.add("hidden");
+              } else {
+                partialBox?.classList.add("hidden");
+                singleBox?.classList.remove("hidden");
+                const payable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
+                if (singleInput) {
+                  singleInput.value = payable.toFixed(3);
+                }
               }
             }
           }
@@ -1508,7 +1524,7 @@ return;
           }
 
           // Fallback to single payment
-          if (selectedPayMethod) {
+          if (selectedPayMethod && selectedPayMethod !== 'partial') {
             let amount = payableAmount;
             const single = document.getElementById('singlePaymentAmount');
             if (single && single.value) {
@@ -1522,8 +1538,19 @@ return;
               });
               return [];
             }
+            
+            // Convert to number and validate
+            const accountId = Number(selectedPayMethod);
+            if (isNaN(accountId) || accountId <= 0) {
+              Swal.fire({
+                icon: 'error',
+                title: "{{ trans('messages.payment_method', [], session('locale')) }}",
+                text: "{{ trans('messages.invalid_account', [], session('locale')) ?: 'Invalid account selected' }}"
+              });
+              return [];
+            }
             payments.push({
-              account_id: Number(selectedPayMethod),
+              account_id: accountId,
               amount: amount,
               label: 'full'
             });
@@ -1533,14 +1560,36 @@ return;
         }
 
         function buildItemsPayload() {
-          return cart.map((item) => ({
-            id: Number(item.id),
-            barcode: item.barcode || '',
-            abaya_code: item.abaya_code || '',
-            qty: Number(item.qty),
-            price: Number(item.price),
-            line_total: Number(item.price) * Number(item.qty)
-          }));
+          return cart.map((item) => {
+            // Handle color_id - convert to number if valid, otherwise null
+            let colorId = null;
+            if (item.colorId !== null && item.colorId !== undefined && item.colorId !== '' && item.colorId !== 'null' && item.colorId !== 'undefined') {
+              const parsed = parseInt(item.colorId, 10);
+              if (!isNaN(parsed) && parsed > 0) {
+                colorId = parsed;
+              }
+            }
+            
+            // Handle size_id - convert to number if valid, otherwise null
+            let sizeId = null;
+            if (item.sizeId !== null && item.sizeId !== undefined && item.sizeId !== '' && item.sizeId !== 'null' && item.sizeId !== 'undefined') {
+              const parsed = parseInt(item.sizeId, 10);
+              if (!isNaN(parsed) && parsed > 0) {
+                sizeId = parsed;
+              }
+            }
+            
+            return {
+              id: Number(item.id),
+              barcode: item.barcode || '',
+              abaya_code: item.abaya_code || '',
+              qty: Number(item.qty),
+              price: Number(item.price),
+              color_id: colorId,
+              size_id: sizeId,
+              line_total: Number(item.price) * Number(item.qty)
+            };
+          });
         }
 
         async function submitPosOrder() {
@@ -1558,14 +1607,6 @@ return;
             Swal.fire({ icon: 'error', title: "{{ trans('messages.select', [], session('locale')) }}", text: "{{ trans('messages.payment_method', [], session('locale')) }}" });
             return;
           }
-
-      const deliveryAreaId = document.getElementById('deliveryArea')?.value || '';
-      const deliveryCitySelect = document.getElementById('deliveryWilayah');
-      const deliveryCityId = deliveryCitySelect?.value || '';
-      const deliveryAddress = document.getElementById('deliveryAddress')?.value || '';
-      const selectedCityOpt = deliveryCitySelect ? deliveryCitySelect.options[deliveryCitySelect.selectedIndex] : null;
-      const deliveryFee = selectedCityOpt ? Number(selectedCityOpt.dataset.charge || 0) : 0;
-      const deliveryPaid = document.getElementById('deliveryPaid')?.checked || false;
 
           const customerPayload = {
             name: document.getElementById('customerName')?.value || '',
@@ -1590,13 +1631,6 @@ return;
             order_type: selectedOrderType || 'direct',
             notes: document.getElementById('deliveryAddress')?.value || null,
             customer: customerPayload,
-        delivery: {
-          area_id: deliveryAreaId,
-          city_id: deliveryCityId,
-          address: deliveryAddress,
-          fee: deliveryFee,
-          paid: deliveryPaid,
-        }
           };
 
           try {

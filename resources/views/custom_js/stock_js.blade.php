@@ -47,6 +47,12 @@ $(document).ready(function() {
                     show_notification('success', response.message);
                     $('#add_material')[0].reset();
                     $('#imagePreview').attr('src','').hide();
+                    // Redirect to material list
+                    if (response.redirect_url) {
+                        setTimeout(function() {
+                            window.location.href = response.redirect_url;
+                        }, 1000);
+                    }
                 }
             },
             error: function(xhr) {
@@ -113,6 +119,12 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
                 // Clear Alpine images array
                 if (window.imageUploaderComponent) {
                     window.imageUploaderComponent.images = [];
+                }
+                // Redirect to stock list
+                if (response.redirect_url) {
+                    setTimeout(function() {
+                        window.location.href = response.redirect_url;
+                    }, 1000);
                 }
             }
         },

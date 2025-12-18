@@ -10,7 +10,7 @@
     }
 
     // Restore submenu states on load
-    ["inventoryMenu","boutiquesMenu","tailorMenu"].forEach(id => {
+    ["inventoryMenu","stock_menue","customersMenu","boutiquesMenu","tailorMenu","specialordersMenu","posMenu"].forEach(id => {
       const saved = localStorage.getItem(`submenu:${id}`);
       if (saved === "1") {
         document.getElementById(id)?.classList.add("active");
