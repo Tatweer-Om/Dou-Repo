@@ -3,17 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PosOrders extends Model
 {
     protected $fillable = [
         'customer_id',
         'order_type',
-        'delivery_area_id',
-        'delivery_city_id',
-        'delivery_address',
-        'delivery_fee',
-        'delivery_fee_paid',
         'item_count',
         'paid_amount',
         'total_amount',
@@ -36,5 +33,10 @@ class PosOrders extends Model
     public function payments()
     {
         return $this->hasMany(PosPayment::class, 'order_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 }

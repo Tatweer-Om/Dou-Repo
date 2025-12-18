@@ -65,7 +65,8 @@ public function getmaterial()
     return response()->json([
         'status' => 'success',
         'message' => 'Material added successfully!',
-        'material_id' => $material->id
+        'material_id' => $material->id,
+        'redirect_url' => url('view_material'),
     ]);
 }
 

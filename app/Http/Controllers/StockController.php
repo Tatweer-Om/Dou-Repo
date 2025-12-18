@@ -182,6 +182,7 @@ if (!empty($request->color_sizes)) {
     return response()->json([
         'status'  => 'success',
         'message' => 'Stock added successfully!',
+        'redirect_url' => url('view_stock'),
     ]);
 }
 
@@ -675,6 +676,116 @@ public function add_quantity(Request $request)
     ]);
 }
 
+    /**
+     * Show stock quantity audit list page
+     */
+    public function stockAudit()
+    {
+        return view('stock.stock_audit');
+    }
 
+    /**
+     * Get stock audit list - all stock items with aggregated quantities
+     */
+    public function getStockAuditList(Request $request)
+    {
+        try {
+            $locale = session('locale', 'en');
+            
+            // Get all stocks with their color-size combinations
+            $stocks = Stock::with(['colorSizes.color', 'colorSizes.size', 'category'])
+                ->whereHas('colorSizes')
+                ->orderBy('id', 'DESC')
+                ->get();
 
+            $auditList = [];
+            
+            foreach ($stocks as $stock) {
+                // Aggregate totals across all color/size combinations for this stock
+                $totalAdded = 0;
+                $totalPosSold = 0;
+                $totalTransferredOut = 0;
+                $totalTransferredIn = 0;
+                $totalRemaining = 0;
+
+                // Get all transfers for this stock
+                $allStockTransfers = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
+                    ->whereHas('transfer', function($q) use ($stock) {
+                        $q->where('stock_id', $stock->id);
+                    })
+                    ->get();
+
+                foreach ($stock->colorSizes as $colorSize) {
+                    $colorId = $colorSize->color_id;
+                    $sizeId = $colorSize->size_id;
+                    $currentQty = (int)($colorSize->qty ?? 0);
+                    $totalRemaining += $currentQty;
+
+                    // Get color and size names for matching
+                    $color = $colorSize->color;
+                    $size = $colorSize->size;
+                    $colorName = $color ? ($locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar)) : '';
+                    $sizeName = $size ? ($locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar)) : '';
+
+                    // Total added from history (action_type = 1 means addition)
+                    $totalAdded += StockHistory::where('stock_id', $stock->id)
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->where('action_type', 1)
+                        ->sum('changed_qty');
+
+                    // Total POS sold
+                    $totalPosSold += \App\Models\PosOrdersDetail::where('item_id', $stock->id)
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->sum('item_quantity');
+
+                    // Match transfers by color/size
+                    $matchedTransfers = $allStockTransfers->filter(function($transfer) use ($colorName, $sizeName) {
+                        $transferColor = $transfer->item_color ?? '';
+                        $transferSize = $transfer->item_size ?? '';
+                        $colorMatch = empty($transferColor) || empty($colorName) || $transferColor === $colorName;
+                        $sizeMatch = empty($transferSize) || empty($sizeName) || $transferSize === $sizeName;
+                        return $colorMatch && $sizeMatch;
+                    });
+                    
+                    $totalTransferredOut += $matchedTransfers->sum('quantity_pulled');
+                    $totalTransferredIn += $matchedTransfers->sum('quantity_pushed');
+                }
+
+                $auditList[] = [
+                    'stock_id' => $stock->id,
+                    'barcode' => $stock->barcode ?? '-',
+                    'abaya_code' => $stock->abaya_code,
+                    'design_name' => $stock->design_name ?? $stock->abaya_code,
+                    'quantity_added' => (int)$totalAdded,
+                    'quantity_sold_pos' => (int)$totalPosSold,
+                    'quantity_transferred_out' => (int)$totalTransferredOut,
+                    'quantity_received' => (int)$totalTransferredIn,
+                    'remaining_quantity' => (int)$totalRemaining,
+                ];
+            }
+
+            // Paginate results
+            $page = $request->input('page', 1);
+            $perPage = 20;
+            $offset = ($page - 1) * $perPage;
+            $total = count($auditList);
+            $paginated = array_slice($auditList, $offset, $perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $paginated,
+                'current_page' => (int)$page,
+                'last_page' => (int)ceil($total / $perPage),
+                'total' => $total,
+                'per_page' => $perPage,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
