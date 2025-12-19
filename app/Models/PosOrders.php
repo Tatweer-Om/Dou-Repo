@@ -16,6 +16,8 @@ class PosOrders extends Model
         'total_amount',
         'discount_type',
         'total_discount',
+        'delivery_charges',
+        'delivery_paid',
         'profit',
         'return_status',
         'restore_status',

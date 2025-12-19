@@ -708,13 +708,6 @@ public function add_quantity(Request $request)
                 $totalTransferredIn = 0;
                 $totalRemaining = 0;
 
-                // Get all transfers for this stock
-                $allStockTransfers = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
-                    ->whereHas('transfer', function($q) use ($stock) {
-                        $q->where('stock_id', $stock->id);
-                    })
-                    ->get();
-
                 foreach ($stock->colorSizes as $colorSize) {
                     $colorId = $colorSize->color_id;
                     $sizeId = $colorSize->size_id;
@@ -740,17 +733,37 @@ public function add_quantity(Request $request)
                         ->where('size_id', $sizeId)
                         ->sum('item_quantity');
 
-                    // Match transfers by color/size
-                    $matchedTransfers = $allStockTransfers->filter(function($transfer) use ($colorName, $sizeName) {
-                        $transferColor = $transfer->item_color ?? '';
-                        $transferSize = $transfer->item_size ?? '';
-                        $colorMatch = empty($transferColor) || empty($colorName) || $transferColor === $colorName;
-                        $sizeMatch = empty($transferSize) || empty($sizeName) || $transferSize === $sizeName;
-                        return $colorMatch && $sizeMatch;
-                    });
+                    // Get transfers OUT (from main/warehouse to channels/boutiques)
+                    // Transfers where item_code matches and quantity_pulled > 0
+                    $transfersOut = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
+                        ->where('quantity_pulled', '>', 0)
+                        ->with('transfer')
+                        ->get()
+                        ->filter(function($transfer) use ($colorName, $sizeName) {
+                            $transferColor = $transfer->item_color ?? '';
+                            $transferSize = $transfer->item_size ?? '';
+                            $colorMatch = empty($transferColor) || empty($colorName) || $transferColor === $colorName;
+                            $sizeMatch = empty($transferSize) || empty($sizeName) || $transferSize === $sizeName;
+                            return $colorMatch && $sizeMatch;
+                        });
                     
-                    $totalTransferredOut += $matchedTransfers->sum('quantity_pulled');
-                    $totalTransferredIn += $matchedTransfers->sum('quantity_pushed');
+                    $totalTransferredOut += $transfersOut->sum('quantity_pulled');
+
+                    // Get transfers IN (from channels/boutiques to main/warehouse)
+                    // Transfers where item_code matches and quantity_pushed > 0
+                    $transfersIn = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
+                        ->where('quantity_pushed', '>', 0)
+                        ->with('transfer')
+                        ->get()
+                        ->filter(function($transfer) use ($colorName, $sizeName) {
+                            $transferColor = $transfer->item_color ?? '';
+                            $transferSize = $transfer->item_size ?? '';
+                            $colorMatch = empty($transferColor) || empty($colorName) || $transferColor === $colorName;
+                            $sizeMatch = empty($transferSize) || empty($sizeName) || $transferSize === $sizeName;
+                            return $colorMatch && $sizeMatch;
+                        });
+                    
+                    $totalTransferredIn += $transfersIn->sum('quantity_pushed');
                 }
 
                 $auditList[] = [
@@ -787,5 +800,123 @@ public function add_quantity(Request $request)
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get stock audit details - transfers and POS sales with names
+     */
+    public function getStockAuditDetails(Request $request)
+    {
+        try {
+            $stockId = $request->input('stock_id');
+            $type = $request->input('type'); // 'added', 'pos', 'transferred'
+            $locale = session('locale', 'en');
+
+            $stock = Stock::findOrFail($stockId);
+            $details = [];
+
+            if ($type === 'transferred') {
+                // Get all transfers OUT (to channels/boutiques) - these are the ones we want to show
+                $transfersOut = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
+                    ->where('quantity_pulled', '>', 0)
+                    ->with('transfer')
+                    ->get();
+
+                foreach ($transfersOut as $transferItem) {
+                    $transfer = $transferItem->transfer;
+                    if (!$transfer) continue;
+
+                    $toLocation = $transfer->to ?? '';
+                    $locationName = $this->getLocationName($toLocation, $locale);
+
+                    // Only include if transferred to a channel or boutique (not main)
+                    // This shows where items were transferred TO
+                    if ($toLocation !== 'main' && !empty($locationName)) {
+                        $details[] = [
+                            'name' => $locationName,
+                            'quantity' => (int)$transferItem->quantity_pulled,
+                            'date' => $transfer->date ? $transfer->date->format('Y-m-d') : '',
+                            'type' => strpos($toLocation, 'boutique-') === 0 ? 'boutique' : 'channel'
+                        ];
+                    }
+                }
+                
+                // Also get transfers IN (from channels/boutiques) if user clicked on "received" column
+                // But for now, we'll show transfers OUT when type is 'transferred'
+                // The "received" column can use the same type but we'll differentiate if needed
+            } elseif ($type === 'pos') {
+                // Get all POS sales
+                $posSales = \App\Models\PosOrdersDetail::where('item_id', $stockId)
+                    ->with('order')
+                    ->get();
+
+                // Group by order to show order numbers
+                $grouped = $posSales->groupBy('order_id');
+                foreach ($grouped as $orderId => $items) {
+                    $order = $items->first()->order;
+                    $totalQty = $items->sum('item_quantity');
+                    
+                    $details[] = [
+                        'name' => $order ? ('Order #' . ($order->order_no ?? $orderId)) : 'Order #' . $orderId,
+                        'quantity' => (int)$totalQty,
+                        'date' => $order && $order->created_at ? $order->created_at->format('Y-m-d') : '',
+                        'type' => 'pos'
+                    ];
+                }
+            } elseif ($type === 'added') {
+                // Get all additions from stock history
+                $additions = StockHistory::where('stock_id', $stockId)
+                    ->where('action_type', 1)
+                    ->orderBy('created_at', 'DESC')
+                    ->get();
+
+                foreach ($additions as $addition) {
+                    $details[] = [
+                        'name' => 'Stock Addition',
+                        'quantity' => (int)$addition->changed_qty,
+                        'date' => $addition->created_at ? $addition->created_at->format('Y-m-d') : '',
+                        'type' => 'added'
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $details
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper function to get location name (channel or boutique)
+     */
+    private function getLocationName($locationId, $locale = 'en')
+    {
+        if (empty($locationId) || $locationId === 'main') {
+            return 'Main Warehouse';
+        }
+
+        // Check if it's a boutique
+        if (strpos($locationId, 'boutique-') === 0) {
+            $boutiqueId = str_replace('boutique-', '', $locationId);
+            $boutique = \App\Models\Boutique::find($boutiqueId);
+            return $boutique ? $boutique->boutique_name : $locationId;
+        }
+
+        // Check if it's a channel
+        if (strpos($locationId, 'channel-') === 0) {
+            $channelId = str_replace('channel-', '', $locationId);
+            $channel = \App\Models\Channel::find($channelId);
+            if ($channel) {
+                return $locale == 'ar' ? ($channel->channel_name_ar ?? $channel->channel_name_en) : ($channel->channel_name_en ?? $channel->channel_name_ar);
+            }
+        }
+
+        return $locationId;
     }
 }

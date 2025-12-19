@@ -14,15 +14,33 @@
                 let rows = '';
                 if (res.data && res.data.length > 0) {
                     $.each(res.data, function(i, item) {
+                        // Make quantity cells clickable if they have values > 0
+                        let addedClass = item.quantity_added > 0 ? 'cursor-pointer hover:bg-green-100 transition' : '';
+                        let posClass = item.quantity_sold_pos > 0 ? 'cursor-pointer hover:bg-red-100 transition' : '';
+                        let transferredClass = item.quantity_transferred_out > 0 ? 'cursor-pointer hover:bg-orange-100 transition' : '';
+                        let receivedClass = item.quantity_received > 0 ? 'cursor-pointer hover:bg-blue-100 transition' : '';
+
                         rows += `
                         <tr class="hover:bg-pink-50/50 transition-colors">
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-semibold">${item.barcode || '-'}</td>
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-semibold">${item.abaya_code || '-'}</td>
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${item.design_name || '-'}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-semibold text-green-600">${item.quantity_added || 0}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-red-600">${item.quantity_sold_pos || 0}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-orange-600">${item.quantity_transferred_out || 0}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-blue-600">${item.quantity_received || 0}</td>
+                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-semibold text-green-600 ${addedClass}" 
+                                ${item.quantity_added > 0 ? `onclick="showAuditDetails(${item.stock_id}, 'added')"` : ''}>
+                                ${item.quantity_added || 0}
+                            </td>
+                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-red-600 ${posClass}"
+                                ${item.quantity_sold_pos > 0 ? `onclick="showAuditDetails(${item.stock_id}, 'pos')"` : ''}>
+                                ${item.quantity_sold_pos || 0}
+                            </td>
+                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-orange-600 ${transferredClass}"
+                                ${item.quantity_transferred_out > 0 ? `onclick="showAuditDetails(${item.stock_id}, 'transferred')"` : ''}>
+                                ${item.quantity_transferred_out || 0}
+                            </td>
+                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-blue-600 ${receivedClass}"
+                                ${item.quantity_received > 0 ? `onclick="showAuditDetails(${item.stock_id}, 'transferred')"` : ''}>
+                                ${item.quantity_received || 0}
+                            </td>
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-bold text-primary">${item.remaining_quantity || 0}</td>
                         </tr>
                         `;
@@ -83,5 +101,74 @@
                 );
             });
         });
+    });
+
+    // Function to show audit details modal
+    function showAuditDetails(stockId, type) {
+        $('#auditDetailsModal').removeClass('hidden');
+        $('#modalContent').html('<p class="text-gray-500 text-center">{{ trans('messages.loading', [], session('locale')) }}...</p>');
+
+        // Set modal title based on type
+        let title = '';
+        if (type === 'added') {
+            title = '{{ trans('messages.quantity_added_details', [], session('locale')) }}';
+        } else if (type === 'pos') {
+            title = '{{ trans('messages.quantity_sold_pos_details', [], session('locale')) }}';
+        } else if (type === 'transferred') {
+            title = '{{ trans('messages.quantity_transferred_details', [], session('locale')) }}';
+        }
+        $('#modalTitle').text(title);
+
+        // Load details from backend
+        $.get("{{ url('stock/audit/details') }}", {
+            stock_id: stockId,
+            type: type
+        }, function(res) {
+            if (!res.success || !res.data || res.data.length === 0) {
+                $('#modalContent').html('<p class="text-gray-500 text-center">{{ trans('messages.no_data', [], session('locale')) }}</p>');
+                return;
+            }
+
+            // Build details table
+            let html = '<div class="overflow-x-auto"><table class="w-full text-sm">';
+            html += '<thead class="bg-gray-50 border-b"><tr>';
+            html += '<th class="px-4 py-3 text-right font-semibold">{{ trans('messages.name', [], session('locale')) }}</th>';
+            html += '<th class="px-4 py-3 text-right font-semibold">{{ trans('messages.quantity', [], session('locale')) }}</th>';
+            html += '<th class="px-4 py-3 text-right font-semibold">{{ trans('messages.date', [], session('locale')) }}</th>';
+            html += '</tr></thead><tbody>';
+
+            $.each(res.data, function(i, detail) {
+                html += '<tr class="border-b hover:bg-gray-50">';
+                html += `<td class="px-4 py-3 text-[var(--text-primary)]">${detail.name || '-'}</td>`;
+                html += `<td class="px-4 py-3 text-[var(--text-primary)] font-semibold">${detail.quantity || 0}</td>`;
+                html += `<td class="px-4 py-3 text-[var(--text-primary)]">${detail.date || '-'}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            $('#modalContent').html(html);
+        }).fail(function() {
+            $('#modalContent').html('<p class="text-red-500 text-center">{{ trans('messages.error_loading_data', [], session('locale')) }}</p>');
+        });
+    }
+
+    // Function to close modal
+    function closeAuditModal() {
+        $('#auditDetailsModal').addClass('hidden');
+        $('#modalContent').html('');
+    }
+
+    // Close modal when clicking outside
+    $(document).on('click', '#auditDetailsModal', function(e) {
+        if ($(e.target).attr('id') === 'auditDetailsModal') {
+            closeAuditModal();
+        }
+    });
+
+    // Close modal with Escape key
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape' && !$('#auditDetailsModal').hasClass('hidden')) {
+            closeAuditModal();
+        }
     });
 </script>

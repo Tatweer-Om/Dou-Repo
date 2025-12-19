@@ -8,10 +8,18 @@
 <main class="flex-1 p-8 bg-background-light dark:bg-background-dark overflow-y-auto">
     <div class="max-w-7xl mx-auto">
         <!-- Page title -->
-        <div class="mb-10">
+        <div class="mb-6">
             <h2 class="text-2xl sm:text-4xl font-bold text-[var(--text-primary)]">
                 {{ trans('messages.stock_audit', [], session('locale')) }}
             </h2>
+        </div>
+
+        <!-- Info notice -->
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <span class="material-symbols-outlined text-blue-600 text-2xl flex-shrink-0">info</span>
+            <p class="text-sm text-blue-800 flex-1">
+                {{ trans('messages.click_quantity_for_details', [], session('locale')) }}
+            </p>
         </div>
 
         <!-- Search bar -->
@@ -60,6 +68,35 @@
         <!-- Pagination -->
         <div class="flex justify-center mt-6">
             <ul id="pagination" class="dress_pagination flex gap-2"></ul>
+        </div>
+    </div>
+
+    <!-- Audit Details Modal -->
+    <div id="auditDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-[var(--text-primary)]" id="modalTitle">
+                    {{ trans('messages.audit_details', [], session('locale')) }}
+                </h3>
+                <button onclick="closeAuditModal()" class="text-gray-500 hover:text-gray-700 transition">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="px-6 py-4 overflow-y-auto flex-1">
+                <div id="modalContent">
+                    <p class="text-gray-500 text-center">{{ trans('messages.loading', [], session('locale')) }}...</p>
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end">
+                <button onclick="closeAuditModal()" class="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold transition">
+                    {{ trans('messages.close', [], session('locale')) }}
+                </button>
+            </div>
         </div>
     </div>
 </main>

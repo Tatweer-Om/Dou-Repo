@@ -382,6 +382,32 @@
           return amount;
         }
 
+        function getDeliveryCharge() {
+          // Check if order type is delivery
+          const orderType = selectedOrderType || 'direct';
+          if (orderType !== 'delivery') return 0;
+          
+          // Get delivery charge from selected wilayah
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
+          const deliverySection = document.getElementById('deliverySection');
+          
+          // If delivery section is hidden, no delivery charge
+          if (!deliverySection || deliverySection.classList.contains('hidden')) return 0;
+          
+          if (!wilayahSelect || !wilayahSelect.value) return 0;
+          
+          const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
+          const charge = parseFloat(selectedOption.dataset.charge || 0);
+          
+          // If delivery is NOT paid (checkbox not checked), add to total
+          if (!deliveryPaidCheckbox || !deliveryPaidCheckbox.checked) {
+            return charge;
+          }
+          
+          return 0; // If paid, don't add to total
+        }
+
         function recalculateTotals() {
           let subtotal = 0;
           let totalQty = 0;
@@ -393,7 +419,12 @@
 
           // Calculate discount
           const discountAmount = getDiscountAmount(subtotal);
-          const total = subtotal - discountAmount;
+          
+          // Get delivery charge (only if not paid)
+          const deliveryCharge = getDeliveryCharge();
+          
+          // Calculate total: subtotal - discount + delivery (if not paid)
+          const total = subtotal - discountAmount + deliveryCharge;
 
           // ===== Desktop total (shows payable amount after discount) =====
           const totalEl = document.getElementById("cartTotal");
@@ -402,7 +433,7 @@
           }
 
           // ===== Update payment modal amounts =====
-          updatePaymentModalAmounts(subtotal, discountAmount, total);
+          updatePaymentModalAmounts(subtotal, discountAmount, total, deliveryCharge);
 
           // ===== Cart count (العنوان) =====
           const countEl = document.getElementById("cartCount");
@@ -648,13 +679,33 @@
           initOrderTypeButtons();
           initCustomerAutocomplete();
           initPartialPaymentInputs();
+          
+          // Always initialize area change listener when modal opens
+          // Use a small delay to ensure DOM is ready
+          setTimeout(() => {
+            const areaSelect = document.getElementById('deliveryArea');
+            if (areaSelect) {
+              // Remove existing listener if any
+              areaSelect.removeEventListener('change', handleAreaChange);
+              // Attach the event listener
+              areaSelect.addEventListener('change', handleAreaChange);
+              console.log('Area change listener attached on modal open');
+            } else {
+              console.warn('deliveryArea select not found when trying to attach listener');
+            }
+          }, 50);
+          
+          // Initialize delivery charge listeners if delivery section is visible
+          if (selectedOrderType === 'delivery') {
+            initDeliveryChargeListeners();
+          }
         }
 
-        function updatePaymentModalAmounts(subtotal, discountAmount, payableAmount) {
+        function updatePaymentModalAmounts(subtotal, discountAmount, payableAmount, deliveryCharge = 0) {
           // Update subtotal
           const subtotalEl = document.getElementById("paymentSubtotal");
           if (subtotalEl) {
-            subtotalEl.innerText = subtotal.toFixed(2) + " " + translations.omr;
+            subtotalEl.innerText = subtotal.toFixed(3) + " " + translations.omr;
           }
 
           // Update discount (show/hide based on discount amount)
@@ -663,16 +714,29 @@
           if (discountRow && discountEl) {
             if (discountAmount > 0) {
               discountRow.classList.remove("hidden");
-              discountEl.innerText = "-" + discountAmount.toFixed(2) + " " + translations.omr;
+              discountEl.innerText = "-" + discountAmount.toFixed(3) + " " + translations.omr;
             } else {
               discountRow.classList.add("hidden");
             }
           }
 
-          // Update payable amount
+          // Update delivery charge display (show raw charge, not the one added to total)
+          const deliveryPriceEl = document.getElementById("deliveryPrice");
+          if (deliveryPriceEl) {
+            const orderType = selectedOrderType || 'direct';
+            const wilayahSelect = document.getElementById('deliveryWilayah');
+            let rawCharge = 0;
+            if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
+              const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
+              rawCharge = parseFloat(selectedOption.dataset.charge || 0);
+            }
+            deliveryPriceEl.innerText = rawCharge.toFixed(3) + " " + translations.omr;
+          }
+
+          // Update payable amount (includes delivery if not paid)
           const paymentTotalEl = document.getElementById("paymentTotal");
           if (paymentTotalEl) {
-            paymentTotalEl.innerText = payableAmount.toFixed(2) + " " + translations.omr;
+            paymentTotalEl.innerText = payableAmount.toFixed(3) + " " + translations.omr;
           }
         }
 
@@ -716,15 +780,138 @@
 
               if (btn.dataset.type === "delivery") {
                 delivery?.classList.remove("hidden");
+                // Initialize delivery charge listeners
+                initDeliveryChargeListeners();
+                // Also ensure area change listener is attached
+                setTimeout(() => {
+                  const areaSelect = document.getElementById('deliveryArea');
+                  if (areaSelect) {
+                    areaSelect.removeEventListener('change', handleAreaChange);
+                    areaSelect.addEventListener('change', handleAreaChange);
+                    console.log('Area change listener attached when delivery type selected');
+                  }
+                }, 50);
               } else {
                 delivery?.classList.add("hidden");
               }
+              // Recalculate totals when order type changes
+              recalculateTotals();
             };
           });
 
           // Default direct
           document.querySelector('.order-type-btn[data-type="direct"]')?.classList.add("active");
           $("deliverySection")?.classList.add("hidden");
+        }
+
+        /* Initialize delivery charge listeners */
+        function initDeliveryChargeListeners() {
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
+          const areaSelect = document.getElementById('deliveryArea');
+
+          // Update delivery charge when wilayah changes
+          if (wilayahSelect) {
+            wilayahSelect.removeEventListener('change', handleDeliveryChargeChange);
+            wilayahSelect.addEventListener('change', handleDeliveryChargeChange);
+          }
+
+          // Update total when delivery paid checkbox changes
+          if (deliveryPaidCheckbox) {
+            deliveryPaidCheckbox.removeEventListener('change', handleDeliveryChargeChange);
+            deliveryPaidCheckbox.addEventListener('change', handleDeliveryChargeChange);
+          }
+
+          // Load cities when area changes
+          if (areaSelect) {
+            // Remove existing listener to avoid duplicates
+            areaSelect.removeEventListener('change', handleAreaChange);
+            // Attach the event listener
+            areaSelect.addEventListener('change', handleAreaChange);
+            console.log('Area change listener attached in initDeliveryChargeListeners');
+          }
+        }
+        
+        // Make handleAreaChange globally accessible
+        window.handleAreaChange = handleAreaChange;
+
+        function handleDeliveryChargeChange() {
+          recalculateTotals();
+        }
+
+        async function handleAreaChange() {
+          const areaSelect = document.getElementById('deliveryArea');
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          
+          if (!areaSelect || !wilayahSelect) {
+            console.error('Area or Wilayah select not found');
+            return;
+          }
+          
+          const areaId = areaSelect.value;
+          if (!areaId) {
+            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
+            return;
+          }
+
+          // Show loading state
+          wilayahSelect.disabled = true;
+          wilayahSelect.innerHTML = '<option value="">{{ trans('messages.loading', [], session('locale')) }}...</option>';
+
+          try {
+            const baseUrl = '{{ url('pos/cities') }}';
+            const url = `${baseUrl}?area_id=${encodeURIComponent(areaId)}`;
+            console.log('Fetching cities from:', url);
+            const res = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            if (!res.ok) {
+              throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            
+            const cities = await res.json();
+            console.log('Cities received:', cities);
+            
+            if (!Array.isArray(cities)) {
+              console.error('Invalid response format:', cities);
+              wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
+              wilayahSelect.disabled = false;
+              return;
+            }
+            
+            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>';
+            
+            if (cities.length === 0) {
+              const noCitiesOption = document.createElement('option');
+              noCitiesOption.value = '';
+              noCitiesOption.textContent = '{{ trans('messages.no_cities_found', [], session('locale')) ?: 'No cities found' }}';
+              wilayahSelect.appendChild(noCitiesOption);
+            } else {
+            const locale = '{{ session('locale', 'ar') }}';
+            cities.forEach(city => {
+              const option = document.createElement('option');
+              option.value = city.id;
+              option.dataset.charge = city.delivery_charges || 0;
+              const cityName = locale === 'ar' ? (city.city_name_ar || city.city_name_en) : (city.city_name_en || city.city_name_ar);
+              option.textContent = cityName + (city.delivery_charges ? ` - ${parseFloat(city.delivery_charges).toFixed(3)} ${translations.omr}` : '');
+              wilayahSelect.appendChild(option);
+            });
+            }
+            
+            wilayahSelect.disabled = false;
+            
+            // Recalculate totals after cities are loaded (in case a city was previously selected)
+            recalculateTotals();
+          } catch (error) {
+            console.error('Error loading cities:', error);
+            wilayahSelect.innerHTML = '<option value="">{{ trans('messages.error_loading_cities', [], session('locale')) ?: 'Error loading cities' }}</option>';
+            wilayahSelect.disabled = false;
+          }
         }
 
         /* Partial payment remaining calculation */
@@ -1600,9 +1787,29 @@ return;
 
           const subtotal = getCartSubtotal();
           const discountAmount = getDiscountAmount(subtotal);
-          const total = subtotal - discountAmount;
+          
+          // Get delivery charge using the helper function (which checks if paid)
+          const deliveryCharge = getDeliveryCharge();
+          const wilayahSelect = document.getElementById('deliveryWilayah');
+          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
+          const orderType = selectedOrderType || 'direct';
+          
+          // Get raw delivery charge (before checking if paid) for saving to DB
+          let rawDeliveryCharge = 0;
+          let deliveryPaid = false;
+          
+          if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
+            const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
+            rawDeliveryCharge = parseFloat(selectedOption.dataset.charge || 0);
+            deliveryPaid = deliveryPaidCheckbox ? deliveryPaidCheckbox.checked : false;
+          }
+          
+          // Total includes delivery charge only if not paid (getDeliveryCharge already handles this)
+          const total = subtotal - discountAmount + deliveryCharge;
 
-          const payments = buildPaymentsPayload(total);
+          // Use the final payable amount from payment modal (which already includes delivery if not paid)
+          const finalPayable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
+          const payments = buildPaymentsPayload(finalPayable);
           if (!payments.length) {
             Swal.fire({ icon: 'error', title: "{{ trans('messages.select', [], session('locale')) }}", text: "{{ trans('messages.payment_method', [], session('locale')) }}" });
             return;
@@ -1622,13 +1829,15 @@ return;
             totals: {
               subtotal,
               discount: discountAmount,
-              total
+              total: finalPayable, // Use final payable which includes delivery if not paid
+              delivery_charges: rawDeliveryCharge, // Raw delivery charge for DB
+              delivery_paid: deliveryPaid
             },
             discount: {
               type: discount.type,
               value: discount.value
             },
-            order_type: selectedOrderType || 'direct',
+            order_type: orderType,
             notes: document.getElementById('deliveryAddress')?.value || null,
             customer: customerPayload,
           };
@@ -1652,7 +1861,20 @@ return;
 
             const data = await res.json();
             if (data.success) {
-              Swal.fire({ icon: 'success', title: "{{ trans('messages.confirm_payment', [], session('locale')) }}" });
+              // Show success message
+              Swal.fire({ 
+                icon: 'success', 
+                title: "{{ trans('messages.confirm_payment', [], session('locale')) }}",
+                showCancelButton: true,
+                confirmButtonText: "{{ trans('messages.print', [], session('locale')) }}",
+                cancelButtonText: "{{ trans('messages.close', [], session('locale')) }}"
+              }).then((result) => {
+                if (result.isConfirmed && data.order_id) {
+                  // Open pos_bill in new window for printing
+                  window.open(`{{ url('pos_bill') }}?order_id=${data.order_id}`, '_blank');
+                }
+              });
+              
               cart = [];
               renderCart();
               recalculateTotals();
