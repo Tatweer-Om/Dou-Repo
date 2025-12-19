@@ -110,6 +110,9 @@ class PosController extends Controller
             return response()->json([]);
         }
 
+        // Convert to integer to ensure proper matching
+        $areaId = (int)$areaId;
+
         $cities = City::where('area_id', $areaId)
             ->orderBy('city_name_ar', 'ASC')
             ->get(['id','city_name_ar','city_name_en','delivery_charges']);
@@ -206,6 +209,14 @@ class PosController extends Controller
 
         /* ================= ORDER ================= */
 
+        // Get delivery charges and paid status
+        $deliveryCharges = 0;
+        $deliveryPaid = false;
+        if ($request->input('order_type') === 'delivery') {
+            $deliveryCharges = (float)($totals['delivery_charges'] ?? 0);
+            $deliveryPaid = (bool)($totals['delivery_paid'] ?? false);
+        }
+
         $order = PosOrders::create([
             'customer_id' => $customerId,
             'order_type' => $request->input('order_type', 'direct'),
@@ -214,6 +225,8 @@ class PosController extends Controller
             'total_amount' => $totals['total'] ?? 0,
             'discount_type' => data_get($request, 'discount.type'),
             'total_discount' => $totals['discount'] ?? 0,
+            'delivery_charges' => $deliveryCharges,
+            'delivery_paid' => $deliveryPaid,
             'profit' => null,
             'return_status' => 0,
             'restore_status' => 0,
@@ -369,6 +382,7 @@ class PosController extends Controller
             'success' => true,
             'order_id' => $order->id,
             'order_no' => $orderNoFormatted,
+            'message' => trans('messages.order_saved_successfully', [], session('locale')),
         ]);
 
     } catch (\Throwable $e) {
@@ -494,5 +508,81 @@ class PosController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function pos_bill(Request $request){
+        $orderId = $request->input('order_id');
+        
+        if (!$orderId) {
+            // If no order_id provided, return empty view or redirect
+            return view('bills.pos_bill', [
+                'order' => null,
+                'orderDetails' => [],
+                'payments' => []
+            ]);
+        }
+
+        $order = PosOrders::with([
+            'customer',
+            'details.stock.images',
+            'details.color',
+            'details.size',
+            'payments.account'
+        ])->find($orderId);
+
+        if (!$order) {
+            return view('bills.pos_bill', [
+                'order' => null,
+                'orderDetails' => [],
+                'payments' => []
+            ]);
+        }
+
+        // Format order number
+        $orderNo = str_pad($order->order_no ?? $order->id, 6, '0', STR_PAD_LEFT);
+        
+        // Get order details with formatted data
+        $orderDetails = $order->details->map(function($detail) {
+            $locale = session('locale', 'ar');
+            $stock = $detail->stock;
+            
+            $colorName = $detail->color ? 
+                ($locale === 'ar' ? ($detail->color->color_name_ar ?? $detail->color->color_name_en) : ($detail->color->color_name_en ?? $detail->color->color_name_ar)) : 
+                '';
+            $sizeName = $detail->size ? 
+                ($locale === 'ar' ? ($detail->size->size_name_ar ?? $detail->size->size_name_en) : ($detail->size->size_name_en ?? $detail->size->size_name_ar)) : 
+                '';
+            
+            return [
+                'id' => $detail->id,
+                'abaya_code' => $stock ? ($stock->abaya_code ?? '-') : '-',
+                'design_name' => $stock ? ($stock->design_name ?? '-') : '-',
+                'image' => $stock && $stock->images->first() ? asset($stock->images->first()->image_path) : null,
+                'color_name' => $colorName,
+                'size_name' => $sizeName,
+                'quantity' => (int)($detail->item_quantity ?? 0),
+                'unit_price' => (float)($detail->item_price ?? 0),
+                'total' => (float)($detail->item_total ?? 0),
+                'abaya_length' => null, // Not stored in POS orders
+                'bust' => null,
+                'sleeves' => null,
+            ];
+        });
+
+        // Get payments
+        $payments = $order->payments->map(function($payment) {
+            return [
+                'account_name' => $payment->account ? $payment->account->account_name : 'Unknown',
+                'amount' => (float)($payment->paid_amount ?? 0),
+            ];
+        });
+
+        return view('bills.pos_bill', [
+            'order' => $order,
+            'orderNo' => $orderNo,
+            'orderDetails' => $orderDetails,
+            'payments' => $payments,
+            'customer' => $order->customer,
+        ]);
     }
 }

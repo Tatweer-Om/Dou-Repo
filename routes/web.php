@@ -19,10 +19,14 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\HomeController;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('dashboard', [HomeController::class, 'index'])->name('dashboard');
+
 
 Route::get('color', [ColorController::class, 'index'])->name('color');
 Route::post('add_color', [ColorController::class, 'add_color'])->name('add_color');
@@ -168,6 +172,7 @@ Route::post('update_stock', [StockController::class, 'update_stock'])->name('upd
 Route::delete('/delete_stock/{id}', [StockController::class, 'delete_stock'])->name('delete_stock');
 Route::get('stock/audit', [StockController::class, 'stockAudit'])->name('stock.audit');
 Route::get('stock/audit/list', [StockController::class, 'getStockAuditList'])->name('stock.audit.list');
+Route::get('stock/audit/details', [StockController::class, 'getStockAuditDetails'])->name('stock.audit.details');
 
 Route::get('stock/list', [StockController::class, 'getstock']);
 Route::get('stock/{id}', [StockController::class, 'show'])->name('stock.show');
@@ -234,3 +239,4 @@ Route::post('pos/orders', [PosController::class, 'store'])->name('pos.orders.sto
 Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.cities.by_area');
 Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
 Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');
+Route::get('pos_bill', [PosController::class, 'pos_bill'])->name('pos_bill');

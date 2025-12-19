@@ -31,10 +31,18 @@
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-bold">${parseFloat(order.paid_amount || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
                             <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.payment_methods || '-'}</td>
                             <td class="px-4 sm:px-6 py-5 text-center">
-                                <button class="view-details-btn p-2 rounded-lg text-white bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] transition shadow-sm" 
-                                        data-order-data='${JSON.stringify(order)}'>
-                                    <span class="material-symbols-outlined text-[22px]">visibility</span>
-                                </button>
+                                <div class="flex items-center justify-center gap-2">
+                                    <button class="view-details-btn p-2 rounded-lg text-white bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] transition shadow-sm" 
+                                            data-order-data='${JSON.stringify(order)}'
+                                            title="{{ trans('messages.view_details', [], session('locale')) }}">
+                                        <span class="material-symbols-outlined text-[22px]">visibility</span>
+                                    </button>
+                                    <button onclick="window.open('{{ url('pos_bill') }}?order_id=${order.id}', '_blank')" 
+                                            class="p-2 rounded-lg text-white bg-green-600 hover:bg-green-700 transition shadow-sm"
+                                            title="{{ trans('messages.print', [], session('locale')) }}">
+                                        <span class="material-symbols-outlined text-[22px]">print</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         `;

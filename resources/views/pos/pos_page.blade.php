@@ -356,16 +356,7 @@
 
             <select id="deliveryWilayah" class="w-full rounded-xl border p-3">
               <option value="">{{ trans('messages.select_wilayah', [], session('locale')) }}</option>
-              @if(isset($cities))
-                @foreach($cities as $city)
-                  @php
-                    $labelCity = session('locale') == 'ar' ? ($city->city_name_ar ?: $city->city_name_en) : ($city->city_name_en ?: $city->city_name_ar);
-                  @endphp
-                  <option value="{{ $city->id }}" data-charge="{{ $city->delivery_charges ?? 0 }}">
-                    {{ $labelCity }} @if($city->delivery_charges) - {{ number_format($city->delivery_charges, 3) }} {{ trans('messages.omr', [], session('locale')) }} @endif
-                  </option>
-                @endforeach
-              @endif
+              <!-- Cities will be loaded dynamically when area is selected -->
             </select>
           </div>
 
