@@ -21,6 +21,9 @@ use App\Http\Controllers\CityController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\SMSController;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -114,6 +117,24 @@ Route::put('categories/{category}', [CategoryController::class, 'update']);
 Route::delete('categories/{category}', [CategoryController::class, 'destroy']);
 Route::get('categories/list', [CategoryController::class, 'getCategories']);
 Route::get('categories/{category}', [CategoryController::class, 'show']);
+
+Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense_category');
+Route::post('expense-categories', [ExpenseCategoryController::class, 'store']);
+Route::put('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
+Route::delete('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
+Route::get('expense-categories/list', [ExpenseCategoryController::class, 'getExpenseCategories']);
+Route::get('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'show']);
+
+Route::get('expenses', [ExpenseController::class, 'index'])->name('expense');
+Route::post('expenses', [ExpenseController::class, 'store']);
+Route::put('expenses/{expense}', [ExpenseController::class, 'update']);
+Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
+Route::get('expenses/list', [ExpenseController::class, 'getExpenses']);
+Route::get('expenses/{expense}', [ExpenseController::class, 'show']);
+
+Route::get('sms', [SMSController::class, 'index'])->name('sms');
+Route::post('sms', [SMSController::class, 'store']);
+Route::get('sms/get', [SMSController::class, 'getSMS']);
 
 Route::get('accounts', [AccountController::class, 'index'])->name('account');
 Route::post('accounts', [AccountController::class, 'store']);

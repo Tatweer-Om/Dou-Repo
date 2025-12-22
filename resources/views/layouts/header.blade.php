@@ -308,10 +308,32 @@
         <span class="font-medium text-sm">{{ __('messages.returns') }}</span>
     </a>
 
-    <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent">
-        <span class="material-symbols-outlined text-xl">receipt_long</span> 
-        <span class="font-medium text-sm">{{ __('messages.expenses') }}</span>
-    </a>
+    <!-- Expenses -->
+    <div>
+        @php
+            $expensesMenuActive = strpos($currentPath, 'expenses') === 0 || strpos($currentPath, 'expense-categories') === 0;
+        @endphp
+        <button onclick="toggleSubmenu('expensesMenu')" 
+            class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $expensesMenuActive ? 'text-accent font-semibold' : '' }}">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-xl">receipt_long</span>
+                <span class="font-medium text-sm">{{ __('messages.expenses', [], session('locale')) }}</span>
+            </div>
+            <span class="material-symbols-outlined text-sm transition-transform" id="arrow-expensesMenu">expand_more</span>
+        </button>
+
+        <div id="expensesMenu" class="submenu mt-2 pl-8 space-y-1 {{ $expensesMenuActive ? 'active' : '' }}">
+            <a href="{{url('expenses')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'expenses' || strpos(request()->path(), 'expenses/') === 0) ? 'text-accent font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.add_expense', [], session('locale')) }}
+            </a>
+
+            <a href="{{url('expense-categories')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'expense-categories' || strpos(request()->path(), 'expense-categories/') === 0) ? 'text-accent font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.expense_categories', [], session('locale')) ?: 'Expense Categories' }}
+            </a>
+        </div>
+    </div>
 
     <a href="{{url('accounts')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'accounts' || strpos(request()->path(), 'accounts/') === 0) ? 'text-accent font-semibold' : '' }}">
         <span class="material-symbols-outlined text-xl">account_balance</span>
@@ -321,6 +343,11 @@
     <a href="{{url('user')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'user' || strpos(request()->path(), 'user/') === 0) ? 'text-accent font-semibold' : '' }}">
         <span class="material-symbols-outlined text-xl">group</span>
         <span class="font-medium text-sm">{{ __('messages.users') }}</span>
+    </a>
+
+    <a href="{{url('sms')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'sms' || strpos(request()->path(), 'sms/') === 0) ? 'text-accent font-semibold' : '' }}">
+        <span class="material-symbols-outlined text-xl">sms</span>
+        <span class="font-medium text-sm">{{ __('messages.sms_panel', [], session('locale')) ?: 'SMS Panel' }}</span>
     </a>
 
     <a href="{{url('settings')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'settings' || strpos(request()->path(), 'settings/') === 0) ? 'text-accent font-semibold' : '' }}">
