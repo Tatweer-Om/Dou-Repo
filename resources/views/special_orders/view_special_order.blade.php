@@ -25,7 +25,7 @@
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.order_number', [], session('locale')) }}</p>
-                <p class="font-bold text-lg" x-text="viewOrder.id"></p>
+                <p class="font-bold text-lg" x-text="viewOrder.order_no || viewOrder.id"></p>
               </div>
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.customer_name', [], session('locale')) }}</p>
@@ -106,19 +106,48 @@
                           </div>
                         </div>
 
+                        <!-- Tailor Information -->
+                        <template x-if="item.original_tailor_name || item.tailor_name">
+                          <div class="pt-2 border-t border-gray-100">
+                            <p class="text-gray-500 text-xs mb-2 font-semibold">{{ trans('messages.tailor', [], session('locale')) }}:</p>
+                            <div class="space-y-1">
+                              <!-- Show original tailor from stock -->
+                              <template x-if="item.original_tailor_name">
+                                <div class="flex items-center gap-2">
+                                  <span class="text-gray-500 text-xs">{{ trans('messages.original_tailor', [], session('locale')) }}:</span>
+                                  <span class="font-semibold text-sm" x-text="item.original_tailor_name"></span>
+                                </div>
+                              </template>
+                              <!-- Show current tailor if different from original (changed when sending to tailor) -->
+                              <template x-if="item.tailor_name && item.original_tailor_name && item.tailor_name !== item.original_tailor_name">
+                                <div class="flex items-center gap-2">
+                                  <span class="text-gray-500 text-xs">{{ trans('messages.current_tailor', [], session('locale')) }}:</span>
+                                  <span class="font-semibold text-sm text-indigo-600" x-text="item.tailor_name"></span>
+                                </div>
+                              </template>
+                              <!-- Show only current tailor if no original tailor exists -->
+                              <template x-if="item.tailor_name && !item.original_tailor_name">
+                                <div class="flex items-center gap-2">
+                                  <span class="font-semibold text-sm" x-text="item.tailor_name"></span>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+
                         <!-- المقاسات -->
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
                           <div>
                             <p class="text-gray-500 text-xs">{{ trans('messages.abaya_length', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.length ? item.length + ' inch' : 'N/A'"></p>
+                            <p class="font-semibold" x-text="item.length ? item.length + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
                           </div>
                           <div>
                             <p class="text-gray-500 text-xs">{{ trans('messages.bust_one_side', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.bust ? item.bust + ' inch' : 'N/A'"></p>
+                            <p class="font-semibold" x-text="item.bust ? item.bust + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
                           </div>
                           <div>
                             <p class="text-gray-500 text-xs">{{ trans('messages.sleeves_length', [], session('locale')) }}</p>
-                            <p class="font-semibold" x-text="item.sleeves ? item.sleeves + ' inch' : 'N/A'"></p>
+                            <p class="font-semibold" x-text="item.sleeves ? item.sleeves + ' {{ trans('messages.inches', [], session('locale')) }}' : '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
                           </div>
                           <div>
                             <p class="text-gray-500 text-xs">{{ trans('messages.buttons', [], session('locale')) }}</p>
@@ -169,8 +198,8 @@
           <!-- الخياط والحالة -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="bg-gray-50 rounded-xl p-4">
-              <h3 class="font-semibold text-gray-700 mb-2">{{ trans('messages.tailor', [], session('locale')) }}</h3>
-              <p class="font-semibold" x-text="viewOrder.tailor || 'N/A'"></p>
+              <h3 class="font-semibold text-gray-700 mb-2">{{ trans('messages.notes', [], session('locale')) }}</h3>
+              <p class="font-semibold" x-text="viewOrder.tailor || '{{ trans('messages.not_available', [], session('locale')) }}'"></p>
             </div>
 
             <div class="bg-gray-50 rounded-xl p-4">
@@ -351,7 +380,7 @@
   </div>
 
   <!-- ======================= MAIN CONTAINER ======================= -->
-  <div class="max-w-7xl mx-auto bg-white shadow-xl rounded-3xl p-4 md:p-6" x-show="!loading">
+  <div class="w-full mx-auto bg-white shadow-xl rounded-3xl p-4 md:p-6" x-show="!loading">
 
     <!-- 📊 البوكسات العلوية -->
     <div class="grid md:grid-cols-3 gap-4 mb-8">
@@ -437,23 +466,23 @@
     </div>
 
     <!-- 📋 الجدول / الكروت -->
-    <div class="overflow-hidden bg-white rounded-2xl border border-gray-200 shadow-md">
+    <div class="overflow-x-auto bg-white rounded-2xl border border-gray-200 shadow-md">
 
       <!-- جدول ديسكتوب -->
-      <table class="w-full text-xs md:text-sm hidden md:table">
-        <thead class="bg-gray-100 text-gray-700">
+      <table class="w-full min-w-full text-xs md:text-sm hidden md:table">
+        <thead class="bg-gray-100 text-gray-700 sticky top-0 z-10">
           <tr>
-            <th class="py-3 px-4 text-center">{{ trans('messages.select', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">Order No</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.source', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.date', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.ago', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.total', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.paid', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.remaining', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-right">{{ trans('messages.status', [], session('locale')) }}</th>
-            <th class="py-3 px-4 text-center">{{ trans('messages.actions', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap">{{ trans('messages.select', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[120px]">{{ trans('messages.order_no', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[150px]">{{ trans('messages.customer', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[120px]">{{ trans('messages.source', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[110px]">{{ trans('messages.date', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.ago', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.total', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.paid', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[110px]">{{ trans('messages.remaining', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[120px]">{{ trans('messages.status', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap min-w-[180px]">{{ trans('messages.actions', [], session('locale')) }}</th>
           </tr>
         </thead>
 
@@ -462,7 +491,7 @@
             <tr class="border-t hover:bg-indigo-50 transition">
 
               <!-- checkbox -->
-              <td class="py-3 px-4 text-center">
+              <td class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap">
                 <input type="checkbox"
                        :disabled="order.status !== 'ready'"
                        :checked="isReadySelected(order.id)"
@@ -470,33 +499,39 @@
                        class="w-4 h-4 text-indigo-600">
               </td>
 
-              <td class="py-3 px-4 font-semibold text-indigo-600" x-text="order.order_no || '—'"></td>
-              <td class="py-3 px-4" x-text="order.customer"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-indigo-600 whitespace-nowrap" x-text="order.order_no || '—'"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="order.customer"></td>
 
               <!-- مصدر الطلب -->
-              <td class="py-3 px-4">
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap">
                 <span :class="sourceBadge(order.source)" class="inline-flex items-center gap-1">
                   <span class="material-symbols-outlined text-xs" x-text="sourceIcon(order.source)"></span>
                   <span x-text="sourceLabel(order.source)"></span>
                 </span>
               </td>
 
-              <td class="py-3 px-4" x-text="formatDate(order.date)"></td>
-              <td class="py-3 px-4" x-text="daysAgo(order.date)"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="formatDate(order.date)"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="daysAgo(order.date)"></td>
 
-              <td class="py-3 px-4 font-semibold text-blue-700" x-text="order.total.toFixed(3) + ' ر.ع'"></td>
-              <td class="py-3 px-4 font-semibold text-emerald-700" x-text="order.paid.toFixed(3) + ' ر.ع'"></td>
-              <td class="py-3 px-4 font-semibold text-red-600" x-text="(order.total - order.paid).toFixed(3) + ' ر.ع'"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-blue-700 whitespace-nowrap" x-text="order.total.toFixed(3) + ' ر.ع'"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-emerald-700 whitespace-nowrap" x-text="order.paid.toFixed(3) + ' ر.ع'"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-red-600 whitespace-nowrap" x-text="(order.total - order.paid).toFixed(3) + ' ر.ع'"></td>
 
-              <td class="py-3 px-4">
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap">
                 <span :class="statusBadge(order.status)" x-text="statusLabel(order.status)"></span>
               </td>
 
-              <td class="py-3 px-4 text-center">
+              <td class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap">
                 <div class="flex justify-center gap-2">
                   <button @click="openViewModal(order)"
                           class="text-blue-600 hover:text-blue-800">
                     <span class="material-symbols-outlined text-base">visibility</span>
+                  </button>
+
+                  <button @click="printBill(order.id)"
+                          class="text-purple-600 hover:text-purple-800"
+                          title="{{ trans('messages.print_bill', [], session('locale')) ?: 'Print Bill' }}">
+                    <span class="material-symbols-outlined text-base">print</span>
                   </button>
 
                   <button @click="openPaymentModal(order)"
@@ -541,7 +576,7 @@
                        :checked="isReadySelected(order.id)"
                        @change="toggleReadySelection(order)"
                        class="w-4 h-4 text-indigo-600">
-                <span class="text-xs text-gray-500">Order No:</span>
+                <span class="text-xs text-gray-500">{{ trans('messages.order_no', [], session('locale')) }}:</span>
                 <span class="font-semibold text-indigo-600" x-text="order.order_no || '—'"></span>
               </div>
               <span :class="statusBadge(order.status)" x-text="statusLabel(order.status)"></span>
@@ -585,6 +620,11 @@
               <button @click="openViewModal(order)"
                       class="text-blue-600 hover:text-blue-800 text-xs">
                 <span class="material-symbols-outlined text-base">visibility</span>
+              </button>
+              <button @click="printBill(order.id)"
+                      class="text-purple-600 hover:text-purple-800 text-xs"
+                      title="{{ trans('messages.print_bill', [], session('locale')) ?: 'Print Bill' }}">
+                <span class="material-symbols-outlined text-base">print</span>
               </button>
               <button @click="openPaymentModal(order)"
                       class="text-emerald-600 hover:text-emerald-800 text-xs">

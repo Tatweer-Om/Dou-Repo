@@ -29,15 +29,30 @@ header {
 aside {
     position: fixed;
     top: 0;
-    right: 0; /* لأن RTL */
     height: 100vh;
     overflow-y: auto;
     z-index: 40;
 }
 
+/* RTL: Sidebar on right */
+html[dir="rtl"] aside {
+    right: 0;
+}
+
+/* LTR: Sidebar on left */
+html[dir="ltr"] aside {
+    left: 0;
+}
+
 /* اضبط مساحة المحتوى حتى ما يدخل تحت السايدبار */
 main {
     margin-right: 18rem; /* نفس عرض السايدبار */
+}
+
+/* LTR: Adjust main margin for left sidebar */
+html[dir="ltr"] main {
+    margin-right: 0;
+    margin-left: 18rem;
 }
 
 
@@ -75,22 +90,38 @@ main {
   aside {
     position: fixed;
     top: 0;
-    right: 0;
     width: 17rem;
     height: 100vh;
     background: white;
-    transform: translateX(100%);
-    box-shadow: -3px 0 10px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease;
     z-index: 50;
   }
 
-  aside.open {
+  /* RTL: Sidebar slides from right */
+  html[dir="rtl"] aside {
+    right: 0;
+    transform: translateX(100%);
+    box-shadow: -3px 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  html[dir="rtl"] aside.open {
+    transform: translateX(0);
+  }
+
+  /* LTR: Sidebar slides from left */
+  html[dir="ltr"] aside {
+    left: 0;
+    transform: translateX(-100%);
+    box-shadow: 3px 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  html[dir="ltr"] aside.open {
     transform: translateX(0);
   }
 
   main {
     margin-right: 0 !important;
+    margin-left: 0 !important;
   }
 }
 
@@ -176,6 +207,46 @@ button.bg-\[var\(--primary-color\)\] {
 @keyframes bounce {
   0%, 100% { transform: translateY(0); opacity: 0.5; }
   50% { transform: translateY(-15px); opacity: 1; }
+}
+
+/* Custom Checkbox Styling for Permissions */
+input[type="checkbox"][name="permissions[]"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    background-color: white;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+input[type="checkbox"][name="permissions[]"]:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+input[type="checkbox"][name="permissions[]"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+input[type="checkbox"][name="permissions[]"]:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(107, 20, 212, 0.1);
+}
+
+input[type="checkbox"][name="permissions[]"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(107, 20, 212, 0.2);
 }
 
 .animate-bounce {

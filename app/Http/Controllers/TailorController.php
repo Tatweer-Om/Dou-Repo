@@ -271,6 +271,7 @@ class TailorController extends Controller
                 'repair_cost' => $item->maintenance_repair_cost ?? 0,
                 'cost_bearer' => $item->maintenance_cost_bearer ?? null,
                 'status' => $item->maintenance_status ?? null,
+                'maintenance_notes' => $item->maintenance_notes ?? null,
             ];
         })->toArray();
         

@@ -31,7 +31,26 @@
 
       <div>
         <label class="block text-sm font-medium mb-1">{{ trans('messages.phone_number', [], session('locale')) }}</label>
-        <input type="text" x-model="customer.phone" class="form-input w-full border-gray-300 rounded-lg" placeholder="9xxxxxxxx">
+        <div class="relative">
+          <input type="text" 
+                 x-model="customer.phone" 
+                 @input.debounce.300ms="searchCustomers()"
+                 class="form-input w-full border-gray-300 rounded-lg" 
+                 placeholder="9xxxxxxxx">
+          
+          <!-- Customer Suggestions Dropdown -->
+          <div x-show="customerSuggestions.length > 0 && customer.phone.length >= 2"
+               @click.outside="customerSuggestions = []"
+               class="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+            <template x-for="customerItem in customerSuggestions" :key="customerItem.id">
+              <div @click="selectCustomer(customerItem)"
+                   class="px-4 py-3 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                <div class="font-medium text-sm" x-text="customerItem.name || '{{ trans('messages.customer', [], session('locale')) }}'"></div>
+                <div class="text-xs text-gray-500 mt-1" x-text="customerItem.phone || ''"></div>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
 
       <div>
@@ -52,6 +71,11 @@
             <option :value="city.id" x-text="city.name + (city.charge ? ' - ' + city.charge + ' ر.ع' : '')"></option>
           </template>
         </select>
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium mb-1">{{ trans('messages.address', [], session('locale')) }}</label>
+        <textarea x-model="customer.address" rows="3" class="form-textarea w-full border-gray-300 rounded-lg" placeholder="{{ trans('messages.address_placeholder', [], session('locale')) ?: 'Enter full address' }}"></textarea>
       </div>
 
       <div>
@@ -203,23 +227,161 @@
 
   <!-- مودل الدفع -->
   <div x-show="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition>
-    <div class="bg-white rounded-2xl p-6 w-full max-w-lg shadow-lg">
-      <h2 class="text-xl font-bold mb-4">{{ trans('messages.order_summary', [], session('locale')) }}</h2>
-      <p class="mb-3 text-sm text-gray-700">{{ trans('messages.customer', [], session('locale')) }}: <strong x-text="customer.name"></strong> — <span x-text="customer.phone"></span></p>
-      <p class="text-sm mb-2 text-gray-600">{{ trans('messages.source', [], session('locale')) }}: <span x-text="customer.source"></span></p>
-      <p class="text-sm mb-2 text-gray-600">{{ trans('messages.area', [], session('locale')) }}: <span x-text="(customer.governorate_name || '') + ' - ' + (customer.city || '')"></span></p>
-      <p class="text-sm mb-3 text-gray-600">{{ trans('messages.shipping', [], session('locale')) }}: <span x-text="shipping_fee + ' ر.ع (' + '{{ trans('messages.on_delivery', [], session('locale')) }}' + ')'"></span></p>
-
-      <template x-for="(order, i) in orders" :key="i">
-        <div class="border-b py-2 mb-2">
-          <div class="font-semibold">{{ trans('messages.abaya_number', [], session('locale')) }} <span x-text="i+1"></span></div>
-          <div class="text-sm">{{ trans('messages.price', [], session('locale')) }}: <span x-text="order.price"></span> × <span x-text="order.quantity"></span></div>
+    <div class="bg-white rounded-2xl p-6 w-full max-w-4xl mx-4 shadow-lg max-h-[90vh] overflow-y-auto">
+      <h2 class="text-xl font-bold mb-6">{{ trans('messages.order_summary', [], session('locale')) }}</h2>
+      
+      <!-- Customer Information -->
+      <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 mb-4">
+        <h3 class="font-semibold mb-3 text-gray-800">{{ trans('messages.customer_data', [], session('locale')) }}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div>
+            <span class="text-gray-600">{{ trans('messages.customer_name', [], session('locale')) }}:</span>
+            <strong class="ml-2" x-text="customer.name"></strong>
+          </div>
+          <div>
+            <span class="text-gray-600">{{ trans('messages.phone_number', [], session('locale')) }}:</span>
+            <strong class="ml-2" x-text="customer.phone"></strong>
+          </div>
+          <div>
+            <span class="text-gray-600">{{ trans('messages.order_source', [], session('locale')) }}:</span>
+            <strong class="ml-2" x-text="customer.source === 'whatsapp' ? '{{ trans('messages.whatsapp', [], session('locale')) }}' : (customer.source === 'walkin' ? '{{ trans('messages.walk_in', [], session('locale')) }}' : customer.source)"></strong>
+          </div>
+          <div>
+            <span class="text-gray-600">{{ trans('messages.governorate', [], session('locale')) }}:</span>
+            <strong class="ml-2" x-text="getGovernorateName(customer.governorate_id) || '—'"></strong>
+          </div>
+          <div>
+            <span class="text-gray-600">{{ trans('messages.state_area', [], session('locale')) }}:</span>
+            <strong class="ml-2" x-text="getCityName(customer.city_id) || '—'"></strong>
+          </div>
+          <div class="md:col-span-2">
+            <span class="text-gray-600">{{ trans('messages.address', [], session('locale')) }}:</span>
+            <strong class="ml-2 block mt-1" x-text="customer.address || '—'"></strong>
+          </div>
+          <template x-if="customer.is_gift === 'yes'">
+            <div class="md:col-span-2">
+              <span class="text-gray-600">{{ trans('messages.send_as_gift', [], session('locale')) }}:</span>
+              <strong class="ml-2">{{ trans('messages.yes', [], session('locale')) }}</strong>
+              <template x-if="customer.gift_message">
+                <div class="mt-2 text-sm">
+                  <span class="text-gray-600">{{ trans('messages.gift_card_message', [], session('locale')) }}:</span>
+                  <p class="mt-1 text-gray-800" x-text="customer.gift_message"></p>
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
-      </template>
+      </div>
+
+      <!-- Order Items -->
+      <div class="mb-4">
+        <h3 class="font-semibold mb-3 text-gray-800">{{ trans('messages.order_items', [], session('locale')) ?: 'Order Items' }}</h3>
+        <div class="space-y-3">
+          <template x-for="(order, i) in orders" :key="i">
+            <div class="border border-gray-200 rounded-xl p-4 bg-white">
+              <div class="flex justify-between items-start mb-3">
+                <h4 class="font-semibold text-lg">{{ trans('messages.abaya_number', [], session('locale')) }} <span x-text="i+1"></span></h4>
+                <div class="text-right">
+                  <div class="text-sm text-gray-600">{{ trans('messages.subtotal', [], session('locale')) ?: 'Subtotal' }}:</div>
+                  <div class="font-bold text-indigo-600" x-text="(order.price * order.quantity).toFixed(3) + ' ر.ع'"></div>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span class="text-gray-600">{{ trans('messages.design_name', [], session('locale')) }}:</span>
+                  <strong class="ml-2" x-text="order.design_name || order.abaya_code || '—'"></strong>
+                </div>
+                <div>
+                  <span class="text-gray-600">{{ trans('messages.code', [], session('locale')) }}:</span>
+                  <strong class="ml-2" x-text="order.abaya_code || '—'"></strong>
+                </div>
+                <div>
+                  <span class="text-gray-600">{{ trans('messages.quantity', [], session('locale')) }}:</span>
+                  <strong class="ml-2" x-text="order.quantity || 1"></strong>
+                </div>
+                <div>
+                  <span class="text-gray-600">{{ trans('messages.price', [], session('locale')) }}:</span>
+                  <strong class="ml-2" x-text="order.price.toFixed(3) + ' ر.ع'"></strong>
+                </div>
+                <template x-if="order.length || order.bust || order.sleeves">
+                  <div class="md:col-span-2 border-t pt-2 mt-2">
+                    <div class="text-gray-600 mb-1">{{ trans('messages.sizes', [], session('locale')) }}:</div>
+                    <div class="flex flex-wrap gap-3 text-sm">
+                      <template x-if="order.length">
+                        <div>
+                          <span class="text-gray-600">{{ trans('messages.abaya_length', [], session('locale')) }}:</span>
+                          <strong class="ml-1" x-text="order.length + ' {{ trans('messages.inches', [], session('locale')) }}'"></strong>
+                        </div>
+                      </template>
+                      <template x-if="order.bust">
+                        <div>
+                          <span class="text-gray-600">{{ trans('messages.bust_one_side', [], session('locale')) }}:</span>
+                          <strong class="ml-1" x-text="order.bust + ' {{ trans('messages.inches', [], session('locale')) }}'"></strong>
+                        </div>
+                      </template>
+                      <template x-if="order.sleeves">
+                        <div>
+                          <span class="text-gray-600">{{ trans('messages.sleeves_length', [], session('locale')) }}:</span>
+                          <strong class="ml-1" x-text="order.sleeves + ' {{ trans('messages.inches', [], session('locale')) }}'"></strong>
+                        </div>
+                      </template>
+                      <div>
+                        <span class="text-gray-600">{{ trans('messages.buttons', [], session('locale')) }}:</span>
+                        <strong class="ml-1" x-text="order.buttons === 'yes' ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></strong>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="order.notes">
+                  <div class="md:col-span-2 border-t pt-2 mt-2">
+                    <span class="text-gray-600">{{ trans('messages.notes', [], session('locale')) }}:</span>
+                    <p class="mt-1 text-gray-800" x-text="order.notes"></p>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="bg-gray-50 rounded-xl p-4 mb-4">
+        <h3 class="font-semibold mb-3 text-gray-800">{{ trans('messages.financial_details', [], session('locale')) }}</h3>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.shipping', [], session('locale')) }}:</span>
+            <strong x-text="shipping_fee.toFixed(3) + ' ر.ع'"></strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">{{ trans('messages.total', [], session('locale')) }}:</span>
+            <strong class="text-lg text-indigo-600" x-text="calculateTotal().toFixed(3) + ' ر.ع'"></strong>
+          </div>
+        </div>
+      </div>
 
       <div class="flex justify-end gap-3 mt-4">
-        <button @click="showModal=false" class="px-4 py-2 bg-gray-100 rounded-lg">{{ trans('messages.cancel', [], session('locale')) }}</button>
-        <button @click="submitOrders" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">{{ trans('messages.confirm_and_save', [], session('locale')) }}</button>
+        <button @click="showModal=false" 
+                :disabled="loading"
+                :class="loading ? 'px-4 py-2 bg-gray-300 rounded-lg cursor-not-allowed' : 'px-4 py-2 bg-gray-100 rounded-lg'">
+          {{ trans('messages.cancel', [], session('locale')) }}
+        </button>
+        <button @click="submitOrders" 
+                :disabled="loading"
+                :class="loading ? 'px-4 py-2 bg-indigo-400 text-white rounded-lg cursor-not-allowed opacity-75' : 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg'">
+          <template x-if="loading">
+            <span class="flex items-center gap-2">
+              <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ trans('messages.processing', [], session('locale')) ?: 'Processing...' }}
+            </span>
+          </template>
+          <template x-if="!loading">
+            <span>{{ trans('messages.confirm_and_save', [], session('locale')) }}</span>
+          </template>
+        </button>
       </div>
     </div>
   </div>

@@ -2,7 +2,7 @@
 
 @section('main')
 @push('title')
-<title>Maintenance Status</title>
+<title>{{ trans('messages.maintenance_status', [], session('locale')) }}</title>
 @endpush
 
 <main class="flex-1 p-4 md:p-6" x-data="maintenanceApp" x-init="init()">
@@ -13,7 +13,7 @@
     <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-orange-500">
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-gray-500 text-sm mb-1">Delivered to Tailor</p>
+          <p class="text-gray-500 text-sm mb-1">{{ trans('messages.delivered_to_tailor', [], session('locale')) }}</p>
           <p class="text-3xl font-bold text-orange-600" x-text="statistics.delivered_to_tailor || 0"></p>
         </div>
         <div class="bg-orange-100 p-4 rounded-full">
@@ -26,7 +26,7 @@
     <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-blue-500">
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-gray-500 text-sm mb-1">Received from Tailor</p>
+          <p class="text-gray-500 text-sm mb-1">{{ trans('messages.received_from_tailor', [], session('locale')) }}</p>
           <p class="text-3xl font-bold text-blue-600" x-text="statistics.received_from_tailor || 0"></p>
         </div>
         <div class="bg-blue-100 p-4 rounded-full">
@@ -42,12 +42,12 @@
       <button @click="activeTab = 'current'"
               :class="activeTab === 'current' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
               class="py-3 px-4 flex items-center gap-1 whitespace-nowrap">
-        <span class="material-symbols-outlined text-base">list</span> Current Items
+        <span class="material-symbols-outlined text-base">list</span> {{ trans('messages.current_items', [], session('locale')) }}
       </button>
       <button @click="activeTab = 'history'"
               :class="activeTab === 'history' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
               class="py-3 px-4 flex items-center gap-1 whitespace-nowrap">
-        <span class="material-symbols-outlined text-base">history</span> Repair History
+        <span class="material-symbols-outlined text-base">history</span> {{ trans('messages.repair_history', [], session('locale')) }}
       </button>
     </div>
   </div>
@@ -58,7 +58,7 @@
     <div class="bg-white rounded-2xl shadow-md p-4 mb-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <input type="text" 
-               placeholder="Search by customer name, design, code, transfer number..."
+               placeholder="{{ trans('messages.search_placeholder_maintenance', [], session('locale')) }}"
                x-model="search"
                class="form-input w-full md:w-72 border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-primary">
       </div>
@@ -68,25 +68,25 @@
   <div class="bg-white rounded-2xl shadow-md overflow-hidden">
     <div x-show="loading" class="p-8 text-center">
       <span class="material-symbols-outlined animate-spin text-4xl text-indigo-600">sync</span>
-      <p class="mt-2 text-gray-500">Loading...</p>
+      <p class="mt-2 text-gray-500">{{ trans('messages.loading', [], session('locale')) }}</p>
     </div>
 
     <div x-show="!loading && filteredItems().length === 0" class="p-8 text-center text-gray-500">
-      No items found
+      {{ trans('messages.no_items_found', [], session('locale')) }}
     </div>
 
     <!-- Desktop Table -->
     <table class="w-full text-sm hidden md:table" x-show="!loading && filteredItems().length > 0">
       <thead class="bg-gray-100 text-gray-700">
         <tr>
-          <th class="py-3 px-4 text-left">Image</th>
-          <th class="py-3 px-4 text-left">Design Name</th>
-          <th class="py-3 px-4 text-left">Code</th>
-          <th class="py-3 px-4 text-left">Order No</th>
-          <th class="py-3 px-4 text-left">Customer</th>
-          <th class="py-3 px-4 text-left">Customer Phone</th>
-          <th class="py-3 px-4 text-left">Status</th>
-          <th class="py-3 px-4 text-left">Actions</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.image', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
+          <th class="py-3 px-4 text-left">{{ trans('messages.actions', [], session('locale')) }}</th>
         </tr>
       </thead>
       <tbody>
@@ -115,17 +115,25 @@
                     x-text="getStatusLabel(item.maintenance_status)"></span>
               <span x-show="!item.maintenance_status" 
                     class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
-                Not in Maintenance
+                {{ trans('messages.not_in_maintenance', [], session('locale')) }}
               </span>
             </td>
             <td class="py-3 px-4">
-              <button @click="openActionModal(item)"
-                      :class="item.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
-                      class="text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
-                <span x-show="item.maintenance_status === 'delivered_to_tailor'">Receive from Tailor</span>
-                <span x-show="item.maintenance_status !== 'delivered_to_tailor' && item.maintenance_status !== 'received_from_tailor'">Send to Tailor</span>
-                <span x-show="item.maintenance_status === 'received_from_tailor'" class="opacity-50 cursor-not-allowed">Completed</span>
-              </button>
+              <div class="flex items-center gap-2">
+                <button x-show="item.maintenance_status === 'delivered_to_tailor' && item.maintenance_notes"
+                        @click="openNotesModal(item)"
+                        class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                  <span class="material-symbols-outlined text-lg">note</span>
+                </button>
+                <button @click="openActionModal(item)"
+                        :class="item.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
+                        class="text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                  <span x-show="item.maintenance_status === 'delivered_to_tailor'">{{ trans('messages.receive_from_tailor', [], session('locale')) }}</span>
+                  <span x-show="item.maintenance_status !== 'delivered_to_tailor' && item.maintenance_status !== 'received_from_tailor'">{{ trans('messages.send_to_tailor', [], session('locale')) }}</span>
+                  <span x-show="item.maintenance_status === 'received_from_tailor'" class="opacity-50 cursor-not-allowed">{{ trans('messages.completed', [], session('locale')) }}</span>
+                </button>
+              </div>
             </td>
           </tr>
         </template>
@@ -142,8 +150,8 @@
                  class="w-20 h-20 object-cover rounded-lg">
             <div class="flex-1">
               <h3 class="font-semibold text-lg" x-text="item.design_name || 'N/A'"></h3>
-              <p class="text-sm text-gray-600" x-text="'Code: ' + (item.abaya_code || 'N/A')"></p>
-              <p class="text-sm text-indigo-600 mt-1" x-text="'Order No: ' + (item.order_no || '—')"></p>
+              <p class="text-sm text-gray-600" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + (item.abaya_code || 'N/A')"></p>
+              <p class="text-sm text-indigo-600 mt-1" x-text="'{{ trans('messages.order_no', [], session('locale')) }}: ' + (item.order_no || '—')"></p>
               <p class="text-sm mt-1">
                 <span class="font-medium" x-text="item.customer_name || 'N/A'"></span>
                 <span class="text-gray-500" x-text="' - ' + (item.customer_phone || 'N/A')"></span>
@@ -153,12 +161,20 @@
                       class="inline-block px-3 py-1 rounded-full text-xs font-semibold"
                       x-text="getStatusLabel(item.maintenance_status)"></span>
               </div>
-              <button @click="openActionModal(item)"
-                      :class="item.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
-                      class="text-white px-4 py-2 rounded-lg text-sm font-semibold transition mt-2">
-                <span x-show="item.maintenance_status === 'delivered_to_tailor'">Receive from Tailor</span>
-                <span x-show="item.maintenance_status !== 'delivered_to_tailor'">Send to Tailor</span>
-              </button>
+              <div class="flex gap-2 mt-2">
+                <button x-show="item.maintenance_status === 'delivered_to_tailor' && item.maintenance_notes"
+                        @click="openNotesModal(item)"
+                        class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition border border-indigo-200 flex-shrink-0"
+                        title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                  <span class="material-symbols-outlined text-lg">note</span>
+                </button>
+                <button @click="openActionModal(item)"
+                        :class="item.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
+                        class="text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex-1">
+                  <span x-show="item.maintenance_status === 'delivered_to_tailor'">{{ trans('messages.receive_from_tailor', [], session('locale')) }}</span>
+                  <span x-show="item.maintenance_status !== 'delivered_to_tailor'">{{ trans('messages.send_to_tailor', [], session('locale')) }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -168,12 +184,12 @@
     <!-- Pagination -->
     <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mt-6 px-4 pb-4" x-show="!loading && filteredItems().length > 0">
       <p class="text-sm text-gray-500">
-        Showing
+        {{ trans('messages.showing', [], session('locale')) }}
         <span x-text="startItem()"></span> -
         <span x-text="endItem()"></span>
-        of
+        {{ trans('messages.of', [], session('locale')) }}
         <span x-text="filteredItems().length"></span>
-        items
+        {{ trans('messages.items', [], session('locale')) }}
       </p>
 
       <div class="flex items-center gap-2 justify-end">
@@ -181,7 +197,7 @@
                 class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm transition"
                 :disabled="page === 1"
                 :class="page === 1 ? 'opacity-50 cursor-not-allowed' : ''">
-          Previous
+          {{ trans('messages.previous', [], session('locale')) }}
         </button>
 
         <template x-for="p in pageNumbers()" :key="p">
@@ -197,7 +213,7 @@
                 class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm transition"
                 :disabled="page === totalPages()"
                 :class="page === totalPages() ? 'opacity-50 cursor-not-allowed' : ''">
-          Next
+          {{ trans('messages.next', [], session('locale')) }}
         </button>
       </div>
     </div>
@@ -209,37 +225,36 @@
     <div class="bg-white rounded-2xl shadow-md overflow-hidden">
       <div x-show="loadingHistory" class="p-8 text-center">
         <span class="material-symbols-outlined animate-spin text-4xl text-indigo-600">sync</span>
-        <p class="mt-2 text-gray-500">Loading history...</p>
+        <p class="mt-2 text-gray-500">{{ trans('messages.loading_history', [], session('locale')) }}</p>
       </div>
 
       <div x-show="!loadingHistory && repairHistory.length === 0" class="p-8 text-center text-gray-500">
-        No repair history found
+        {{ trans('messages.no_repair_history_found', [], session('locale')) }}
       </div>
 
       <!-- History Table -->
       <table class="w-full text-sm hidden md:table" x-show="!loadingHistory && repairHistory.length > 0">
         <thead class="bg-gray-100 text-gray-700">
           <tr>
-            <th class="py-3 px-4 text-left">Order No</th>
-            <th class="py-3 px-4 text-left">Transfer Number</th>
-            <th class="py-3 px-4 text-left">Design Name</th>
-            <th class="py-3 px-4 text-left">Code</th>
-            <th class="py-3 px-4 text-left">Customer</th>
-            <th class="py-3 px-4 text-left">Customer Phone</th>
-            <th class="py-3 px-4 text-left">Tailor</th>
-            <th class="py-3 px-4 text-left">Sent Date</th>
-            <th class="py-3 px-4 text-left">Received Date</th>
-            <th class="py-3 px-4 text-left">Delivery Charges</th>
-            <th class="py-3 px-4 text-left">Repair Cost</th>
-            <th class="py-3 px-4 text-left">Cost Bearer</th>
-            <th class="py-3 px-4 text-left">Status</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.order_no', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.design_name', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.code', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.customer', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.customer_phone', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.tailor', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.sent_date', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.received_date', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.delivery_charges', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.repair_cost', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.cost_bearer', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.notes', [], session('locale')) }}</th>
+            <th class="py-3 px-4 text-left">{{ trans('messages.status', [], session('locale')) }}</th>
           </tr>
         </thead>
         <tbody>
           <template x-for="item in repairHistory" :key="item.id">
             <tr class="border-t hover:bg-indigo-50 transition">
               <td class="py-3 px-4 font-semibold text-indigo-600" x-text="item.order_no || '—'"></td>
-              <td class="py-3 px-4 font-semibold text-indigo-600" x-text="item.transfer_number || '—'"></td>
               <td class="py-3 px-4 font-semibold" x-text="item.design_name || 'N/A'"></td>
               <td class="py-3 px-4 text-gray-600" x-text="item.abaya_code || 'N/A'"></td>
               <td class="py-3 px-4">
@@ -259,8 +274,19 @@
                 <span x-show="item.cost_bearer" 
                       :class="item.cost_bearer === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
                       class="px-3 py-1 rounded-full text-xs font-semibold"
-                      x-text="item.cost_bearer === 'customer' ? 'Customer' : 'Company'"></span>
+                      x-text="item.cost_bearer === 'customer' ? '{{ trans('messages.customer_bearer', [], session('locale')) }}' : '{{ trans('messages.company_bearer', [], session('locale')) }}'"></span>
                 <span x-show="!item.cost_bearer" class="text-gray-400">—</span>
+              </td>
+              <td class="py-3 px-4 text-sm text-gray-700 max-w-xs">
+                <div class="flex items-center gap-2">
+                  <p class="truncate flex-1" :title="item.maintenance_notes || '—'" x-text="item.maintenance_notes ? (item.maintenance_notes.length > 30 ? item.maintenance_notes.substring(0, 30) + '...' : item.maintenance_notes) : '—'"></p>
+                  <button x-show="item.maintenance_notes"
+                          @click="openNotesModal(item)"
+                          class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition flex-shrink-0"
+                          title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                    <span class="material-symbols-outlined text-base">visibility</span>
+                  </button>
+                </div>
               </td>
               <td class="py-3 px-4">
                 <span :class="getStatusBadgeClass(item.maintenance_status)" 
@@ -280,9 +306,8 @@
               <div class="flex justify-between items-start">
                 <div>
                   <h3 class="font-semibold text-lg" x-text="item.design_name || 'N/A'"></h3>
-                  <p class="text-sm text-gray-600" x-text="'Code: ' + (item.abaya_code || 'N/A')"></p>
-                  <p class="text-sm text-indigo-600 mt-1" x-text="'Order No: ' + (item.order_no || '—')"></p>
-                  <p class="text-sm text-indigo-600 mt-1" x-text="'Transfer: ' + (item.transfer_number || '—')"></p>
+                  <p class="text-sm text-gray-600" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + (item.abaya_code || 'N/A')"></p>
+                  <p class="text-sm text-indigo-600 mt-1" x-text="'{{ trans('messages.order_no', [], session('locale')) }}: ' + (item.order_no || '—')"></p>
                 </div>
                 <span :class="getStatusBadgeClass(item.maintenance_status)" 
                       class="inline-block px-3 py-1 rounded-full text-xs font-semibold"
@@ -290,37 +315,51 @@
               </div>
               <div class="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <p class="text-gray-600">Customer:</p>
+                  <p class="text-gray-600">{{ trans('messages.customer', [], session('locale')) }}:</p>
                   <p class="font-medium" x-text="item.customer_name || 'N/A'"></p>
                   <p class="text-gray-500" x-text="item.customer_phone || 'N/A'"></p>
                 </div>
                 <div>
-                  <p class="text-gray-600">Tailor:</p>
+                  <p class="text-gray-600">{{ trans('messages.tailor', [], session('locale')) }}:</p>
                   <p class="font-medium" x-text="item.tailor_name || 'N/A'"></p>
                 </div>
                 <div>
-                  <p class="text-gray-600">Sent:</p>
+                  <p class="text-gray-600">{{ trans('messages.sent_date', [], session('locale')) }}:</p>
                   <p x-text="item.sent_date || '—'"></p>
                 </div>
                 <div>
-                  <p class="text-gray-600">Received:</p>
+                  <p class="text-gray-600">{{ trans('messages.received_date', [], session('locale')) }}:</p>
                   <p x-text="item.received_date || '—'"></p>
                 </div>
                 <div>
-                  <p class="text-gray-600">Delivery Charges:</p>
+                  <p class="text-gray-600">{{ trans('messages.delivery_charges', [], session('locale')) }}:</p>
                   <p class="font-semibold" x-text="item.delivery_charges ? item.delivery_charges + ' ر.ع' : '—'"></p>
                 </div>
                 <div>
-                  <p class="text-gray-600">Repair Cost:</p>
+                  <p class="text-gray-600">{{ trans('messages.repair_cost', [], session('locale')) }}:</p>
                   <p class="font-semibold" x-text="item.repair_cost ? item.repair_cost + ' ر.ع' : '—'"></p>
                 </div>
                 <div class="col-span-2">
-                  <p class="text-gray-600">Cost Bearer:</p>
+                  <p class="text-gray-600">{{ trans('messages.cost_bearer', [], session('locale')) }}:</p>
                   <span x-show="item.cost_bearer" 
                         :class="item.cost_bearer === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
                         class="inline-block px-3 py-1 rounded-full text-xs font-semibold"
-                        x-text="item.cost_bearer === 'customer' ? 'Customer' : 'Company'"></span>
+                        x-text="item.cost_bearer === 'customer' ? '{{ trans('messages.customer_bearer', [], session('locale')) }}' : '{{ trans('messages.company_bearer', [], session('locale')) }}'"></span>
                   <span x-show="!item.cost_bearer" class="text-gray-400">—</span>
+                </div>
+                <div class="col-span-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1">
+                      <p class="text-gray-600 font-medium">{{ trans('messages.notes', [], session('locale')) }}:</p>
+                      <p class="text-sm text-gray-700 mt-1 break-words" x-text="item.maintenance_notes ? (item.maintenance_notes.length > 50 ? item.maintenance_notes.substring(0, 50) + '...' : item.maintenance_notes) : '—'"></p>
+                    </div>
+                    <button x-show="item.maintenance_notes && item.maintenance_notes.length > 50"
+                            @click="openNotesModal(item)"
+                            class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition flex-shrink-0 mt-5"
+                            title="{{ trans('messages.view_notes', [], session('locale')) }}">
+                      <span class="material-symbols-outlined text-base">visibility</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -337,29 +376,37 @@
        @click.away="showActionModal = false">
     <div @click.stop
          x-transition.scale
-         class="bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6">
-      <h2 class="text-2xl font-bold mb-4" x-text="selectedItem.maintenance_status === 'delivered_to_tailor' ? 'Receive from Tailor' : 'Send to Tailor'"></h2>
+         class="bg-white w-full max-w-md mx-2 md:mx-4 rounded-2xl shadow-2xl p-4 md:p-6 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-2xl font-bold mb-4" x-text="selectedItem.maintenance_status === 'delivered_to_tailor' ? '{{ trans('messages.receive_from_tailor', [], session('locale')) }}' : '{{ trans('messages.send_to_tailor', [], session('locale')) }}'"></h2>
       
       <div class="mb-4">
-        <p class="text-gray-600 mb-2" x-text="'Design: ' + (selectedItem.design_name || 'N/A')"></p>
-        <p class="text-gray-600 mb-2" x-text="'Code: ' + (selectedItem.abaya_code || 'N/A')"></p>
-        <p class="text-gray-600 mb-2" x-show="selectedItem.order_no" x-text="'Order No: ' + selectedItem.order_no"></p>
-        <p class="text-gray-600 mb-2" x-text="'Customer: ' + (selectedItem.customer_name || 'N/A') + ' (' + (selectedItem.customer_phone || 'N/A') + ')'"></p>
+        <p class="text-gray-600 mb-2" x-text="'{{ trans('messages.design', [], session('locale')) }}: ' + (selectedItem.design_name || 'N/A')"></p>
+        <p class="text-gray-600 mb-2" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + (selectedItem.abaya_code || 'N/A')"></p>
+        <p class="text-gray-600 mb-2" x-show="selectedItem.order_no" x-text="'{{ trans('messages.order_no', [], session('locale')) }}: ' + selectedItem.order_no"></p>
+        <p class="text-gray-600 mb-2" x-text="'{{ trans('messages.customer', [], session('locale')) }}: ' + (selectedItem.customer_name || 'N/A') + ' (' + (selectedItem.customer_phone || 'N/A') + ')'"></p>
       </div>
 
       <div class="mb-4" x-show="selectedItem.maintenance_status !== 'delivered_to_tailor'">
-        <label class="block text-sm font-medium mb-2">Select Tailor</label>
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.select_tailor', [], session('locale')) }}</label>
         <select x-model="selectedTailorId" 
                 class="form-select w-full border-gray-300 rounded-lg">
-          <option value="">Select a tailor</option>
+          <option value="">{{ trans('messages.select_a_tailor', [], session('locale')) }}</option>
           <template x-for="tailor in tailors" :key="tailor.id">
             <option :value="tailor.id" x-text="tailor.name"></option>
           </template>
         </select>
       </div>
 
+      <div class="mb-4" x-show="selectedItem.maintenance_status !== 'delivered_to_tailor'">
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.notes', [], session('locale')) }}</label>
+        <textarea x-model="maintenanceNotes" 
+                  placeholder="{{ trans('messages.enter_notes', [], session('locale')) }}"
+                  rows="4"
+                  class="form-textarea w-full border-gray-300 rounded-lg resize-none"></textarea>
+      </div>
+
       <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
-        <label class="block text-sm font-medium mb-2">Delivery Charges (OMR)</label>
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.delivery_charges_omr', [], session('locale')) }}</label>
         <input type="number" 
                step="0.001"
                x-model="deliveryCharges"
@@ -367,7 +414,7 @@
       </div>
 
       <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
-        <label class="block text-sm font-medium mb-2">Repair Cost (OMR)</label>
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.repair_cost_omr', [], session('locale')) }}</label>
         <input type="number" 
                step="0.001"
                x-model="repairCost"
@@ -375,24 +422,69 @@
       </div>
 
       <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
-        <label class="block text-sm font-medium mb-2">Cost Bearer</label>
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.cost_bearer', [], session('locale')) }}</label>
         <select x-model="costBearer" 
                 class="form-select w-full border-gray-300 rounded-lg">
-          <option value="">Select cost bearer</option>
-          <option value="customer">Customer</option>
-          <option value="company">Company</option>
+          <option value="">{{ trans('messages.select_cost_bearer', [], session('locale')) }}</option>
+          <option value="customer">{{ trans('messages.customer_bearer', [], session('locale')) }}</option>
+          <option value="company">{{ trans('messages.company_bearer', [], session('locale')) }}</option>
         </select>
       </div>
 
       <div class="flex gap-3 justify-end">
         <button @click="showActionModal = false"
                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
-          Cancel
+          {{ trans('messages.cancel', [], session('locale')) }}
         </button>
         <button @click="performAction()"
                 :class="selectedItem.maintenance_status === 'delivered_to_tailor' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
                 class="px-4 py-2 text-white rounded-lg">
-          <span x-text="selectedItem.maintenance_status === 'delivered_to_tailor' ? 'Confirm Receive' : 'Send'"></span>
+          <span x-text="selectedItem.maintenance_status === 'delivered_to_tailor' ? '{{ trans('messages.confirm_receive', [], session('locale')) }}' : '{{ trans('messages.send', [], session('locale')) }}'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes Modal -->
+  <div x-show="showNotesModal" 
+       x-transition.opacity
+       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+       @click.away="showNotesModal = false">
+    <div @click.stop
+         x-transition.scale
+         class="bg-white w-full max-w-lg mx-2 md:mx-4 rounded-2xl shadow-2xl p-4 md:p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl md:text-2xl font-bold">{{ trans('messages.notes', [], session('locale')) }}</h2>
+        <button @click="showNotesModal = false"
+                class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      
+      <div class="mb-4">
+        <p class="text-sm text-gray-600 mb-2">
+          <span class="font-medium">{{ trans('messages.design_name', [], session('locale')) }}: </span>
+          <span x-text="selectedNotesItem.design_name || 'N/A'"></span>
+        </p>
+        <p class="text-sm text-gray-600 mb-2">
+          <span class="font-medium">{{ trans('messages.code', [], session('locale')) }}: </span>
+          <span x-text="selectedNotesItem.abaya_code || 'N/A'"></span>
+        </p>
+        <p class="text-sm text-gray-600 mb-2" x-show="selectedNotesItem.order_no">
+          <span class="font-medium">{{ trans('messages.order_no', [], session('locale')) }}: </span>
+          <span x-text="selectedNotesItem.order_no"></span>
+        </p>
+      </div>
+
+      <div class="bg-gray-50 rounded-lg p-4 mb-4">
+        <p class="text-sm text-gray-600 mb-2 font-medium">{{ trans('messages.notes', [], session('locale')) }}:</p>
+        <p class="text-gray-800 whitespace-pre-wrap break-words" x-text="selectedNotesItem.maintenance_notes || '—'"></p>
+      </div>
+
+      <div class="flex justify-end">
+        <button @click="showNotesModal = false"
+                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+          {{ trans('messages.close', [], session('locale')) }}
         </button>
       </div>
     </div>
@@ -411,11 +503,14 @@ document.addEventListener('alpine:init', () => {
     repairHistory: [],
     tailors: [],
     showActionModal: false,
+    showNotesModal: false,
     selectedItem: {},
+    selectedNotesItem: {},
     selectedTailorId: '',
     deliveryCharges: 0,
     repairCost: 0,
     costBearer: '',
+    maintenanceNotes: '',
 
     // Pagination
     page: 1,
@@ -450,18 +545,18 @@ document.addEventListener('alpine:init', () => {
             console.log('First item data:', this.items[0]);
           }
         } else {
-          throw new Error(data.message || 'Failed to load data');
+          throw new Error(data.message || '{{ trans('messages.failed_to_load_data', [], session('locale')) }}');
         }
       } catch (error) {
         console.error('Error loading data:', error);
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
-            title: 'Error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
             text: error.message
           });
         } else {
-          alert('Error: ' + error.message);
+          alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
         }
       } finally {
         this.loading = false;
@@ -477,14 +572,14 @@ document.addEventListener('alpine:init', () => {
         if (data.success) {
           this.repairHistory = data.history || [];
         } else {
-          throw new Error(data.message || 'Failed to load repair history');
+          throw new Error(data.message || '{{ trans('messages.failed_to_load_repair_history', [], session('locale')) }}');
         }
       } catch (error) {
         console.error('Error loading repair history:', error);
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
-            title: 'Error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
             text: error.message
           });
         }
@@ -585,7 +680,18 @@ document.addEventListener('alpine:init', () => {
       this.deliveryCharges = item.delivery_charges || 0;
       this.repairCost = item.repair_cost || 0;
       this.costBearer = item.cost_bearer || '';
+      this.maintenanceNotes = item.maintenance_notes || '';
       this.showActionModal = true;
+    },
+
+    openNotesModal(item) {
+      this.selectedNotesItem = item;
+      this.showNotesModal = true;
+    },
+
+    openNotesModal(item) {
+      this.selectedNotesItem = item;
+      this.showNotesModal = true;
     },
 
     async performAction() {
@@ -593,8 +699,8 @@ document.addEventListener('alpine:init', () => {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'info',
-            title: 'Already Completed',
-            text: 'This item has already been received from tailor'
+            title: '{{ trans('messages.already_completed', [], session('locale')) }}',
+            text: '{{ trans('messages.already_received_message', [], session('locale')) }}'
           });
         }
         return;
@@ -606,11 +712,11 @@ document.addEventListener('alpine:init', () => {
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'warning',
-              title: 'Required Field',
-              text: 'Please select cost bearer'
+              title: '{{ trans('messages.required_field', [], session('locale')) }}',
+              text: '{{ trans('messages.please_select_cost_bearer', [], session('locale')) }}'
             });
           } else {
-            alert('Please select cost bearer');
+            alert('{{ trans('messages.please_select_cost_bearer', [], session('locale')) }}');
           }
           return;
         }
@@ -636,7 +742,7 @@ document.addEventListener('alpine:init', () => {
             if (typeof Swal !== 'undefined') {
               Swal.fire({
                 icon: 'success',
-                title: 'Success',
+                title: '{{ trans('messages.success', [], session('locale')) }}',
                 text: data.message
               });
             } else {
@@ -645,18 +751,18 @@ document.addEventListener('alpine:init', () => {
             this.showActionModal = false;
             await this.loadData();
           } else {
-            throw new Error(data.message || 'Failed to receive item');
+            throw new Error(data.message || '{{ trans('messages.failed_to_receive_item', [], session('locale')) }}');
           }
         } catch (error) {
           console.error('Error:', error);
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'error',
-              title: 'Error',
+              title: '{{ trans('messages.error', [], session('locale')) }}',
               text: error.message
             });
           } else {
-            alert('Error: ' + error.message);
+            alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
           }
         }
       } else {
@@ -665,11 +771,11 @@ document.addEventListener('alpine:init', () => {
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'warning',
-              title: 'Select Tailor',
-              text: 'Please select a tailor'
+              title: '{{ trans('messages.select_tailor_title', [], session('locale')) }}',
+              text: '{{ trans('messages.please_select_tailor', [], session('locale')) }}'
             });
           } else {
-            alert('Please select a tailor');
+            alert('{{ trans('messages.please_select_tailor', [], session('locale')) }}');
           }
           return;
         }
@@ -683,7 +789,8 @@ document.addEventListener('alpine:init', () => {
             },
             body: JSON.stringify({
               item_id: this.selectedItem.id,
-              tailor_id: this.selectedTailorId
+              tailor_id: this.selectedTailorId,
+              maintenance_notes: this.maintenanceNotes || ''
             })
           });
 
@@ -693,7 +800,7 @@ document.addEventListener('alpine:init', () => {
             if (typeof Swal !== 'undefined') {
               Swal.fire({
                 icon: 'success',
-                title: 'Success',
+                title: '{{ trans('messages.success', [], session('locale')) }}',
                 text: data.message
               });
             } else {
@@ -702,18 +809,18 @@ document.addEventListener('alpine:init', () => {
             this.showActionModal = false;
             await this.loadData();
           } else {
-            throw new Error(data.message || 'Failed to send item');
+            throw new Error(data.message || '{{ trans('messages.failed_to_send_item', [], session('locale')) }}');
           }
         } catch (error) {
           console.error('Error:', error);
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'error',
-              title: 'Error',
+              title: '{{ trans('messages.error', [], session('locale')) }}',
               text: error.message
             });
           } else {
-            alert('Error: ' + error.message);
+            alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
           }
         }
       }
@@ -721,10 +828,10 @@ document.addEventListener('alpine:init', () => {
 
     getStatusLabel(status) {
       const labels = {
-        'delivered_to_tailor': 'Delivered to Tailor',
-        'received_from_tailor': 'Received from Tailor'
+        'delivered_to_tailor': '{{ trans('messages.delivered_to_tailor', [], session('locale')) }}',
+        'received_from_tailor': '{{ trans('messages.received_from_tailor', [], session('locale')) }}'
       };
-      return labels[status] || 'Not in Maintenance';
+      return labels[status] || '{{ trans('messages.not_in_maintenance', [], session('locale')) }}';
     },
 
     getStatusBadgeClass(status) {

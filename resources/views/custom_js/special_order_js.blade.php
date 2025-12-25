@@ -16,11 +16,13 @@ document.addEventListener('alpine:init', () => {
       source: '', 
       name: '', 
       phone: '', 
-      governorate: '', 
-      city: '', 
+      governorate_id: '', 
+      city_id: '', 
+      address: '',
       is_gift: 'no', 
       gift_message: '' 
     },
+    customerSuggestions: [],
     orders: [{ 
       id: 1, 
       stock_id: null,
@@ -57,6 +59,26 @@ document.addEventListener('alpine:init', () => {
       } catch (error) {
         console.error('Error loading areas list:', error);
       }
+    },
+
+    getGovernorateName(id) {
+      if (!id) return '';
+      const area = this.areasMap.find(a => a.id == id);
+      return area ? area.name : '';
+    },
+
+    getCityName(id) {
+      if (!id) return '';
+      const city = this.availableCities.find(c => c.id == id);
+      return city ? city.name : '';
+    },
+
+    calculateTotal() {
+      let subtotal = 0;
+      this.orders.forEach(order => {
+        subtotal += (parseFloat(order.price) || 0) * (parseInt(order.quantity) || 1);
+      });
+      return subtotal + (parseFloat(this.shipping_fee) || 0);
     },
 
     updateCities(areaId) {
@@ -99,6 +121,66 @@ document.addEventListener('alpine:init', () => {
       this.customer.city_id = cityId || '';
       this.customer.city = city ? city.name : '';
       this.shipping_fee = city ? city.charge : 0;
+    },
+    
+    async searchCustomers() {
+      const phone = this.customer.phone?.trim() || '';
+      
+      if (phone.length < 2) {
+        this.customerSuggestions = [];
+        return;
+      }
+      
+      try {
+        const response = await fetch(`{{ route('pos.customers.search') }}?search=${encodeURIComponent(phone)}`);
+        const data = await response.json();
+        this.customerSuggestions = Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error('Error searching customers:', error);
+        this.customerSuggestions = [];
+      }
+    },
+    
+    selectCustomer(customerItem) {
+      // Fill customer data from selected customer
+      this.customer.name = customerItem.name || '';
+      this.customer.phone = customerItem.phone || '';
+      this.customer.address = customerItem.address || '';
+      
+      // Fill area/governorate if available (area_id in customer = governorate_id in form)
+      if (customerItem.area_id) {
+        // Try to find matching area in governorates list
+        const matchingArea = this.areasMap.find(a => a.id == customerItem.area_id);
+        if (matchingArea) {
+          this.customer.governorate_id = customerItem.area_id;
+          this.customer.governorate_name = matchingArea.name;
+          // Update cities for this area
+          this.updateCities(customerItem.area_id);
+          
+          // After cities are loaded, select the city if available
+          if (customerItem.city_id) {
+            // Use a small delay to ensure cities are loaded
+            setTimeout(() => {
+              const matchingCity = this.availableCities.find(c => c.id == customerItem.city_id);
+              if (matchingCity) {
+                this.selectCity(customerItem.city_id);
+              }
+            }, 300);
+          }
+        }
+      } else if (customerItem.city_id) {
+        // If no area_id but city_id exists, try to find city and set its area
+        // This is a fallback - ideally area_id should be set
+        setTimeout(() => {
+          const matchingCity = this.availableCities.find(c => c.id == customerItem.city_id);
+          if (matchingCity) {
+            this.selectCity(customerItem.city_id);
+          }
+        }, 300);
+      }
+      
+      // Clear suggestions
+      this.customerSuggestions = [];
     },
     
     addOrder() {
@@ -148,6 +230,7 @@ document.addEventListener('alpine:init', () => {
     async submitOrders() {
       if (this.loading) return;
       
+      // Disable button immediately to prevent multiple clicks
       this.loading = true;
       
       try {
@@ -156,9 +239,9 @@ document.addEventListener('alpine:init', () => {
             name: this.customer.name,
             phone: this.customer.phone,
             source: this.customer.source,
-            governorate: this.customer.governorate_name || '',
-            area: this.customer.city, // backend currently stores area, map city into area
-            city: this.customer.city,
+            area_id: this.customer.governorate_id, // Governorate ID
+            city_id: this.customer.city_id, // State/Area ID
+            address: this.customer.address,
             is_gift: this.customer.is_gift,
             gift_message: this.customer.gift_message
           },
@@ -195,6 +278,7 @@ document.addEventListener('alpine:init', () => {
         console.log('Response data:', data);
 
         if (data.success) {
+          // Keep loading true until form is reset (prevents multiple submissions)
           this.showModal = false;
           
           // Open bill in new window
@@ -211,15 +295,15 @@ document.addEventListener('alpine:init', () => {
               timer: 2000,
               showConfirmButton: false
             }).then(() => {
-              // Reset form
+              // Reset form and re-enable button
+              this.loading = false;
               this.customer = { 
                 source: '', 
                 name: '', 
                 phone: '', 
-                governorate_name: '', 
-              governorate_id: '',
-              city: '', 
-              city_id: '',
+                governorate_id: '',
+                city_id: '',
+                address: '',
                 is_gift: 'no', 
                 gift_message: '' 
               };
@@ -237,21 +321,32 @@ document.addEventListener('alpine:init', () => {
                 notes: '' 
               }];
               this.shipping_fee = 0;
-            this.availableCities = [];
+              this.availableCities = [];
             });
           } else {
             alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');
-            // Reset form
+            // Reset form and re-enable button
+            this.loading = false;
             location.reload();
           }
         } else {
+          // Re-enable button on error
+          this.loading = false;
           throw new Error(data.message || 'Error saving order');
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('حدث خطأ أثناء حفظ الطلب: ' + error.message);
-      } finally {
+        // Re-enable button on error so user can try again
         this.loading = false;
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: error.message || '{{ trans('messages.error_saving_order', [], session('locale')) ?: 'Error saving order' }}'
+          });
+        } else {
+          alert('حدث خطأ أثناء حفظ الطلب: ' + error.message);
+        }
       }
     }
   }));

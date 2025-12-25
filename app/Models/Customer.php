@@ -13,6 +13,7 @@ class Customer extends Model
         'phone',
         'city_id',
         'area_id',
+        'address',
         'notes',
     ];
 
@@ -38,5 +39,13 @@ class Customer extends Model
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);
+    }
+
+    /**
+     * Get all POS orders for this customer
+     */
+    public function posOrders(): HasMany
+    {
+        return $this->hasMany(PosOrders::class, 'customer_id', 'id');
     }
 }

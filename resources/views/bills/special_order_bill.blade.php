@@ -211,7 +211,27 @@ td img{
   <div class="customer">
     <div><strong>{{ trans('messages.customer_name', [], session('locale')) }}:</strong> {{ $specialOrder->customer->name ?? 'N/A' }}</div>
     <div><strong>{{ trans('messages.phone_number', [], session('locale')) ?? 'الهاتف' }}:</strong> {{ $specialOrder->customer->phone ?? '—' }}</div>
-    <div class="full"><strong>{{ trans('messages.address', [], session('locale')) }}:</strong> {{ ($specialOrder->customer->governorate ?? '') . ($specialOrder->customer->area ? ' – ' . $specialOrder->customer->area : '') }}</div>
+    <div class="full">
+      <strong>{{ trans('messages.address', [], session('locale')) }}:</strong> 
+      @php
+        $addressParts = [];
+        if ($specialOrder->customer->area) {
+          $locale = session('locale', 'en');
+          $addressParts[] = $locale === 'ar' 
+            ? ($specialOrder->customer->area->area_name_ar ?? $specialOrder->customer->area->area_name_en ?? '')
+            : ($specialOrder->customer->area->area_name_en ?? $specialOrder->customer->area->area_name_ar ?? '');
+        }
+        if ($specialOrder->customer->city) {
+          $locale = session('locale', 'en');
+          $addressParts[] = $locale === 'ar'
+            ? ($specialOrder->customer->city->city_name_ar ?? $specialOrder->customer->city->city_name_en ?? '')
+            : ($specialOrder->customer->city->city_name_en ?? $specialOrder->customer->city->city_name_ar ?? '');
+        }
+        $location = implode(' – ', array_filter($addressParts));
+        $fullAddress = trim(($location ? $location . ' – ' : '') . ($specialOrder->customer->address ?? ''));
+      @endphp
+      {{ $fullAddress ?: '—' }}
+    </div>
     <div><strong>{{ trans('messages.shipping', [], session('locale')) }}:</strong> {{ trans('messages.paid_to_delivery_agent', [], session('locale')) }}</div>
     <div><strong>{{ trans('messages.delivery_fee', [], session('locale')) }}:</strong> {{ number_format($specialOrder->shipping_fee, 3) }} {{ trans('messages.currency', [], session('locale')) }}</div>
     @if($specialOrder->send_as_gift && $specialOrder->gift_text)

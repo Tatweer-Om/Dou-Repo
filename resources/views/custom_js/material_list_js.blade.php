@@ -3,9 +3,14 @@ $(document).ready(function() {
 
     // ------------------ Translations ------------------
     const trans = {
-        details: "تفاصيل",
-        edit: "تعديل",
-        delete: "حذف"
+        details: "{{ trans('messages.details', [], session('locale')) }}",
+        edit: "{{ trans('messages.edit', [], session('locale')) }}",
+        delete: "{{ trans('messages.delete', [], session('locale')) }}",
+        unit: "{{ trans('messages.unit', [], session('locale')) }}",
+        category: "{{ trans('messages.category', [], session('locale')) }}",
+        size: "{{ trans('messages.size', [], session('locale')) }}",
+        color: "{{ trans('messages.color', [], session('locale')) }}",
+        quantity: "{{ trans('messages.quantity', [], session('locale')) }}"
     };
 
     // ------------------ Track state ------------------
@@ -55,11 +60,11 @@ $(document).ready(function() {
             mobileCards += `
                 <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden" data-id="${material.id}">
                     <h3 class="font-bold text-gray-900 truncate">${material.material_name}</h3>
-                    <p>Unit: ${material.unit ?? '-'}</p>
-                    <p>Category: ${material.category ?? '-'}</p>
-                    <p>Size: ${size}</p>
-                    <p>Color: ${color}</p>
-                    <p>Quantity: ${quantity}</p>
+                    <p>${trans.unit}: ${material.unit ?? '-'}</p>
+                    <p>${trans.category}: ${material.category ?? '-'}</p>
+                    <p>${trans.size}: ${size}</p>
+                    <p>${trans.color}: ${color}</p>
+                    <p>${trans.quantity}: ${quantity}</p>
                     <div class="flex justify-around mt-3 text-xs font-semibold">
                         <button class="flex flex-col items-center gap-1 hover:text-blue-600 transition" onclick="window.location.href='/edit_material/${material.id}'">
                             <span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full text-base">edit</span>

@@ -15,7 +15,7 @@
         <h2 class="text-2xl sm:text-3xl font-bold text-gray-900">{{ trans('messages.transfer_quantities_between_channels', [], session('locale')) }}</h2>
         <p class="text-gray-500 text-sm">{{ trans('messages.inventory_management_channels', [], session('locale')) }}</p>
       </div>
-      <a href="/inventory/index.php"
+      <a href="{{ route('stock') }}"
          class="px-4 py-2 rounded-lg bg-[var(--primary-color)] text-white hover:opacity-90 font-semibold">
         {{ trans('messages.back_to_inventory', [], session('locale')) }}
       </a>

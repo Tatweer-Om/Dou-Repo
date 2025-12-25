@@ -148,60 +148,141 @@ document.addEventListener('alpine:init', () => {
     /* PRINT MULTIPLE ITEMS */
     /* ======================================================================= */
     doPrintList() {
+      if (this.selectedItems.length === 0) {
+        alert('{{ trans('messages.no_items_selected', [], session('locale')) }}');
+        return;
+      }
+
       let w = window.open('', '_blank');
 
-      let rows = this.selectedItems.map(i => `
-        <tr>
-          <td>${i.orderId}</td>
-          <td>${i.customer}</td>
-          <td>
-            {{ trans('messages.abaya_length', [], session('locale')) }}: ${i.length}<br>
-            {{ trans('messages.bust_one_side', [], session('locale')) }}: ${i.bust}<br>
-            {{ trans('messages.sleeves_length', [], session('locale')) }}: ${i.sleeves}<br>
-            {{ trans('messages.buttons', [], session('locale')) }}: ${i.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'}
-          </td>
-          <td>${i.tailor_name || this.tailorNameById(i.tailor_id) || ''}</td>
-          <td>${i.notes}</td>
-        </tr>
-      `).join('');
+      // Create a single table with all items, including tailor name in each row
+      let rows = this.selectedItems.map((i, idx) => {
+        const tailorName = i.tailor_name || this.tailorNameById(i.tailor_id) || '{{ trans('messages.not_assigned', [], session('locale')) }}';
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td>${i.order_no || ('#' + i.orderId)}</td>
+            <td>${i.customer || '—'}</td>
+            <td><strong>${tailorName}</strong></td>
+            <td><strong>${i.abayaName || i.code || '—'}</strong><br><small style="color: #666;">{{ trans('messages.code', [], session('locale')) }}: ${i.code || '—'}</small></td>
+            <td class="text-center">${i.quantity || 1}</td>
+            <td>
+              <strong>{{ trans('messages.abaya_length', [], session('locale')) }}:</strong> ${i.length || '—'}<br>
+              <strong>{{ trans('messages.bust_one_side', [], session('locale')) }}:</strong> ${i.bust || '—'}<br>
+              <strong>{{ trans('messages.sleeves_length', [], session('locale')) }}:</strong> ${i.sleeves || '—'}<br>
+              <strong>{{ trans('messages.buttons', [], session('locale')) }}:</strong> ${i.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'}
+            </td>
+            <td>${i.notes || '—'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      let content = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>{{ trans('messages.order_number', [], session('locale')) }}</th>
+              <th>{{ trans('messages.customer', [], session('locale')) }}</th>
+              <th>{{ trans('messages.tailor', [], session('locale')) }}</th>
+              <th>{{ trans('messages.abaya', [], session('locale')) }}</th>
+              <th style="width: 60px;">{{ trans('messages.quantity', [], session('locale')) }}</th>
+              <th>{{ trans('messages.sizes', [], session('locale')) }}</th>
+              <th>{{ trans('messages.notes', [], session('locale')) }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
 
       w.document.write(`
+        <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
           <title>{{ trans('messages.tailor_sheet_orders', [], session('locale')) }}</title>
           <style>
-            body { font-family: sans-serif; padding: 20px; direction: rtl; }
-            h1 { margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; font-size: 14px; }
-            th, td { border: 1px solid #ccc; padding: 10px; }
-            th { background: #f3f4f6; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              padding: 20px; 
+              direction: rtl; 
+              background: #fff;
+              color: #333;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #4f46e5;
+            }
+            .header h1 {
+              color: #4f46e5;
+              font-size: 24px;
+              margin-bottom: 10px;
+            }
+            .header .info {
+              color: #666;
+              font-size: 14px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 13px;
+              margin-bottom: 20px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            th { 
+              background: linear-gradient(to bottom, #f3f4f6, #e5e7eb);
+              color: #374151;
+              font-weight: 600;
+              padding: 12px 8px;
+              border: 1px solid #d1d5db;
+              text-align: right;
+            }
+            td { 
+              border: 1px solid #e5e7eb;
+              padding: 10px 8px;
+              text-align: right;
+            }
+            tr:nth-child(even) {
+              background-color: #f9fafb;
+            }
+            tr:hover {
+              background-color: #f3f4f6;
+            }
+            .text-center {
+              text-align: center;
+            }
+            @media print {
+              body { padding: 10px; }
+              table { page-break-inside: auto; }
+              tr { page-break-inside: avoid; page-break-after: auto; }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+              @page { margin: 1cm; }
+            }
           </style>
         </head>
         <body>
-
-          <h1>{{ trans('messages.tailor_sheet', [], session('locale')) }} - ${this.selectedItems.length} {{ trans('messages.abayas', [], session('locale')) }}</h1>
-
-          <table>
-            <thead>
-              <tr>
-                <th>{{ trans('messages.order_number', [], session('locale')) }}</th>
-                <th>{{ trans('messages.customer', [], session('locale')) }}</th>
-                <th>{{ trans('messages.sizes', [], session('locale')) }}</th>
-                <th>{{ trans('messages.tailor', [], session('locale')) }}</th>
-                <th>{{ trans('messages.notes', [], session('locale')) }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-
+          <div class="header">
+            <h1>{{ trans('messages.tailor_sheet', [], session('locale')) }}</h1>
+            <div class="info">
+              {{ trans('messages.total_items', [], session('locale')) }}: ${this.selectedItems.length} | 
+              {{ trans('messages.printed_on', [], session('locale')) }}: ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})}
+            </div>
+          </div>
+          ${content}
         </body>
         </html>
       `);
 
       w.document.close();
-      w.print();
+      setTimeout(() => {
+        w.print();
+      }, 250);
       this.showPrintModal = false;
     },
 

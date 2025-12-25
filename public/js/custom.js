@@ -58,33 +58,96 @@
     const langFlag = document.getElementById("langFlag");
     const langMenu = document.getElementById("langMenu");
 
-    // Apply saved language on load
-    const savedLang = localStorage.getItem("ui:lang");
-    if (savedLang === "en") setLang("en"); else setLang("ar");
+    // Function to update locale in Laravel session
+    function updateLocale(locale) {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]');
+      if (!csrfToken) {
+        console.error("CSRF token not found");
+        // Reload immediately if no CSRF token
+        window.location.reload();
+        return;
+      }
 
-    // Handle menu clicks
-    langMenu.querySelectorAll("[data-lang]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const v = btn.getAttribute("data-lang");
-        setLang(v);
-        langMenu.classList.remove("show");
+      // Show loading indicator (optional)
+      const body = document.body;
+      body.style.cursor = 'wait';
+      
+      fetch("/change-locale", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-TOKEN": csrfToken.getAttribute('content'),
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ locale: locale })
+      })
+      .then(response => {
+        // Always reload regardless of response
+        body.style.cursor = 'default';
+        window.location.reload();
+      })
+      .catch(error => {
+        console.error("Error updating locale:", error);
+        body.style.cursor = 'default';
+        // Always reload even if AJAX fails
+        window.location.reload();
       });
-    });
+    }
 
-    // Core: set language + direction + flag + persist
-    function setLang(code) {
+    // Core: set language + direction + flag + persist + update session
+    function setLang(code, reloadPage = true) {
       if (code === "en") {
         htmlEl.setAttribute("lang", "en");
         htmlEl.setAttribute("dir", "ltr");
-        langFlag.textContent = "🇬🇧";
+        if (langFlag) langFlag.textContent = "🇬🇧";
         localStorage.setItem("ui:lang", "en");
-        // NOTE: Here you can hook i18n strings switch if needed
+        
+        // Update Laravel session via AJAX
+        if (reloadPage) {
+          updateLocale("en");
+        }
       } else {
         htmlEl.setAttribute("lang", "ar");
         htmlEl.setAttribute("dir", "rtl");
-        langFlag.textContent = "🇴🇲";
+        if (langFlag) langFlag.textContent = "🇴🇲";
         localStorage.setItem("ui:lang", "ar");
+        
+        // Update Laravel session via AJAX
+        if (reloadPage) {
+          updateLocale("ar");
+        }
       }
+    }
+
+    // Get initial locale from HTML attribute (from session) or default to 'ar'
+    const sessionLocale = htmlEl.getAttribute("lang") || "ar";
+    const initialDir = htmlEl.getAttribute("dir") || "rtl";
+    
+    // Check localStorage for saved preference
+    const savedLocale = localStorage.getItem("ui:lang") || sessionLocale;
+
+    // If localStorage differs from session, sync them by updating session and reloading
+    if (savedLocale !== sessionLocale) {
+      // Update session to match localStorage preference
+      updateLocale(savedLocale);
+    } else {
+      // If they match, just apply the language without reloading
+      if (sessionLocale === "en") {
+        setLang("en", false); // false = don't reload page on initial load
+      } else {
+        setLang("ar", false);
+      }
+    }
+
+    // Handle menu clicks
+    if (langMenu) {
+      langMenu.querySelectorAll("[data-lang]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const v = btn.getAttribute("data-lang");
+          setLang(v, true); // true = reload page to apply changes
+          langMenu.classList.remove("show");
+        });
+      });
     }
 
 document.addEventListener("DOMContentLoaded", () => {

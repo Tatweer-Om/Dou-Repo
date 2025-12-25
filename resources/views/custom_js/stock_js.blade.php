@@ -71,6 +71,14 @@ $(document).ready(function() {
       $('#abaya_form').on('submit', function(e) {
     e.preventDefault();
 
+    let $form = $(this);
+    let $submitBtn = $form.find('button[type="submit"]');
+    
+    // Check if already submitting
+    if ($submitBtn.prop('disabled')) {
+        return false;
+    }
+
     let abaya_code = $('#abaya_code').val().trim();
     let barcode = $('#barcode').val().trim();
     let design_name = $('#design_name').val();
@@ -94,6 +102,10 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
         show_notification('error', '<?= trans("messages.enter_tailor", [], session("locale")) ?>');
         return;
     }
+
+    // Store original button text and disable button
+    let originalBtnText = $submitBtn.html();
+    $submitBtn.prop('disabled', true).css('opacity', '0.6').html('<?= trans("messages.processing", [], session("locale")) ?>...');
 
     let formData = new FormData(this);
 
@@ -126,9 +138,15 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
                         window.location.href = response.redirect_url;
                     }, 1000);
                 }
+            } else {
+                // Re-enable button on unexpected response
+                $submitBtn.prop('disabled', false).css('opacity', '1').html(originalBtnText);
             }
         },
         error: function(xhr) {
+            // Re-enable button on error
+            $submitBtn.prop('disabled', false).css('opacity', '1').html(originalBtnText);
+            
             if (xhr.status === 422) {
                 let errors = xhr.responseJSON.errors;
                 $.each(errors, function(key, value) {

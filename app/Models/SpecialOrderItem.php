@@ -32,6 +32,7 @@ class SpecialOrderItem extends Model
         'maintenance_delivery_charges',
         'maintenance_repair_cost',
         'maintenance_cost_bearer',
+        'maintenance_notes',
         'is_late_delivery',
         'marked_late_at',
     ];
@@ -47,6 +48,11 @@ class SpecialOrderItem extends Model
         'maintenance_repair_cost' => 'decimal:3',
         'is_late_delivery' => 'boolean',
         'marked_late_at' => 'datetime',
+        'sent_to_tailor_at' => 'datetime',
+        'received_from_tailor_at' => 'datetime',
+        'sent_for_repair_at' => 'datetime',
+        'repaired_at' => 'datetime',
+        'repaired_delivered_at' => 'datetime',
     ];
 
     /**

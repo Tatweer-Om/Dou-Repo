@@ -7,7 +7,7 @@
 
 <main class="flex-1 p-4 md:p-6"
     x-data="{ showDetails: false, loading: false, showQuantity: false, actionType: 'add' }">
-    <div class="w-full max-w-screen-xl xl:pr-8 xl:pl-64 mx-auto">
+    <div class="w-full max-w-[95%] xl:max-w-[98%] mx-auto">
 
         <!-- Page title and add button -->
         <div class="flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center gap-4 mb-6">
@@ -40,8 +40,8 @@
 
     <!-- Desktop table -->
     <section class="hidden xl:block mt-6">
-        <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition">
-            <table class="w-full text-sm min-w-[1024px]">
+        <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition mx-auto" style="max-width: 100%;">
+            <table class="w-full text-sm min-w-[1400px] mx-auto">
                 <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800">
                     <tr>
                         <th class="text-right px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }}</th>

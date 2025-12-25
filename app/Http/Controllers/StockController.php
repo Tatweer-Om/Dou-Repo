@@ -275,6 +275,7 @@ public function update_stock(Request $request)
     return response()->json([
         'status'  => 'success',
         'message' => 'Stock Updated successfully!',
+        'redirect_url' => url('view_stock'),
     ]);
 }
 

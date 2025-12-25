@@ -113,8 +113,11 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
         // Validate required fields
         $request->validate([
             'customer.name' => 'required|string|max:255',
-            'customer.phone' => 'nullable|string|max:20',
+            'customer.phone' => 'required|string|max:20',
             'customer.source' => 'required|string|in:whatsapp,walkin',
+            'customer.area_id' => 'required|exists:areas,id',
+            'customer.city_id' => 'required|exists:cities,id',
+            'customer.address' => 'required|string',
             'orders' => 'required|array|min:1',
             'orders.*.stock_id' => 'nullable|exists:stocks,id',
             'orders.*.quantity' => 'required|integer|min:1',
@@ -123,9 +126,9 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
 
         // Create or find customer
         $phone = $request->input('customer.phone');
-        $governorate = $request->input('customer.governorate');
-        $city = $request->input('customer.city');
-        $area = $city ?: $request->input('customer.area');
+        $areaId = $request->input('customer.area_id'); // Governorate ID
+        $cityId = $request->input('customer.city_id'); // State/Area ID
+        $address = $request->input('customer.address');
         
         if (!empty($phone)) {
             // If phone exists, find or create by phone
@@ -133,16 +136,18 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
                 ['phone' => $phone],
                 [
                     'name' => $request->input('customer.name'),
-                    'governorate' => $governorate,
-                    'area' => $area,
+                    'area_id' => $areaId,
+                    'city_id' => $cityId,
+                    'address' => $address,
                 ]
             );
 
-            // Update customer if phone exists but name/governorate/area changed
+            // Update customer if phone exists but data changed
             if ($customer->wasRecentlyCreated === false) {
                 $customer->name = $request->input('customer.name');
-                $customer->governorate = $governorate;
-                $customer->area = $area;
+                $customer->area_id = $areaId;
+                $customer->city_id = $cityId;
+                $customer->address = $address;
                 $customer->save();
             }
         } else {
@@ -150,8 +155,9 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
             $customer = new Customer();
             $customer->name = $request->input('customer.name');
             $customer->phone = null;
-            $customer->governorate = $governorate;
-            $customer->area = $area;
+            $customer->area_id = $areaId;
+            $customer->city_id = $cityId;
+            $customer->address = $address;
             $customer->save();
         }
 
@@ -348,7 +354,7 @@ public function view_special_order()
 public function getOrdersList(Request $request)
 {
     try {
-        $orders = SpecialOrder::with(['customer', 'items.stock.images', 'items.tailor'])
+        $orders = SpecialOrder::with(['customer.area', 'customer.city', 'items.stock.images', 'items.tailor'])
             ->orderBy('created_at', 'DESC')
             ->get();
 
@@ -367,6 +373,24 @@ public function getOrdersList(Request $request)
                     $itemImage = $item->stock->images->first()->image_path;
                 }
 
+                // Get original tailor from stock
+                $originalTailor = '';
+                $originalTailorName = '';
+                if ($item->stock && $item->stock->tailor_id) {
+                    $tailorIds = json_decode($item->stock->tailor_id, true);
+                    if (!is_array($tailorIds)) {
+                        $tailorIds = [$tailorIds];
+                    }
+                    if (!empty($tailorIds)) {
+                        $tailors = \App\Models\Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+                        $originalTailorName = implode(', ', $tailors);
+                        $originalTailor = $item->stock->tailor_id;
+                    }
+                }
+
+                // Get current tailor (if changed when sending to tailor)
+                $currentTailorName = $item->tailor ? $item->tailor->tailor_name : null;
+
                 return [
                     'id' => $item->id,
                     'abaya_code' => $item->abaya_code ?? 'N/A',
@@ -381,7 +405,9 @@ public function getOrdersList(Request $request)
                     'notes' => $item->notes ?? '',
                     'tailor_status' => $item->tailor_status ?? 'new',
                     'tailor_id' => $item->tailor_id,
-                    'tailor_name' => $item->tailor ? $item->tailor->tailor_name : null,
+                    'tailor_name' => $currentTailorName,
+                    'original_tailor' => $originalTailor,
+                    'original_tailor_name' => $originalTailorName,
                 ];
             });
 
@@ -394,8 +420,35 @@ public function getOrdersList(Request $request)
             }
 
             $customer = $order->customer;
-            $governorate = optional($customer)->governorate ?? '';
-            $city = optional($customer)->area ?? '';
+            
+            // Get governorate from area relationship or fallback to direct field
+            $governorate = '';
+            if ($customer && $customer->area) {
+                // Use locale to get the correct language version
+                $locale = session('locale', 'en');
+                if ($locale === 'ar') {
+                    $governorate = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+                } else {
+                    $governorate = $customer->area->area_name_en ?? $customer->area->area_name_ar ?? '';
+                }
+            } elseif ($customer && isset($customer->governorate)) {
+                $governorate = $customer->governorate;
+            }
+            
+            // Get city/state from city relationship or fallback to direct field
+            $city = '';
+            if ($customer && $customer->city) {
+                // Use locale to get the correct language version
+                $locale = session('locale', 'en');
+                if ($locale === 'ar') {
+                    $city = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+                } else {
+                    $city = $customer->city->city_name_en ?? $customer->city->city_name_ar ?? '';
+                }
+            } elseif ($customer && isset($customer->area)) {
+                $city = $customer->area; // Fallback for old data
+            }
+            
             $location = trim($governorate . ($city ? ' - ' . $city : ''));
 
             // Calculate and update order status based on items' tailor_status
@@ -1017,6 +1070,7 @@ public function getMaintenanceData()
                     'cost_bearer' => $item->maintenance_cost_bearer ?? null,
                     'transfer_number' => $item->maintenance_transfer_number ?? null,
                     'order_status' => $order ? $order->status : null,
+                    'maintenance_notes' => $item->maintenance_notes ?? null,
                 ];
             });
 
@@ -1080,6 +1134,7 @@ public function getRepairHistory()
                     'repair_cost' => $item->maintenance_repair_cost ?? 0,
                     'cost_bearer' => $item->maintenance_cost_bearer ?? null,
                     'maintenance_status' => $item->maintenance_status,
+                    'maintenance_notes' => $item->maintenance_notes ?? null,
                 ];
             });
 
@@ -1102,6 +1157,7 @@ public function sendForRepair(Request $request)
     try {
         $itemId = $request->input('item_id');
         $tailorId = $request->input('tailor_id');
+        $maintenanceNotes = $request->input('maintenance_notes');
 
         if (!$itemId || !$tailorId) {
             return response()->json([
@@ -1113,6 +1169,7 @@ public function sendForRepair(Request $request)
         $item = SpecialOrderItem::findOrFail($itemId);
         $item->maintenance_status = 'delivered_to_tailor';
         $item->maintenance_tailor_id = $tailorId;
+        $item->maintenance_notes = $maintenanceNotes;
         $item->sent_for_repair_at = now();
         $item->save();
 
@@ -1204,7 +1261,7 @@ public function markRepairedDelivered(Request $request)
 public function showBill($id)
 {
     try {
-        $specialOrder = SpecialOrder::with(['customer', 'items.stock.images'])
+        $specialOrder = SpecialOrder::with(['customer.area', 'customer.city', 'items.stock.images'])
             ->findOrFail($id);
         
         // Generate order number: YYYY-00ID (e.g., 2025-0001)
@@ -1219,6 +1276,266 @@ public function showBill($id)
         \Log::error('Error showing special order bill: ' . $e->getMessage());
         abort(404, 'Special order not found');
     }
-}
+    }
+
+    /**
+     * Show tailor orders list page
+     */
+    public function tailorOrdersList()
+    {
+        $tailors = Tailor::orderBy('tailor_name')->get();
+        return view('tailors.tailor_orders_list', compact('tailors'));
+    }
+
+    /**
+     * Get tailor orders list data
+     */
+    public function getTailorOrdersList(Request $request)
+    {
+        try {
+            $tailorId = $request->input('tailor_id');
+            
+            if (!$tailorId) {
+                return response()->json([
+                    'success' => true,
+                    'orders' => []
+                ]);
+            }
+
+            $items = SpecialOrderItem::with([
+                'specialOrder.customer.city',
+                'specialOrder.customer.area',
+                'specialOrder.customer'
+            ])
+            ->where('tailor_id', $tailorId)
+            ->whereNotNull('tailor_id')
+            ->orderByRaw('COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at) DESC')
+            ->paginate(10);
+
+            $formattedOrders = $items->map(function($item) {
+                $order = $item->specialOrder;
+                $customer = $order->customer ?? null;
+                
+                // Get size measurements
+                $sizeInfo = [];
+                if ($item->abaya_length) $sizeInfo[] = 'Length: ' . $item->abaya_length;
+                if ($item->bust) $sizeInfo[] = 'Bust: ' . $item->bust;
+                if ($item->sleeves_length) $sizeInfo[] = 'Sleeves: ' . $item->sleeves_length;
+                $sizeText = !empty($sizeInfo) ? implode(', ', $sizeInfo) : '-';
+                
+                // Get address from city and area
+                $address = '';
+                if ($customer) {
+                    $addressParts = [];
+                    if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+                    if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+                    $address = implode(', ', array_filter($addressParts)) ?: '-';
+                }
+                
+                return [
+                    'id' => $item->id,
+                    'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+                    'dress_name' => $item->design_name ?? '-',
+                    'dress_code' => $item->abaya_code ?? '-',
+                    'size' => $sizeText,
+                    'quantity' => $item->quantity ?? 1,
+                    'buttons' => $item->buttons ? true : false,
+                    'gift' => $order->send_as_gift ? ($order->gift_text ?? 'Yes') : '-',
+                    'notes' => $item->notes ?? ($order->notes ?? '-'),
+                    'customer_name' => $customer->name ?? '-',
+                    'customer_phone' => $customer->phone ?? '-',
+                    'customer_address' => $address,
+                    'customer_country' => 'Oman', // Default or get from city if available
+                    'sent_at' => $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : '-',
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'orders' => $formattedOrders->values()->all(),
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Export tailor orders to PDF
+     */
+    public function exportTailorOrdersPDF(Request $request)
+    {
+        try {
+            $tailorId = $request->input('tailor_id');
+            
+            if (!$tailorId) {
+                return redirect()->back()->with('error', 'Please select a tailor');
+            }
+
+            $tailor = Tailor::findOrFail($tailorId);
+            
+            $items = SpecialOrderItem::with([
+                'specialOrder.customer.city',
+                'specialOrder.customer.area',
+                'specialOrder.customer'
+            ])
+            ->where('tailor_id', $tailorId)
+            ->whereNotNull('tailor_id')
+            ->orderByRaw('COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at) DESC')
+            ->get();
+
+            $orders = $items->map(function($item) {
+                $order = $item->specialOrder;
+                $customer = $order->customer ?? null;
+                
+                $sizeInfo = [];
+                if ($item->abaya_length) $sizeInfo[] = 'Length: ' . $item->abaya_length;
+                if ($item->bust) $sizeInfo[] = 'Bust: ' . $item->bust;
+                if ($item->sleeves_length) $sizeInfo[] = 'Sleeves: ' . $item->sleeves_length;
+                $sizeText = !empty($sizeInfo) ? implode(', ', $sizeInfo) : '-';
+                
+                $address = '';
+                if ($customer) {
+                    $addressParts = [];
+                    if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+                    if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+                    $address = implode(', ', array_filter($addressParts)) ?: '-';
+                }
+                
+                return [
+                    'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+                    'dress_name' => $item->design_name ?? '-',
+                    'dress_code' => $item->abaya_code ?? '-',
+                    'size' => $sizeText,
+                    'quantity' => $item->quantity ?? 1,
+                    'buttons' => $item->buttons ? 'Yes' : 'No',
+                    'gift' => $order->send_as_gift ? ($order->gift_text ?? 'Yes') : '-',
+                    'notes' => $item->notes ?? ($order->notes ?? '-'),
+                    'customer_name' => $customer->name ?? '-',
+                    'customer_phone' => $customer->phone ?? '-',
+                    'customer_address' => $address,
+                    'customer_country' => 'Oman',
+                ];
+            });
+
+            $html = view('tailors.tailor_orders_pdf', compact('orders', 'tailor'))->render();
+            
+            // Use dompdf if available, otherwise return HTML view
+            if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+                return $pdf->download('tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.pdf');
+            } else {
+                // Fallback: return HTML view for printing
+                return view('tailors.tailor_orders_pdf', compact('orders', 'tailor'));
+            }
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error generating PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Export tailor orders to Excel
+     */
+    public function exportTailorOrdersExcel(Request $request)
+    {
+        try {
+            $tailorId = $request->input('tailor_id');
+            
+            if (!$tailorId) {
+                return redirect()->back()->with('error', 'Please select a tailor');
+            }
+
+            $tailor = Tailor::findOrFail($tailorId);
+            
+            $items = SpecialOrderItem::with([
+                'specialOrder.customer.city',
+                'specialOrder.customer.area',
+                'specialOrder.customer'
+            ])
+            ->where('tailor_id', $tailorId)
+            ->whereNotNull('tailor_id')
+            ->orderByRaw('COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at) DESC')
+            ->get();
+
+            $data = [];
+            $data[] = ['Order No', 'Dress Name', 'Dress Code', 'Size', 'Quantity', 'Buttons', 'Gift', 'Notes', 'Customer Name', 'Phone', 'Address', 'Country'];
+            
+            foreach ($items as $item) {
+                $order = $item->specialOrder;
+                $customer = $order->customer ?? null;
+                
+                $sizeInfo = [];
+                if ($item->abaya_length) $sizeInfo[] = 'Length: ' . $item->abaya_length;
+                if ($item->bust) $sizeInfo[] = 'Bust: ' . $item->bust;
+                if ($item->sleeves_length) $sizeInfo[] = 'Sleeves: ' . $item->sleeves_length;
+                $sizeText = !empty($sizeInfo) ? implode(', ', $sizeInfo) : '-';
+                
+                $address = '';
+                if ($customer) {
+                    $addressParts = [];
+                    if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+                    if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+                    $address = implode(', ', array_filter($addressParts)) ?: '-';
+                }
+                
+                $data[] = [
+                    'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+                    $item->design_name ?? '-',
+                    $item->abaya_code ?? '-',
+                    $sizeText,
+                    $item->quantity ?? 1,
+                    $item->buttons ? 'Yes' : 'No',
+                    $order->send_as_gift ? ($order->gift_text ?? 'Yes') : '-',
+                    $item->notes ?? ($order->notes ?? '-'),
+                    $customer->name ?? '-',
+                    $customer->phone ?? '-',
+                    $address,
+                    'Oman',
+                ];
+            }
+
+            // Use PhpSpreadsheet if available
+            if (class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+                $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->fromArray($data, null, 'A1');
+                
+                // Auto-size columns
+                foreach (range('A', 'L') as $col) {
+                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+                
+                $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+                $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.xlsx';
+                
+                header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                header('Content-Disposition: attachment;filename="' . $filename . '"');
+                header('Cache-Control: max-age=0');
+                
+                $writer->save('php://output');
+                exit;
+            } else {
+                // Fallback: CSV export
+                $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.csv';
+                header('Content-Type: text/csv');
+                header('Content-Disposition: attachment;filename="' . $filename . '"');
+                
+                $output = fopen('php://output', 'w');
+                foreach ($data as $row) {
+                    fputcsv($output, $row);
+                }
+                fclose($output);
+                exit;
+            }
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error generating Excel: ' . $e->getMessage());
+        }
+    }
 
 }

@@ -14,10 +14,10 @@
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">{{ trans('messages.monthly_sales_settlements', [], session('locale')) }}</h1>
         <p class="text-gray-500 text-sm">{{ trans('messages.settlement_description', [], session('locale')) }}</p>
       </div>
-      <a href="/boutiques/index.php"
+      <!-- <a href="/boutiques/index.php"
          class="w-full sm:w-auto px-4 py-2 rounded-lg bg-[var(--primary-color)] text-white hover:opacity-90 font-semibold text-center">
         {{ trans('messages.back_to_boutiques', [], session('locale')) }}
-      </a>
+      </a> -->
     </div>
 
     <!-- Tabs -->
@@ -213,12 +213,12 @@
           <table class="w-full text-sm min-w-[1100px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.operation_number', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.boutique', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.number_of_items', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sales_currency', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.difference', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.operation_number', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.boutique', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.number_of_items', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.sales_currency', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.difference', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.attachment', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.details', [], session('locale')) }}</th>
               </tr>
@@ -229,12 +229,12 @@
               </template>
               <template x-for="h in historyFiltered" :key="h.no">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold text-[var(--primary-color)]" x-text="h.no"></td>
-                  <td class="px-3 py-2" x-text="h.month"></td>
-                  <td class="px-3 py-2" x-text="h.boutique_name || boutiqueName(h.boutique)"></td>
-                  <td class="px-3 py-2" x-text="h.items"></td>
-                  <td class="px-3 py-2 font-bold" x-text="formatCurrency(h.amount)"></td>
-                  <td class="px-3 py-2" x-text="h.diff"></td>
+                  <td class="px-3 py-2 text-center font-semibold text-[var(--primary-color)]" x-text="h.no"></td>
+                  <td class="px-3 py-2 text-center" x-text="h.month"></td>
+                  <td class="px-3 py-2 text-center" x-text="h.boutique_name || boutiqueName(h.boutique)"></td>
+                  <td class="px-3 py-2 text-center" x-text="h.items"></td>
+                  <td class="px-3 py-2 text-center font-bold" x-text="formatCurrency(h.amount)"></td>
+                  <td class="px-3 py-2 text-center" x-text="h.diff"></td>
                   <td class="px-3 py-2 text-center">
                     <template x-if="h.attachment_path">
                       <a :href="'/' + h.attachment_path" target="_blank" 
@@ -313,6 +313,159 @@
       </div>
     </div>
   </div>
+
+  <!-- Settlement Details Modal -->
+  <div x-show="showSettlementDetails" x-transition.opacity x-cloak class="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
+    <div @click.away="showSettlementDetails=false" class="bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center p-4 border-b bg-gradient-to-r from-pink-50 to-purple-50">
+        <h3 class="text-lg font-bold text-[var(--primary-color)]">
+          {{ trans('messages.settlement_details', [], session('locale')) }} - 
+          <span x-text="settlementDetails.settlement_code || ''"></span>
+        </h3>
+        <button @click="showSettlementDetails=false" class="text-gray-500 hover:text-gray-700 text-xl font-bold">✖</button>
+      </div>
+      
+      <div class="p-4 overflow-y-auto flex-1">
+        <template x-if="settlementDetailsLoading">
+          <div class="text-center py-10">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary-color)]"></div>
+            <p class="mt-2 text-gray-500">{{ trans('messages.loading', [], session('locale')) }}...</p>
+          </div>
+        </template>
+
+        <template x-if="!settlementDetailsLoading && settlementDetails.settlement_code">
+          <div class="space-y-6">
+            <!-- Settlement Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-pink-50 rounded-xl">
+              <div>
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.boutique', [], session('locale')) }}</label>
+                <p class="text-sm font-bold text-gray-900" x-text="settlementDetails.boutique_name || '-'"></p>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.month', [], session('locale')) }}</label>
+                <p class="text-sm font-bold text-gray-900" x-text="settlementDetails.month || '-'"></p>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.from', [], session('locale')) }}</label>
+                <p class="text-sm font-bold text-gray-900" x-text="settlementDetails.date_from || '-'"></p>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.to', [], session('locale')) }}</label>
+                <p class="text-sm font-bold text-gray-900" x-text="settlementDetails.date_to || '-'"></p>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="p-4 bg-green-50 rounded-xl border border-green-200">
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.number_of_items', [], session('locale')) }}</label>
+                <p class="text-2xl font-bold text-green-700" x-text="settlementDetails.number_of_items || 0"></p>
+              </div>
+              <div class="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.total_sales_currency', [], session('locale')) }}</label>
+                <p class="text-2xl font-bold text-blue-700" x-text="formatCurrency(settlementDetails.total_sales || 0)"></p>
+              </div>
+              <div class="p-4 rounded-xl border" 
+                   :class="(settlementDetails.total_difference || 0) == 0 ? 'bg-green-50 border-green-200' : 'bg-pink-50 border-pink-200'">
+                <label class="text-xs font-semibold text-gray-600">{{ trans('messages.difference', [], session('locale')) }}</label>
+                <p class="text-2xl font-bold" 
+                   :class="(settlementDetails.total_difference || 0) == 0 ? 'text-green-700' : 'text-pink-700'"
+                   x-text="settlementDetails.total_difference || 0"></p>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="overflow-x-auto rounded-xl border border-pink-100">
+              <table class="w-full text-sm min-w-[1100px]">
+                <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
+                  <tr>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sent', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.pulled', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sellable', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sold_report', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.difference', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.price', [], session('locale')) }}</th>
+                    <th class="px-3 py-2 text-right font-bold">{{ trans('messages.total', [], session('locale')) }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-if="!settlementDetails.items_data || settlementDetails.items_data.length === 0">
+                    <tr>
+                      <td colspan="10" class="px-3 py-4 text-center text-gray-400">
+                        {{ trans('messages.no_data_available', [], session('locale')) }}
+                      </td>
+                    </tr>
+                  </template>
+                  <template x-for="item in (settlementDetails.items_data || [])" :key="item.uid || (item.code + '-' + item.size + '-' + item.color)">
+                    <tr class="border-t"
+                        :class="(item.diff || 0) == 0 ? 'bg-green-50' : (Number(item.sold||0) > Number(item.sellable||0) ? 'bg-red-50' : 'bg-pink-50')">
+                      <td class="px-3 py-2 font-semibold" x-text="item.code || '-'"></td>
+                      <td class="px-3 py-2">
+                        <template x-if="item.color">
+                          <span class="inline-flex items-center gap-2">
+                            <template x-if="item.color_code">
+                              <span class="w-4 h-4 rounded-full border" :style="'background:' + item.color_code"></span>
+                            </template>
+                            <span x-text="item.color"></span>
+                          </span>
+                        </template>
+                        <template x-if="!item.color">—</template>
+                      </td>
+                      <td class="px-3 py-2" x-text="item.size || '—'"></td>
+                      <td class="px-3 py-2" x-text="item.sent || 0"></td>
+                      <td class="px-3 py-2" x-text="item.pulled || 0"></td>
+                      <td class="px-3 py-2" x-text="item.sellable || 0"></td>
+                      <td class="px-3 py-2" x-text="item.sold || 0"></td>
+                      <td class="px-3 py-2 font-semibold"
+                          :class="(item.diff || 0) != 0 ? 'text-[var(--primary-color)]' : 'text-gray-700'"
+                          x-text="item.diff || 0"></td>
+                      <td class="px-3 py-2" x-text="item.price || 0"></td>
+                      <td class="px-3 py-2 font-bold text-gray-900" x-text="formatCurrency(item.total || 0)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Attachment & Notes -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <label class="text-xs font-semibold text-gray-600 mb-2 block">{{ trans('messages.attachment', [], session('locale')) }}</label>
+                <template x-if="settlementDetails.attachment_path">
+                  <a :href="'/' + settlementDetails.attachment_path" target="_blank" 
+                     class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border hover:bg-gray-50 text-sm">
+                    <span class="material-symbols-outlined text-base">description</span>
+                    <span x-text="settlementDetails.attachment_name || '{{ trans('messages.view', [], session('locale')) }}'"></span>
+                  </a>
+                </template>
+                <template x-if="!settlementDetails.attachment_path">
+                  <span class="text-gray-400 text-sm">—</span>
+                </template>
+              </div>
+              <div class="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <label class="text-xs font-semibold text-gray-600 mb-2 block">{{ trans('messages.notes', [], session('locale')) }}</label>
+                <p class="text-sm text-gray-700" x-text="settlementDetails.notes || '—'"></p>
+              </div>
+            </div>
+
+            <!-- Created Info -->
+            <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-600">
+              <span>{{ trans('messages.added_by', [], session('locale')) }}: <span class="font-semibold" x-text="settlementDetails.added_by || '-'"></span></span>
+              <span class="mx-2">|</span>
+              <span>{{ trans('messages.created_at', [], session('locale')) }}: <span class="font-semibold" x-text="settlementDetails.created_at || '-'"></span></span>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div class="p-4 border-t text-right bg-gray-50">
+        <button @click="showSettlementDetails=false" class="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 w-full sm:w-auto">{{ trans('messages.close', [], session('locale')) }}</button>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -336,7 +489,7 @@ function settlementPage(){
     loading: false,
 
     // Helpers
-    formatCurrency(n){ const v=Number(n||0); return v.toLocaleString('ar-EG',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' ر.ع'; },
+    formatCurrency(n){ const v=Number(n||0); return v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' ر.ع'; },
     boutiqueName(id){ 
       if (!id) return '';
       const b = this.boutiques.find(x => x.id == id || 'boutique-' + x.id == id);

@@ -11,6 +11,7 @@ class PosOrders extends Model
     protected $fillable = [
         'customer_id',
         'order_type',
+        'delivery_status',
         'item_count',
         'paid_amount',
         'total_amount',
