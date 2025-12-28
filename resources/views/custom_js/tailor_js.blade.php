@@ -9,8 +9,16 @@
         $.each(res.data, function(i, tailor) {
             rows += `
             <tr class="hover:bg-pink-50/50 transition-tailors" data-id="${tailor.id}">
-              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_name}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_phone}</td>
+              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                <a href="{{ url('tailor_profile') }}/${tailor.id}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline font-semibold cursor-pointer transition">
+                  ${tailor.tailor_name}
+                </a>
+              </td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                  <a href="{{ url('tailor_profile') }}/${tailor.id}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline cursor-pointer transition">
+                    ${tailor.tailor_phone}
+                  </a>
+                </td>
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${tailor.tailor_address}</td>
 
                 <td class="px-4 sm:px-6 py-5 text-center">

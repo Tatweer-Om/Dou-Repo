@@ -84,4 +84,49 @@ class CustomerController extends Controller
         $customer->delete();
         return response()->json(['message' => 'Deleted']);
     }
+
+    public function profile($id)
+    {
+        $customer = Customer::with(['city', 'area', 'specialOrders.items.stock.images', 'specialOrders.items.tailor'])
+            ->findOrFail($id);
+
+        // Get special orders with all relationships
+        $specialOrders = $customer->specialOrders()->with(['items.stock.images', 'items.tailor'])->get();
+        
+        // Get POS orders where customer_id matches (as string) with details
+        $posOrders = \App\Models\PosOrders::where('customer_id', (string)$customer->id)
+            ->with(['details.stock.images', 'details.color', 'details.size'])
+            ->orderBy('created_at', 'DESC')
+            ->get();
+
+        // Special Orders Statistics
+        $specialOrdersTotalRevenue = $specialOrders->sum('total_amount');
+        $specialOrdersTotalItems = $specialOrders->sum(function($order) {
+            return $order->items->sum('quantity');
+        });
+        $specialOrdersCount = $specialOrders->count();
+
+        // POS Orders Statistics
+        $posOrdersTotalRevenue = $posOrders->sum('total_amount');
+        $posOrdersTotalItems = $posOrders->sum('item_count');
+        $posOrdersCount = $posOrders->count();
+
+        // Overall Statistics
+        $totalRevenue = $specialOrdersTotalRevenue + $posOrdersTotalRevenue;
+        $totalItems = $specialOrdersTotalItems + $posOrdersTotalItems;
+
+        return view('customers.customer_profile', compact(
+            'customer',
+            'specialOrders',
+            'posOrders',
+            'specialOrdersTotalRevenue',
+            'specialOrdersTotalItems',
+            'specialOrdersCount',
+            'posOrdersTotalRevenue',
+            'posOrdersTotalItems',
+            'posOrdersCount',
+            'totalRevenue',
+            'totalItems'
+        ));
+    }
 }

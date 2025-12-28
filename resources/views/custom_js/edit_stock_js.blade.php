@@ -47,6 +47,14 @@
 $('#update_abaya').on('submit', function(e) {
     e.preventDefault();
 
+    let $form = $(this);
+    let $submitBtn = $form.find('button[type="submit"]');
+    
+    // Check if already submitting
+    if ($submitBtn.prop('disabled')) {
+        return false;
+    }
+
     let abaya_code = $('#abaya_code').val().trim();
     let barcode = $('#barcode').val().trim();
     let design_name = $('#design_name').val();
@@ -66,6 +74,10 @@ $('#update_abaya').on('submit', function(e) {
     }
   
 
+    // Store original button text and disable button
+    let originalBtnText = $submitBtn.html();
+    $submitBtn.prop('disabled', true).css('opacity', '0.6').html('<?= trans("messages.processing", [], session("locale")) ?>...');
+
     let formData = new FormData(this);
 
     // Manually append files from Alpine.js
@@ -82,15 +94,24 @@ $('#update_abaya').on('submit', function(e) {
         },
         success: function(response) {
             if (response.status === 'success') {
-                show_notification('success', 'Stock added successfully!');
-                $('#abaya_form')[0].reset();
-                // Clear Alpine images array
-                if (window.imageUploaderComponent) {
-                    window.imageUploaderComponent.images = [];
-                }
+                show_notification('success', response.message || 'Stock updated successfully!');
+                // Redirect to view_stock after a short delay
+                setTimeout(function() {
+                    if (response.redirect_url) {
+                        window.location.href = response.redirect_url;
+                    } else {
+                        window.location.href = '{{ url("view_stock") }}';
+                    }
+                }, 1500);
+            } else {
+                // Re-enable button on unexpected response
+                $submitBtn.prop('disabled', false).css('opacity', '1').html(originalBtnText);
             }
         },
         error: function(xhr) {
+            // Re-enable button on error
+            $submitBtn.prop('disabled', false).css('opacity', '1').html(originalBtnText);
+            
             if (xhr.status === 422) {
                 let errors = xhr.responseJSON.errors;
                 $.each(errors, function(key, value) {

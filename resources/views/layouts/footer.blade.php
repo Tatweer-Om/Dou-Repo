@@ -64,6 +64,10 @@
          @include('custom_js.city_js')
           @elseif ($routeName == 'pos.orders.list')
          @include('custom_js.pos_orders_list_js')
+          @elseif ($routeName == 'tailor_orders_list')
+         @include('custom_js.tailor_orders_list_js')
+          @elseif ($routeName == 'customer_profile')
+         @include('custom_js.customer_profile_js')
             @elseif ($route_name == 'pos')
          @include('custom_js.pos_js')
     @endif

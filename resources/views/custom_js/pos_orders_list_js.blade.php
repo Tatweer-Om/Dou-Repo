@@ -2,11 +2,55 @@
     $(document).ready(function() {
         let currentPage = 1;
 
+        // Function to get delivery status badge HTML
+        function getDeliveryStatusBadge(status, orderTypeRaw) {
+            // Only show status for delivery orders
+            if (orderTypeRaw !== 'delivery') {
+                return '<span class="text-gray-400">-</span>';
+            }
+
+            if (!status || status === 'not_delivered') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-300">
+                    <span class="material-symbols-outlined text-sm align-middle">cancel</span>
+                    {{ trans('messages.not_delivered', [], session('locale')) }}
+                </span>`;
+            } else if (status === 'delivered') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
+                    <span class="material-symbols-outlined text-sm align-middle">check_circle</span>
+                    {{ trans('messages.delivered', [], session('locale')) }}
+                </span>`;
+            } else if (status === 'pending') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-300">
+                    <span class="material-symbols-outlined text-sm align-middle">schedule</span>
+                    {{ trans('messages.pending', [], session('locale')) }}
+                </span>`;
+            } else if (status === 'shipped') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-300">
+                    <span class="material-symbols-outlined text-sm align-middle">local_shipping</span>
+                    {{ trans('messages.shipped', [], session('locale')) }}
+                </span>`;
+            } else if (status === 'under_preparation') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-300">
+                    <span class="material-symbols-outlined text-sm align-middle">restaurant</span>
+                    {{ trans('messages.under_preparation', [], session('locale')) }}
+                </span>`;
+            } else if (status === 'under_repairing') {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 border border-orange-300">
+                    <span class="material-symbols-outlined text-sm align-middle">build</span>
+                    {{ trans('messages.under_repairing', [], session('locale')) }}
+                </span>`;
+            } else {
+                return `<span class="px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                    ${status}
+                </span>`;
+            }
+        }
+
         function loadOrders(page = 1) {
             currentPage = page;
             $.get("{{ url('pos/orders/list/data') }}?page=" + page, function(res) {
                 if (!res.success) {
-                    $('#ordersTableBody').html('<tr><td colspan="11" class="px-4 sm:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
+                    $('#ordersTableBody').html('<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
                     return;
                 }
 
@@ -16,27 +60,38 @@
                     $.each(res.orders, function(i, order) {
                         rows += `
                         <tr class="hover:bg-pink-50/50 transition-colors" data-id="${order.id}">
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-semibold">#${order.order_no}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.customer_name || '-'}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] font-semibold whitespace-nowrap">#${order.order_no}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${order.customer_name || '-'}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">
                                 <span class="px-2 py-1 rounded-full text-xs font-semibold ${order.order_type === 'Delivery' || order.order_type === 'توصيل' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
                                     ${order.order_type || '-'}
                                 </span>
                             </td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.date || '-'}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.time || '-'}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.items_count || 0}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${parseFloat(order.subtotal || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${parseFloat(order.discount || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-bold">${parseFloat(order.paid_amount || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
-                            <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${order.payment_methods || '-'}</td>
-                            <td class="px-4 sm:px-6 py-5 text-center">
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${order.date || '-'}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${order.time || '-'}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] text-center whitespace-nowrap">${order.items_count || 0}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${parseFloat(order.subtotal || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${parseFloat(order.discount || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] font-bold whitespace-nowrap">${parseFloat(order.paid_amount || 0).toFixed(3)} {{ trans('messages.omr', [], session('locale')) }}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap min-w-[150px]">${order.payment_methods || '-'}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap min-w-[140px]">
+                                ${getDeliveryStatusBadge(order.delivery_status || 'not_delivered', order.order_type_raw)}
+                            </td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-center whitespace-nowrap">
                                 <div class="flex items-center justify-center gap-2">
                                     <button class="view-details-btn p-2 rounded-lg text-white bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] transition shadow-sm" 
                                             data-order-data='${JSON.stringify(order)}'
                                             title="{{ trans('messages.view_details', [], session('locale')) }}">
                                         <span class="material-symbols-outlined text-[22px]">visibility</span>
                                     </button>
+                                    ${(order.order_type_raw === 'delivery' || order.order_type === '{{ trans('messages.delivery', [], session('locale')) }}') ? `
+                                    <button class="update-status-btn p-2 rounded-lg text-white bg-amber-600 hover:bg-amber-700 transition shadow-sm" 
+                                            data-order-id="${order.id}"
+                                            data-order-status="${order.delivery_status || 'not_delivered'}"
+                                            title="{{ trans('messages.update_delivery_status', [], session('locale')) }}">
+                                        <span class="material-symbols-outlined text-[22px]">local_shipping</span>
+                                    </button>
+                                    ` : ''}
                                     <button onclick="window.open('{{ url('pos_bill') }}?order_id=${order.id}', '_blank')" 
                                             class="p-2 rounded-lg text-white bg-green-600 hover:bg-green-700 transition shadow-sm"
                                             title="{{ trans('messages.print', [], session('locale')) }}">
@@ -48,7 +103,7 @@
                         `;
                     });
                 } else {
-                    rows = '<tr><td colspan="11" class="px-4 sm:px-6 py-8 text-center text-gray-500">{{ trans('messages.no_orders', [], session('locale')) ?: 'No orders found' }}</td></tr>';
+                    rows = '<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-gray-500">{{ trans('messages.no_orders', [], session('locale')) ?: 'No orders found' }}</td></tr>';
                 }
                 $('#ordersTableBody').html(rows);
 
@@ -78,7 +133,7 @@
                 }
                 $('#pagination').html(pagination);
             }).fail(function() {
-                $('#ordersTableBody').html('<tr><td colspan="10" class="px-4 sm:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
+                $('#ordersTableBody').html('<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
             });
         }
 
@@ -251,6 +306,85 @@
         $('#productDetailsModal').on('click', function(e) {
             if ($(e.target).is('#productDetailsModal')) {
                 closeProductModal();
+            }
+        });
+
+        // Handle status update button click
+        $(document).on('click', '.update-status-btn', function() {
+            let orderId = $(this).data('order-id');
+            let currentStatus = $(this).data('order-status') || 'not_delivered';
+            
+            // Determine initial status based on current status
+            let initialStatus = 'not_delivered';
+            if (['pending', 'shipped', 'under_preparation', 'under_repairing'].includes(currentStatus)) {
+                initialStatus = 'not_delivered';
+            } else if (currentStatus) {
+                initialStatus = currentStatus;
+            }
+            
+            $('#deliveryStatusOrderId').val(orderId);
+            $('#deliveryStatusSelect').val(initialStatus);
+            $('#deliveryStatusModal').removeClass('hidden').addClass('flex');
+        });
+
+        // Handle status update form submission
+        $('#updateDeliveryStatusForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            let orderId = $('#deliveryStatusOrderId').val();
+            let status = $('#deliveryStatusSelect').val();
+            
+            $.ajax({
+                url: "{{ route('pos.orders.update_delivery_status') }}",
+                type: "POST",
+                data: {
+                    order_id: orderId,
+                    delivery_status: status,
+                    _token: "{{ csrf_token() }}"
+                },
+                success: function(res) {
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '{{ trans('messages.success', [], session('locale')) }}',
+                            text: res.message || '{{ trans('messages.delivery_status_updated', [], session('locale')) }}',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        $('#deliveryStatusModal').removeClass('flex').addClass('hidden');
+                        // Reload orders
+                        loadOrders(currentPage);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '{{ trans('messages.error', [], session('locale')) }}',
+                            text: res.message || '{{ trans('messages.error_updating_status', [], session('locale')) }}'
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    let message = '{{ trans('messages.error_updating_status', [], session('locale')) }}';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+                    Swal.fire({
+                        icon: 'error',
+                        title: '{{ trans('messages.error', [], session('locale')) }}',
+                        text: message
+                    });
+                }
+            });
+        });
+
+        // Close status modal
+        window.closeDeliveryStatusModal = function() {
+            $('#deliveryStatusModal').removeClass('flex').addClass('hidden');
+        };
+
+        // Close status modal on backdrop click
+        $('#deliveryStatusModal').on('click', function(e) {
+            if ($(e.target).is('#deliveryStatusModal')) {
+                closeDeliveryStatusModal();
             }
         });
     });

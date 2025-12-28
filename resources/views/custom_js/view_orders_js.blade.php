@@ -42,11 +42,11 @@ document.addEventListener('alpine:init', () => {
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'error',
-              title: 'خطأ',
-              text: data.message || 'حدث خطأ أثناء تحميل الطلبات'
+              title: '{{ trans('messages.error', [], session('locale')) }}',
+              text: data.message || '{{ trans('messages.error_loading_orders', [], session('locale')) ?: 'Error loading orders' }}'
             });
           } else {
-            alert('حدث خطأ أثناء تحميل الطلبات: ' + (data.message || ''));
+            alert('{{ trans('messages.error_loading_orders', [], session('locale')) ?: 'Error loading orders' }}: ' + (data.message || ''));
           }
         }
       } catch (error) {
@@ -54,11 +54,11 @@ document.addEventListener('alpine:init', () => {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
-            title: 'خطأ',
-            text: 'حدث خطأ أثناء تحميل الطلبات'
+            title: '{{ trans('messages.error', [], session('locale')) }}',
+            text: '{{ trans('messages.error_loading_orders', [], session('locale')) ?: 'Error loading orders' }}'
           });
         } else {
-          alert('حدث خطأ أثناء تحميل الطلبات');
+          alert('{{ trans('messages.error_loading_orders', [], session('locale')) ?: 'Error loading orders' }}');
         }
       } finally {
         this.loading = false;
@@ -237,7 +237,12 @@ document.addEventListener('alpine:init', () => {
 
     /* -------- التاريخ -------- */
     formatDate(d) { 
-      return new Date(d).toLocaleDateString('ar-EG'); 
+      if (!d) return '—';
+      const date = new Date(d);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
     },
 
     daysAgo(d) {
@@ -250,6 +255,12 @@ document.addEventListener('alpine:init', () => {
     openViewModal(order) {
       this.viewOrder = order;
       this.showViewModal = true;
+    },
+
+    /* -------- PRINT BILL -------- */
+    printBill(orderId) {
+      const billUrl = '{{ url("special-order-bill") }}/' + orderId;
+      window.open(billUrl, '_blank');
     },
 
     /* -------- دفع -------- */
@@ -328,7 +339,7 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('حدث خطأ أثناء تسجيل الدفعة');
+        alert('{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}');
       }
     },
 
@@ -389,7 +400,7 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('حدث خطأ أثناء تحديث حالة التسليم');
+        alert('{{ trans('messages.error_updating_delivery', [], session('locale')) ?: 'Error updating delivery status' }}');
       }
     },
 
@@ -445,7 +456,7 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('حدث خطأ أثناء تحديث حالة التسليم');
+        alert('{{ trans('messages.error_updating_delivery', [], session('locale')) ?: 'Error updating delivery status' }}');
       }
     },
 
@@ -507,7 +518,7 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('حدث خطأ أثناء حذف الطلب');
+        alert('{{ trans('messages.error_deleting_order', [], session('locale')) ?: 'Error deleting order' }}');
       }
     }
 

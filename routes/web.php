@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use App\Http\Controllers\SizeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ColorController;
@@ -21,6 +22,9 @@ use App\Http\Controllers\CityController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\SMSController;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -28,6 +32,16 @@ Route::get('/', function () {
     }
     return redirect()->route('login_page');
 });
+
+// Language/Locale change route
+Route::post('/change-locale', function (Request $request) {
+    $locale = $request->input('locale', 'ar');
+    if (in_array($locale, ['ar', 'en'])) {
+        session(['locale' => $locale]);
+        return response()->json(['success' => true, 'locale' => $locale]);
+    }
+    return response()->json(['success' => false, 'message' => 'Invalid locale'], 400);
+})->name('change_locale');
 
 Route::get('dashboard', [HomeController::class, 'index'])->name('dashboard');
 Route::get('dashboard/monthly-data', [HomeController::class, 'getMonthlyData'])->name('dashboard.monthly_data');
@@ -115,6 +129,24 @@ Route::delete('categories/{category}', [CategoryController::class, 'destroy']);
 Route::get('categories/list', [CategoryController::class, 'getCategories']);
 Route::get('categories/{category}', [CategoryController::class, 'show']);
 
+Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense_category');
+Route::post('expense-categories', [ExpenseCategoryController::class, 'store']);
+Route::put('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
+Route::delete('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
+Route::get('expense-categories/list', [ExpenseCategoryController::class, 'getExpenseCategories']);
+Route::get('expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'show']);
+
+Route::get('expenses', [ExpenseController::class, 'index'])->name('expense');
+Route::post('expenses', [ExpenseController::class, 'store']);
+Route::put('expenses/{expense}', [ExpenseController::class, 'update']);
+Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
+Route::get('expenses/list', [ExpenseController::class, 'getExpenses']);
+Route::get('expenses/{expense}', [ExpenseController::class, 'show']);
+
+Route::get('sms', [SMSController::class, 'index'])->name('sms');
+Route::post('sms', [SMSController::class, 'store']);
+Route::get('sms/get', [SMSController::class, 'getSMS']);
+
 Route::get('accounts', [AccountController::class, 'index'])->name('account');
 Route::post('accounts', [AccountController::class, 'store']);
 Route::put('accounts/{account}', [AccountController::class, 'update']);
@@ -145,6 +177,7 @@ Route::put('customers/{customer}', [CustomerController::class, 'update']);
 Route::delete('customers/{customer}', [CustomerController::class, 'destroy']);
 Route::get('customers/list', [CustomerController::class, 'getCustomers']);
 Route::get('customers/{customer}', [CustomerController::class, 'show']);
+Route::get('customer_profile/{id}', [CustomerController::class, 'profile'])->name('customer_profile');
 
 
 
@@ -216,10 +249,15 @@ Route::get('send_request', [SpecialOrderController::class, 'send_request'])->nam
 Route::get('send_request/data', [SpecialOrderController::class, 'getTailorAssignmentsData'])->name('send_request.data');
 Route::post('send_request/assign', [SpecialOrderController::class, 'assignItemsToTailor'])->name('send_request.assign');
 Route::post('send_request/receive', [SpecialOrderController::class, 'markTailorItemsReceived'])->name('send_request.receive');
+Route::get('tailor-orders-list', [SpecialOrderController::class, 'tailorOrdersList'])->name('tailor_orders_list');
+Route::get('tailor-orders-list/data', [SpecialOrderController::class, 'getTailorOrdersList'])->name('tailor_orders_list.data');
+Route::get('tailor-orders-list/export-pdf', [SpecialOrderController::class, 'exportTailorOrdersPDF'])->name('tailor_orders_list.export_pdf');
+Route::get('tailor-orders-list/export-excel', [SpecialOrderController::class, 'exportTailorOrdersExcel'])->name('tailor_orders_list.export_excel');
 
 Route::get('maintenance', [SpecialOrderController::class, 'maintenance'])->name('maintenance');
 Route::get('maintenance/data', [SpecialOrderController::class, 'getMaintenanceData'])->name('maintenance.data');
 Route::get('maintenance/history', [SpecialOrderController::class, 'getRepairHistory'])->name('maintenance.history');
+Route::get('maintenance/sent-to-tailors', [SpecialOrderController::class, 'getSentToTailorsList'])->name('maintenance.sent_to_tailors');
 Route::post('maintenance/send-repair', [SpecialOrderController::class, 'sendForRepair'])->name('maintenance.send_repair');
 Route::post('maintenance/receive', [SpecialOrderController::class, 'receiveFromTailor'])->name('maintenance.receive');
 Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepairedDelivered'])->name('maintenance.deliver');
@@ -267,4 +305,5 @@ Route::post('pos/orders', [PosController::class, 'store'])->name('pos.orders.sto
 Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.cities.by_area');
 Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
 Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');
+Route::post('pos/orders/update-delivery-status', [PosController::class, 'updateDeliveryStatus'])->name('pos.orders.update_delivery_status');
 Route::get('pos_bill', [PosController::class, 'pos_bill'])->name('pos_bill');

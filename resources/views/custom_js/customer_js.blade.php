@@ -44,15 +44,30 @@
                     (customer.area.area_name_en || customer.area.area_name_ar)) : 
                 '-';
             
+            const profileUrl = "{{ url('customer_profile') }}/" + customer.id;
+            const customerName = customer.name || '-';
+            const customerPhone = customer.phone || '-';
+            
             rows += `
             <tr class="hover:bg-pink-50/50 transition-colors" data-id="${customer.id}">
-              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${customer.name || '-'}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${customer.phone || '-'}</td>
+              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                <a href="${profileUrl}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline font-semibold transition">
+                  ${customerName}
+                </a>
+              </td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">
+                  <a href="${profileUrl}" class="text-[var(--primary-color)] hover:text-[var(--primary-darker)] hover:underline transition">
+                    ${customerPhone}
+                  </a>
+                </td>
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${cityDisplay}</td>
                 <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${areaDisplay}</td>
 
                 <td class="px-4 sm:px-6 py-5 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
+    <a href="{{ url('customer_profile') }}/${customer.id}" class="icon-btn text-[var(--primary-color)] hover:text-[var(--primary-darker)]" title="{{ trans('messages.view_profile', [], session('locale')) ?: 'View Profile' }}">
+        <span class="material-symbols-outlined">person</span>
+    </a>
     <button class="edit-btn icon-btn">
         <span class="material-symbols-outlined">edit</span>
     </button>

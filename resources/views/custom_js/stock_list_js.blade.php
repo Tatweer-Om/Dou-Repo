@@ -4,10 +4,23 @@
 
     // Translations
     const trans = {
-        details: "تفاصيل",
-        enter_quantity: "إدخال كميات",
-        edit: "تعديل",
-        delete: "حذف"
+        details: "{{ trans('messages.details', [], session('locale')) }}",
+        enter_quantity: "{{ trans('messages.enter_quantity', [], session('locale')) }}",
+        edit: "{{ trans('messages.edit', [], session('locale')) }}",
+        delete: "{{ trans('messages.delete', [], session('locale')) }}",
+        design: "{{ trans('messages.design', [], session('locale')) }}",
+        category: "{{ trans('messages.category', [], session('locale')) }}",
+        size: "{{ trans('messages.size', [], session('locale')) }}",
+        color: "{{ trans('messages.color', [], session('locale')) }}",
+        quantity: "{{ trans('messages.quantity', [], session('locale')) }}",
+        failed_to_load_details: "{{ trans('messages.failed_to_load_details', [], session('locale')) }}",
+        success_title: "{{ trans('messages.success_title', [], session('locale')) }}",
+        error_title: "{{ trans('messages.error_title', [], session('locale')) }}",
+        error_occurred: "{{ trans('messages.error_occurred', [], session('locale')) }}",
+        error_saving: "{{ trans('messages.error_saving', [], session('locale')) }}",
+        saving: "{{ trans('messages.saving', [], session('locale')) }}",
+        please_enter_pull_notes: "{{ trans('messages.please_enter_pull_notes', [], session('locale')) }}",
+        pieces: "{{ trans('messages.pieces', [], session('locale')) }}"
     };
 
     // Make loadStock globally accessible
@@ -37,18 +50,28 @@
 
                     const categoryName = stock.category ? stock.category.category_name : '-';
                     
+                    // Determine quantity status
+                    let quantityStatus = 'out_of_stock';
+                    if (quantity === 0) {
+                        quantityStatus = 'out_of_stock';
+                    } else if (quantity <= 5) {
+                        quantityStatus = 'low';
+                    } else {
+                        quantityStatus = 'available';
+                    }
+                    
                     tableRows += `
-                <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}">
-                    <td class="px-3 py-3">
+                <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}" data-quantity-status="${quantityStatus}">
+                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">
                         <img src="${image}" class="w-12 h-16 object-cover rounded-md" />
                     </td>
-                    <td class="px-3 py-3 font-bold">${stock.abaya_code}</td>
-                    <td class="px-3 py-3">${stock.design_name ?? '-'}</td>
-                    <td class="px-3 py-3">${categoryName}</td>
-                    <td class="px-3 py-3">${size}</td>
-                    <td class="px-3 py-3">${color}</td>
-                    <td class="px-3 py-3 font-bold">${quantity}</td>
-                    <td class="px-3 py-3 text-center">
+                    <td class="px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap">${stock.abaya_code}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${stock.design_name ?? '-'}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${categoryName}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${size}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 whitespace-nowrap">${color}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap">${quantity}</td>
+                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">
                         <div class="flex justify-center gap-5 text-[12px] font-semibold text-gray-700">
                            <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"
                                     onclick="openFullStockDetails(${stock.id})">
@@ -65,7 +88,7 @@
                                 data-bs-target="#quantityModal"
                                 onclick="openStockQuantity(${stock.id})">
                             <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
-                            Enter Quantity
+                            ${trans.enter_quantity}
                         </button>
 
 
@@ -104,19 +127,29 @@
 
                     const categoryName = stock.category ? stock.category.category_name : '-';
                     
+                    // Determine quantity status for mobile cards
+                    let quantityStatusMobile = 'out_of_stock';
+                    if (quantity === 0) {
+                        quantityStatusMobile = 'out_of_stock';
+                    } else if (quantity <= 5) {
+                        quantityStatusMobile = 'low';
+                    } else {
+                        quantityStatusMobile = 'available';
+                    }
+                    
                     mobileCards += `
-                <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden">
+                <div class="bg-white border border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition p-4 mb-4 md:hidden" data-quantity-status="${quantityStatusMobile}">
                     <h3 class="font-bold text-gray-900 truncate">${stock.abaya_code}</h3>
-                    <p>تصميم: ${stock.design_name ?? '-'}</p>
-                    <p>الفئة: ${categoryName}</p>
-                    <p>المقاس: ${size}</p>
-                    <p>اللون: ${color}</p>
-                    <p>الكمية: ${quantity}</p>
+                    <p>${trans.design}: ${stock.design_name ?? '-'}</p>
+                    <p>${trans.category}: ${categoryName}</p>
+                    <p>${trans.size}: ${size}</p>
+                    <p>${trans.color}: ${color}</p>
+                    <p>${trans.quantity}: ${quantity}</p>
                     <div class="flex justify-around mt-3 text-xs font-semibold">
                     <button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition d-none"
                             @click="$store.modals.showDetails = true">
                         <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-                        تفاصيل
+                        ${trans.details}
                     </button>
                         <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"
                                 onclick="openFullStockDetails(${stock.id})">
@@ -205,14 +238,43 @@
 
         // Client-side search
         $("#stock_search").on("keyup", function() {
-            let search = $(this).val().toLowerCase();
-            $("#desktop_stock_body tr").filter(function() {
-                $(this).toggle($(this).text().toLowerCase().indexOf(search) > -1);
-            });
-            $("#mobile_stock_cards > div").filter(function() {
-                $(this).toggle($(this).text().toLowerCase().indexOf(search) > -1);
-            });
+            applyFilters();
         });
+
+        // Quantity filter
+        $("#stock_filter").on("change", function() {
+            applyFilters();
+        });
+
+        // Function to apply both search and quantity filters
+        function applyFilters() {
+            let search = $("#stock_search").val().toLowerCase();
+            let filterValue = $("#stock_filter").val();
+
+            // Filter desktop table
+            $("#desktop_stock_body tr").each(function() {
+                let $row = $(this);
+                let rowText = $row.text().toLowerCase();
+                let quantityStatus = $row.data('quantity-status') || '';
+                
+                let matchesSearch = search === '' || rowText.indexOf(search) > -1;
+                let matchesFilter = filterValue === 'all' || quantityStatus === filterValue;
+                
+                $row.toggle(matchesSearch && matchesFilter);
+            });
+
+            // Filter mobile cards
+            $("#mobile_stock_cards > div").each(function() {
+                let $card = $(this);
+                let cardText = $card.text().toLowerCase();
+                let quantityStatus = $card.data('quantity-status') || '';
+                
+                let matchesSearch = search === '' || cardText.indexOf(search) > -1;
+                let matchesFilter = filterValue === 'all' || quantityStatus === filterValue;
+                
+                $card.toggle(matchesSearch && matchesFilter);
+            });
+        }
 
         // Initial load
         loadStock();
@@ -254,7 +316,7 @@ function stockDetails() {
                 },
                 error: (err) => {
                     console.error('Error:', err);
-                    alert('فشل تحميل التفاصيل');
+                    alert(trans.failed_to_load_details);
                     this.loading = false;
                     this.showDetails = false;
                 }
@@ -313,7 +375,7 @@ function openStockQuantity(stockId) {
         },
         error: function(err) {
             console.error('Error:', err);
-            alert('فشل تحميل التفاصيل');
+            alert(trans.failed_to_load_details);
             bsModal.hide(); // Close modal on error
         },
         complete: function() {
@@ -387,7 +449,7 @@ $(document).ready(function() {
         var modalFooter = modal.find('.modal-footer');
         
         // Disable submit button to prevent double submission
-        submitBtn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-2"></i>جاري الحفظ...');
+        submitBtn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-2"></i>' + trans.saving);
         
         // Ensure modal stays open and visible
         modal.css('display', 'block').addClass('show');
@@ -404,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const pullReason = pullTextarea ? pullTextarea.value.trim() : '';
 
         if (actionType === 'pull' && pullReason === '') {
-            show_notification('error', 'Please enter pull notes!');
+            show_notification('error', trans.please_enter_pull_notes);
             return;
         }
 
@@ -440,7 +502,7 @@ function show_notification(type, message) {
     
     Swal.fire({
         icon: 'success',
-        title: 'نجح!',
+        title: trans.success_title,
         text: response.message,
         timer: 2000,
         showConfirmButton: false
@@ -469,8 +531,8 @@ function show_notification(type, message) {
 
     Swal.fire({
         icon: 'error',
-        title: 'خطأ!',
-        text: response.message || 'حدث خطأ ما'
+        title: trans.error_title,
+        text: response.message || trans.error_occurred
     });
 
     submitBtn.prop('disabled', false).html(
@@ -486,14 +548,14 @@ function show_notification(type, message) {
                 console.error('Error:', error);
                 console.error('Response:', xhr.responseText);
                 
-                var errorMsg = 'حدث خطأ أثناء الحفظ';
+                var errorMsg = trans.error_saving;
                 if(xhr.responseJSON && xhr.responseJSON.message) {
                     errorMsg = xhr.responseJSON.message;
                 }
                 
                 Swal.fire({
                     icon: 'error',
-                    title: 'خطأ!',
+                    title: trans.error_title,
                     text: errorMsg
                 });
                 
@@ -599,7 +661,7 @@ function openFullStockDetails(stockId) {
                                     <div class="card-img-top position-relative" style="height: 200px; overflow: hidden;">
                                         <img src="${imagePath}" 
                                              class="w-100 h-100 object-cover" 
-                                             alt="Stock Image ${index + 1}"
+                                             alt="${trans.abaya_image} ${index + 1}"
                                              onerror="this.src='/images/placeholder.png'">
                                     </div>
                                 </div>
@@ -634,7 +696,7 @@ function openFullStockDetails(stockId) {
                                             </div>
                                         </div>
                                         <div class="text-end">
-                                            <span class="badge bg-primary fs-6 px-3 py-2">${item.quantity} {{ trans('messages.pieces', [], session('locale')) }}</span>
+                                            <span class="badge bg-primary fs-6 px-3 py-2">${item.quantity} ${trans.pieces}</span>
                                         </div>
                                     </div>
                                 </div>

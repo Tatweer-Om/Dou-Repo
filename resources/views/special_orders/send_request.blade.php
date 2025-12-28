@@ -2,7 +2,7 @@
 
 @section('main')
 @push('title')
-<title>{{ trans('messages.add_stock_lang', [], session('locale')) }}</title>
+<title>{{ trans('messages.send_new_abayas', [], session('locale')) }}</title>
 @endpush
 <style>
 /* وميض للصف المتأخر */
@@ -121,6 +121,7 @@
             <tr class="bg-gray-100 text-gray-700">
               <th class="p-2 border">{{ trans('messages.order_number', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.customer', [], session('locale')) }}</th>
+              <th class="p-2 border">{{ trans('messages.abaya', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</th>
               <th class="p-2 border">{{ trans('messages.sizes', [], session('locale')) }}</th>
               <th class="p-2 border">{{ trans('messages.tailor', [], session('locale')) }}</th>
@@ -129,10 +130,18 @@
           </thead>
 
           <tbody>
+            <template x-if="selectedItems.length === 0">
+              <tr>
+                <td colspan="6" class="p-4 text-center text-gray-500">
+                  {{ trans('messages.no_items_selected', [], session('locale')) }}
+                </td>
+              </tr>
+            </template>
             <template x-for="i in selectedItems" :key="i.rowId">
               <tr>
                 <td class="p-2 border" x-text="i.order_no || ('#' + i.orderId)"></td>
                 <td class="p-2 border" x-text="i.customer"></td>
+                <td class="p-2 border" x-text="i.abayaName || i.code || '—'"></td>
                 <td class="p-2 border text-center">
                   <span class="font-semibold" x-text="i.quantity || 1"></span>
                 </td>
@@ -142,8 +151,8 @@
                   {{ trans('messages.sleeves_length', [], session('locale')) }}: <span x-text="i.sleeves"></span><br>
                   {{ trans('messages.buttons', [], session('locale')) }}: <span x-text="i.buttons ? '{{ trans('messages.yes', [], session('locale')) }}' : '{{ trans('messages.no', [], session('locale')) }}'"></span>
                 </td>
-                <td class="p-2 border" x-text="i.tailor"></td>
-                <td class="p-2 border" x-text="i.notes"></td>
+                <td class="p-2 border" x-text="i.tailor_name || i.tailor || tailorNameById(i.tailor_id) || '—'"></td>
+                <td class="p-2 border" x-text="i.notes || '—'"></td>
               </tr>
             </template>
           </tbody>
@@ -220,9 +229,13 @@
       <!-- PDF Print Button -->
       <div class="flex gap-3 mb-4">
         <button @click="showPrintModal=true"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow flex items-center gap-1">
+                :disabled="selectedItems.length === 0"
+                :class="selectedItems.length === 0 
+                  ? 'bg-gray-400 cursor-not-allowed text-white px-4 py-2 rounded-xl shadow flex items-center gap-1'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow flex items-center gap-1'">
           <span class="material-symbols-outlined">print</span>
           {{ trans('messages.print_all_selected', [], session('locale')) }}
+          <span x-show="selectedItems.length > 0" class="ml-2 bg-white text-indigo-600 px-2 py-0.5 rounded-full text-xs font-bold" x-text="selectedItems.length"></span>
         </button>
       </div>
 
@@ -234,6 +247,7 @@
           <thead class="bg-gray-100 text-gray-700">
             <tr>
               <th class="py-3 px-4 text-center">{{ trans('messages.receive', [], session('locale')) }}</th>
+              <th class="py-3 px-4 text-center">{{ trans('messages.select', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.order', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.customer', [], session('locale')) }}</th>
               <th class="py-3 px-4 text-right">{{ trans('messages.abaya', [], session('locale')) }}</th>
@@ -257,6 +271,13 @@
                          class="w-4 h-4 text-indigo-600">
                 </td>
 
+                <!-- checkbox print -->
+                <td class="py-3 px-4 text-center">
+                  <input type="checkbox" @change="toggleSelection(item)"
+                         :checked="selectedItems.find(i => i.rowId === item.rowId)"
+                         class="w-4 h-4 text-indigo-600">
+                </td>
+
                 <!-- order no -->
                 <td class="py-3 px-4 font-medium text-indigo-600" x-text="item.order_no || ('#' + item.orderId)"></td>
 
@@ -267,8 +288,14 @@
                 <td class="py-3 px-4">
                   <div class="flex items-center gap-2">
                     <img :src="item.image" class="w-12 h-12 rounded-lg border object-cover">
-                    <div>
-                      <div class="font-semibold" x-text="item.abayaName"></div>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <div class="font-semibold" x-text="item.abayaName"></div>
+                        <button @click="openDetails(item)" 
+                                class="text-indigo-600 hover:text-indigo-800">
+                          <span class="material-symbols-outlined text-base">visibility</span>
+                        </button>
+                      </div>
                       <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
                     </div>
                   </div>
@@ -279,16 +306,9 @@
                   <span class="font-semibold text-indigo-600" x-text="item.quantity || 1"></span>
                 </td>
 
-                <!-- tailor + details button -->
-                <td class="py-3 px-4 flex items-center gap-2">
-
+                <!-- tailor -->
+                <td class="py-3 px-4">
                   <span x-text="item.tailor_name || item.tailor || tailorNameById(item.tailor_id)"></span>
-
-                  <button @click="openDetails(item)" 
-                          class="text-indigo-600 hover:text-indigo-800">
-                    <span class="material-symbols-outlined text-lg">visibility</span>
-                  </button>
-
                 </td>
 
                 <!-- status -->
@@ -307,7 +327,7 @@
             </template>
 
             <tr x-show="sortedProcessing().length === 0">
-              <td colspan="8" class="py-6 text-center text-gray-500">
+              <td colspan="9" class="py-6 text-center text-gray-500">
                 {{ trans('messages.no_abayas_sent_to_tailor', [], session('locale')) }}
               </td>
             </tr>
@@ -408,8 +428,14 @@
                 <td class="py-3 px-4">
                   <div class="flex items-center gap-2">
                     <img :src="item.image" class="w-12 h-12 rounded-lg border object-cover">
-                    <div>
-                      <div class="font-semibold" x-text="item.abayaName"></div>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <div class="font-semibold" x-text="item.abayaName"></div>
+                        <button @click="openDetails(item)" 
+                                class="text-indigo-600 hover:text-indigo-800">
+                          <span class="material-symbols-outlined text-base">visibility</span>
+                        </button>
+                      </div>
                       <div class="text-xs text-gray-500" x-text="'{{ trans('messages.code', [], session('locale')) }}: ' + item.code"></div>
                     </div>
                   </div>

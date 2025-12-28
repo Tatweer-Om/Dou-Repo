@@ -28,8 +28,9 @@ class UserController extends Controller
         $user->user_email = $request->user_email;
         $user->password = Hash::make($request->user_password);
         $user->notes = $request->notes;
+        $user->permissions = $request->permissions ?? [];
         $user->added_by = 'system';
-        $user->user_id = 1;
+        $user->user_id = auth()->id() ?? 1;
         $user->save();
 
         return response()->json($user);
@@ -39,8 +40,10 @@ class UserController extends Controller
 {
     $user->user_name   = $request->user_name;
     $user->user_phone  = $request->user_phone;
-    $user->user_address = $request->user_address;
-    $user->updated_by  = 'system_update';
+    $user->user_email  = $request->user_email;
+    $user->notes       = $request->notes;
+    $user->permissions = $request->permissions ?? [];
+    $user->updated_by  = auth()->user()->user_name ?? 'system_update';
 
     // Update password ONLY if the user enters a new one
     if (!empty($request->user_password)) {

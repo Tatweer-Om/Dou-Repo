@@ -75,6 +75,17 @@ $(document).on('click', '#pagination a', function(e) {
         // Initial load
         loadusers();
 
+        // Toggle all permissions
+        let allSelected = false;
+        $('#toggleAllPermissions').click(function() {
+            allSelected = !allSelected;
+            $('input[name="permissions[]"]').prop('checked', allSelected);
+            $(this).text(allSelected ? 
+                '<?= trans("messages.deselect_all", [], session("locale")) ?: "Deselect All" ?>' : 
+                '<?= trans("messages.select_all", [], session("locale")) ?: "Select All" ?>'
+            );
+        });
+
         $('#search_user').on('keyup', function() {
             let value = $(this).val().toLowerCase();
 
@@ -119,6 +130,7 @@ $(document).on('click', '#pagination a', function(e) {
                     // Reset form
                     $('#user_form')[0].reset();
                     $('#user_id').val('');
+                    $('input[name="permissions[]"]').prop('checked', false);
                     loadusers();
                     show_notification(
                         'success',
@@ -143,7 +155,7 @@ $(document).on('click', '#pagination a', function(e) {
 
 
         // Close modal button
-        $('#close_modal').click(function() {
+        $('#close_modal, #close_modal_btn').click(function() {
             // Reset Alpine.js state using custom event
             window.dispatchEvent(new CustomEvent('close-modal'));
         });
@@ -156,8 +168,18 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#user_name').val(user.user_name);
                 $('#user_phone').val(user.user_phone);
                  $('#user_email').val(user.user_email);
-                $('#user_password').val(user.password);
+                $('#user_password').val('');
                 $('#notes').val(user.notes);
+
+                // Clear all permission checkboxes first
+                $('input[name="permissions[]"]').prop('checked', false);
+
+                // Set permissions if they exist
+                if (user.permissions && Array.isArray(user.permissions)) {
+                    user.permissions.forEach(function(permission) {
+                        $('#permission_' + permission).prop('checked', true);
+                    });
+                }
 
                 // Open modal using Alpine event
                 window.dispatchEvent(new CustomEvent('open-modal'));

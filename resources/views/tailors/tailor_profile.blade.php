@@ -197,38 +197,112 @@
         </div> -->
 
         <!-- Send Material Form -->
-        <div class="bg-gray-50 rounded-2xl p-6 mb-6 border border-gray-200">
-          <h4 class="text-lg font-bold text-gray-800 mb-4">{{ trans('messages.send_new_material', [], session('locale')) }}</h4>
+        <div class="bg-gradient-to-br from-gray-50 to-pink-50 rounded-2xl p-6 mb-6 border border-gray-200 shadow-lg">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-[var(--primary-color)] rounded-full p-3">
+              <span class="material-symbols-outlined text-white text-2xl">send</span>
+            </div>
+            <div>
+              <h4 class="text-xl font-bold text-gray-800">{{ trans('messages.send_new_material', [], session('locale')) }}</h4>
+              <p class="text-sm text-gray-600">{{ trans('messages.send_material_description', [], session('locale')) ?: 'Select material and enter quantity to send to tailor' }}</p>
+            </div>
+          </div>
+          
           <form id="send_material_form" class="space-y-6">
             @csrf
             <input type="hidden" name="tailor_id" value="{{ $tailor->id }}">
             <input type="hidden" name="material_id" id="material_id" value="">
             
             <!-- Material Selection -->
-            <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h2 class="text-xl font-bold mb-5">{{ trans('messages.select_material', [], session('locale')) }}</h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-                <label class="flex flex-col col-span-2">
-                  <p class="text-sm font-medium mb-2">{{ trans('messages.material_name', [], session('locale')) }}</p>
-                  <select class="form-select h-12 rounded-lg px-4 border focus:ring-2 focus:ring-[var(--primary-color)]" 
-                          name="material_select" id="material_select" @change="onMaterialSelect()">
+            <div class="bg-white rounded-xl p-6 border-2 border-pink-200 shadow-md">
+              <div class="flex items-center gap-2 mb-5">
+                <span class="material-symbols-outlined text-[var(--primary-color)] text-xl">inventory_2</span>
+                <h2 class="text-xl font-bold text-gray-800">{{ trans('messages.select_material', [], session('locale')) }}</h2>
+              </div>
+              
+              <div class="space-y-5">
+                <!-- Material Name Selection with Search -->
+                <label class="flex flex-col relative">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-semibold text-gray-700">{{ trans('messages.material_name', [], session('locale')) }}</p>
+                    <span class="text-xs text-gray-500" x-show="materials.length > 0" x-text="`${materials.length} {{ trans('messages.materials_available', [], session('locale')) ?: 'materials available' }}`"></span>
+                  </div>
+                  <div class="relative" @click.away="showMaterialDropdown = false">
+                    <input type="text" 
+                           id="material_search" 
+                           x-model="materialSearch"
+                           placeholder="{{ trans('messages.search_material_placeholder', [], session('locale')) }}"
+                           class="form-input h-12 rounded-lg px-4 pr-10 border-2 border-gray-300 focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-color)] w-full"
+                           @input="filterMaterials()"
+                           @focus="if (filteredMaterials.length > 0) showMaterialDropdown = true"
+                           @keydown.escape="showMaterialDropdown = false"
+                           autocomplete="off">
+                    <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">search</span>
+                    
+                    <!-- Material Dropdown with Category -->
+                    <div x-show="showMaterialDropdown && filteredMaterials.length > 0" 
+                         x-transition
+                         x-cloak
+                         class="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto z-50">
+                      <template x-if="filteredMaterials.length === 0 && materialSearch">
+                        <div class="px-4 py-3 text-center text-gray-500 text-sm">
+                          {{ trans('messages.no_materials_found', [], session('locale')) ?: 'No materials found' }}
+                        </div>
+                      </template>
+                      <template x-for="material in filteredMaterials" :key="material.id">
+                        <div @click="selectMaterial(material)" 
+                             class="px-4 py-3 hover:bg-pink-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition">
+                          <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                              <p class="font-semibold text-gray-800" x-text="material.material_name"></p>
+                              <p class="text-xs text-gray-500 mt-1">
+                                <span class="inline-flex items-center gap-1">
+                                  <span class="material-symbols-outlined text-xs">category</span>
+                                  <span x-text="getCategoryLabel(material.category)"></span>
+                                </span>
+                                <span class="mx-2">•</span>
+                                <span class="inline-flex items-center gap-1">
+                                  <span class="material-symbols-outlined text-xs">straighten</span>
+                                  <span x-text="material.unit || '-'"></span>
+                                </span>
+                              </p>
+                            </div>
+                            <span class="material-symbols-outlined text-[var(--primary-color)] text-sm">arrow_forward</span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  
+                  <!-- Hidden select for form submission -->
+                  <select class="hidden" name="material_select" id="material_select" @change="onMaterialSelect()">
                     <option value="">{{ trans('messages.choose_material', [], session('locale')) }}</option>
                   </select>
                 </label>
 
-                <!-- Material Details (shown when material is selected) -->
-                <div class="col-span-2" x-show="selectedMaterial" x-transition>
-                  <div class="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4 border border-pink-200 shadow-sm">
-                    <h3 class="text-sm font-semibold text-gray-700 mb-3">{{ trans('messages.material_details', [], session('locale')) }}</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div class="bg-white rounded-lg p-3 border border-pink-100">
-                        <p class="text-xs text-gray-600 mb-1">{{ trans('messages.unit', [], session('locale')) }}</p>
-                        <p class="text-base font-bold text-[var(--primary-color)]" x-text="materialUnit || '-'"></p>
-                      </div>
-                      <div class="bg-white rounded-lg p-3 border border-pink-100">
-                        <p class="text-xs text-gray-600 mb-1">{{ trans('messages.category', [], session('locale')) }}</p>
-                        <p class="text-base font-bold text-[var(--primary-color)]" x-text="getCategoryLabel(materialCategory)"></p>
-                      </div>
+                <!-- Selected Material Info Card -->
+                <div x-show="selectedMaterial" 
+                     x-transition
+                     class="bg-gradient-to-r from-indigo-50 via-pink-50 to-purple-50 rounded-xl p-5 border-2 border-indigo-200 shadow-md">
+                  <div class="flex items-center gap-3 mb-4">
+                    <div class="bg-white rounded-full p-2 shadow-sm">
+                      <span class="material-symbols-outlined text-[var(--primary-color)]">check_circle</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">{{ trans('messages.selected_material', [], session('locale')) ?: 'Selected Material' }}</h3>
+                  </div>
+                  
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
+                      <p class="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">{{ trans('messages.material_name', [], session('locale')) }}</p>
+                      <p class="text-base font-bold text-gray-900" x-text="selectedMaterialName || '-'"></p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
+                      <p class="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">{{ trans('messages.category', [], session('locale')) }}</p>
+                      <p class="text-base font-bold text-[var(--primary-color)]" x-text="getCategoryLabel(materialCategory)"></p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
+                      <p class="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">{{ trans('messages.unit', [], session('locale')) }}</p>
+                      <p class="text-base font-bold text-[var(--primary-color)]" x-text="materialUnit || '-'"></p>
                     </div>
                   </div>
                 </div>
@@ -236,20 +310,42 @@
             </div>
 
             <!-- Quantity and Abayas Expected -->
-            <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm" x-show="selectedMaterial" x-transition>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+            <div class="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-md" x-show="selectedMaterial" x-transition>
+              <div class="flex items-center gap-2 mb-5">
+                <span class="material-symbols-outlined text-[var(--primary-color)] text-xl">numbers</span>
+                <h2 class="text-lg font-bold text-gray-800">{{ trans('messages.quantity_details', [], session('locale')) ?: 'Quantity Details' }}</h2>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <label class="flex flex-col">
-                  <p class="text-sm font-medium mb-2" x-text="quantityLabel"></p>
-                  <input type="number" placeholder="0" min="0.01" step="0.01"
-                    class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-[var(--primary-color)]" 
-                    name="quantity" id="quantity" />
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-gray-500 text-sm">scale</span>
+                    <p class="text-sm font-semibold text-gray-700" x-text="quantityLabel"></p>
+                  </div>
+                  <input type="number" 
+                         placeholder="0" 
+                         min="0.01" 
+                         step="0.01"
+                         class="form-input h-14 rounded-xl px-4 border-2 border-gray-300 focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-color)] text-lg font-semibold" 
+                         name="quantity" 
+                         id="quantity" />
+                  <p class="text-xs text-gray-500 mt-1" x-show="materialUnit">
+                    {{ trans('messages.unit', [], session('locale')) }}: <span x-text="materialUnit" class="font-semibold"></span>
+                  </p>
                 </label>
 
                 <label class="flex flex-col">
-                  <p class="text-sm font-medium mb-2">{{ trans('messages.abayas_expected', [], session('locale')) }}</p>
-                  <input type="number" placeholder="{{ trans('messages.abayas_expected_placeholder', [], session('locale')) }}" min="1"
-                    class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-[var(--primary-color)]" 
-                    name="abayas_expected" id="abayas_expected" />
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-gray-500 text-sm">checklist</span>
+                    <p class="text-sm font-semibold text-gray-700">{{ trans('messages.abayas_expected', [], session('locale')) }}</p>
+                  </div>
+                  <input type="number" 
+                         placeholder="{{ trans('messages.abayas_expected_placeholder', [], session('locale')) }}" 
+                         min="1"
+                         class="form-input h-14 rounded-xl px-4 border-2 border-gray-300 focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-color)] text-lg font-semibold" 
+                         name="abayas_expected" 
+                         id="abayas_expected" />
+                  <p class="text-xs text-gray-500 mt-1">{{ trans('messages.expected_abayas_hint', [], session('locale')) ?: 'Number of abayas expected from this material' }}</p>
                 </label>
               </div>
             </div>
@@ -339,6 +435,7 @@
                 <th class="px-4 py-3 font-semibold text-gray-700">Delivery Charges</th>
                 <th class="px-4 py-3 font-semibold text-gray-700">Repair Cost</th>
                 <th class="px-4 py-3 font-semibold text-gray-700">Cost Bearer</th>
+                <th class="px-4 py-3 font-semibold text-gray-700">Notes</th>
                 <th class="px-4 py-3 font-semibold text-gray-700">Status</th>
               </tr>
             </thead>
@@ -367,6 +464,9 @@
                     @else
                       <span class="text-gray-400">—</span>
                     @endif
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 max-w-xs">
+                    <p class="truncate" title="{{ $item['maintenance_notes'] ?? '—' }}">{{ $item['maintenance_notes'] ?? '—' }}</p>
                   </td>
                   <td class="px-4 py-3">
                     @if($item['status'] === 'received_from_tailor')

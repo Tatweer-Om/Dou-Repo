@@ -3,23 +3,56 @@ function tailorProfile() {
     return {
         tab: 'special_orders',
         selectedMaterial: false,
+        selectedMaterialName: '',
         materialUnit: '',
         materialCategory: '',
         quantityLabel: '',
         materials: [],
+        filteredMaterials: [],
+        showMaterialDropdown: false,
+        materialSearch: '',
         init() {
             this.loadMaterials();
         },
         loadMaterials() {
             $.get("{{ route('materials.all') }}", (data) => {
-                this.materials = data;
+                this.materials = data || [];
+                this.filteredMaterials = this.materials;
                 let select = $('#material_select');
                 select.empty();
                 select.append('<option value="">{{ trans("messages.choose_material", [], session("locale")) }}</option>');
-                data.forEach(material => {
-                    select.append(`<option value="${material.id}">${material.material_name}</option>`);
+                this.materials.forEach(material => {
+                    const categoryLabel = this.getCategoryLabel(material.category);
+                    select.append(`<option value="${material.id}" data-category="${material.category || ''}">${material.material_name}${material.category ? ' (' + categoryLabel + ')' : ''}</option>`);
                 });
+            }).fail(() => {
+                console.error('Error loading materials');
+                this.materials = [];
+                this.filteredMaterials = [];
             });
+        },
+        filterMaterials() {
+            const search = (this.materialSearch || '').toLowerCase().trim();
+            if (!search) {
+                this.filteredMaterials = this.materials;
+            } else {
+                this.filteredMaterials = this.materials.filter(m => {
+                    const nameMatch = (m.material_name || '').toLowerCase().includes(search);
+                    const categoryMatch = (this.getCategoryLabel(m.category) || '').toLowerCase().includes(search);
+                    const unitMatch = (m.unit || '').toLowerCase().includes(search);
+                    return nameMatch || categoryMatch || unitMatch;
+                });
+            }
+            // Show dropdown if there are filtered results
+            if (this.filteredMaterials.length > 0) {
+                this.showMaterialDropdown = true;
+            }
+        },
+        selectMaterial(material) {
+            $('#material_select').val(material.id);
+            this.materialSearch = material.material_name;
+            this.showMaterialDropdown = false;
+            this.onMaterialSelect();
         },
         onMaterialSelect() {
             const materialId = $('#material_select').val();
@@ -29,6 +62,7 @@ function tailorProfile() {
                         const material = response.material;
                         $('#material_id').val(material.id);
                         this.selectedMaterial = true;
+                        this.selectedMaterialName = material.material_name || '';
                         this.materialUnit = material.unit || '-';
                         this.materialCategory = material.category || '-';
                         
@@ -48,6 +82,8 @@ function tailorProfile() {
                 });
             } else {
                 this.selectedMaterial = false;
+                this.selectedMaterialName = '';
+                this.materialSearch = '';
                 $('#material_id').val('');
             }
         },
@@ -186,9 +222,12 @@ $(document).ready(function() {
                             const component = Alpine.$data(document.querySelector('[x-data="tailorProfile()"]'));
                             if (component) {
                                 component.selectedMaterial = false;
+                                component.selectedMaterialName = '';
                                 component.materialUnit = '';
                                 component.materialCategory = '';
                                 component.quantityLabel = '';
+                                component.showMaterialDropdown = false;
+                                component.materialSearch = '';
                             }
                             
                             // Reload page to show updated materials sent history

@@ -171,7 +171,7 @@
                 id="imageBoxLabel">
 
                 <!-- Image preview -->
-                <img id="imagePreview" src="" alt="Preview" class="hidden absolute inset-0 w-full h-full object-contain rounded-lg" />
+                <img id="imagePreview" src="" alt="{{ trans('messages.preview', [], session('locale')) }}" class="hidden absolute inset-0 w-full h-full object-contain rounded-lg" />
 
                 <span class="material-symbols-outlined text-4xl text-text-secondary-light dark:text-text-secondary-dark" id="uploadIcon">
                   cloud_upload
@@ -238,16 +238,30 @@
               <!-- Generate Barcode -->
               <label class="flex flex-col">
                 <p class="text-sm font-medium mb-2">{{ trans('messages.generate_barcode', [], session('locale')) }}</p>
-                <div class="flex gap-2">
+                <div class="flex gap-2" x-data="{ generating: false, generated: false }">
                   <input type="text" name="barcode" id="barcode"
                     x-model="barcode"
                     placeholder="{{ trans('messages.barcode_placeholder', [], session('locale')) }}"
-                    class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50" readonly />
+                    class="form-input h-12 rounded-lg px-4 border focus:ring-2 focus:ring-primary/50 transition-all"
+                    :class="generated ? 'border-green-500 bg-green-50' : ''"
+                    readonly />
                   <button type="button"
-                    @click="barcode = Math.floor(100000000000 + Math.random() * 900000000000)"
-                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-1">
-                    <span class="material-icons">qr_code</span>
-                    {{ trans('messages.generate', [], session('locale')) }}
+                    @click="
+                      generating = true;
+                      setTimeout(() => {
+                        barcode = Math.floor(100000000000 + Math.random() * 900000000000);
+                        generating = false;
+                        generated = true;
+                        setTimeout(() => generated = false, 2000);
+                      }, 500);
+                    "
+                    :disabled="generating"
+                    class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed min-w-[140px]"
+                    :title="generating ? '' : '{{ trans('messages.click_to_generate_barcode', [], session('locale')) }}'">
+                    <span class="material-symbols-outlined transition-transform duration-300" 
+                          :class="generating ? 'animate-spin' : ''"
+                          x-text="generating ? 'hourglass_empty' : (generated ? 'check_circle' : 'qr_code_2')"></span>
+                    <span x-text="generating ? '{{ trans('messages.processing', [], session('locale')) }}' : (generated ? '{{ trans('messages.barcode_generated', [], session('locale')) }}' : '{{ trans('messages.generate', [], session('locale')) }}')"></span>
                   </button>
                 </div>
               </label>
@@ -337,13 +351,13 @@
             <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Tailor Input (Half Width) -->
               <div x-data="{ open: false, selected: [] }" class="relative">
-                <label class="text-sm font-medium mb-2 block">Tailors</label>
+                <label class="text-sm font-medium mb-2 block">{{ trans('messages.tailors', [], session('locale')) }}</label>
 
                 <!-- Dropdown button -->
                 <button @click="open = !open"
                   type="button"
                   class="w-full flex items-center justify-between border rounded-lg px-4 py-2 h-12 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-primary/40 transition">
-                  <span x-show="selected.length === 0" class="text-gray-400">Select Tailors</span>
+                  <span x-show="selected.length === 0" class="text-gray-400">{{ trans('messages.select_tailors', [], session('locale')) }}</span>
                   <div class="flex flex-wrap gap-2" x-show="selected.length > 0">
                     <template x-for="tailor in selected" :key="tailor.id">
                       <span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-semibold"

@@ -418,7 +418,7 @@ class PosController extends Controller
                 'payments.account'
             ])
             ->orderBy('id', 'DESC')
-            ->paginate(20);
+            ->paginate(10);
 
             $formattedOrders = $orders->map(function($order) {
                 // Format order number
@@ -458,6 +458,8 @@ class PosController extends Controller
                     'order_no' => $orderNo,
                     'customer_name' => $customerName,
                     'order_type' => $orderTypeLabel,
+                    'order_type_raw' => $order->order_type,
+                    'delivery_status' => $order->delivery_status ?? null,
                     'date' => $date,
                     'time' => $time,
                     'items_count' => $itemsCount,
@@ -501,6 +503,43 @@ class PosController extends Controller
                 'current_page' => $orders->currentPage(),
                 'last_page' => $orders->lastPage(),
                 'total' => $orders->total(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update delivery status for POS order
+     */
+    public function updateDeliveryStatus(Request $request)
+    {
+        try {
+            $request->validate([
+                'order_id' => 'required|exists:pos_orders,id',
+                'delivery_status' => 'required|string|in:not_delivered,delivered,pending,shipped,under_preparation,under_repairing',
+            ]);
+
+            $order = PosOrders::findOrFail($request->order_id);
+            
+            // Only allow status update for delivery orders
+            if ($order->order_type !== 'delivery') {
+                return response()->json([
+                    'success' => false,
+                    'message' => trans('messages.only_delivery_orders', [], session('locale')),
+                ], 400);
+            }
+
+            $order->delivery_status = $request->delivery_status;
+            $order->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('messages.delivery_status_updated', [], session('locale')),
+                'order' => $order,
             ]);
         } catch (\Exception $e) {
             return response()->json([

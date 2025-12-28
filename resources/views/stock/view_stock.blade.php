@@ -47,7 +47,7 @@
 </style>
 <main class="flex-1 p-4 md:p-6"
     x-data="{ showDetails: false, loading: false, showQuantity: false, actionType: 'add' }">
-    <div class="w-full max-w-screen-xl xl:pr-8 xl:pl-64 mx-auto">
+    <div class="w-full max-w-[1920px] mx-auto">
 
         <!-- Page title and add button -->
         <div class="flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center gap-4 mb-6">
@@ -71,17 +71,12 @@
                             placeholder="{{ trans('messages.search_placeholder', [], session('locale')) }}"
                             class="w-full h-11 rounded-xl border border-pink-200 focus:border-[var(--primary-color)] focus:ring-[var(--primary-color)] pr-10 text-sm" />
                     </div>
-                    <select class="shrink-0 rounded-xl border border-pink-200 h-11 text-sm">
-                        <option>{{ trans('messages.all', [], session('locale')) }}</option>
-                        <option>{{ trans('messages.available', [], session('locale')) }}</option>
-                        <option>{{ trans('messages.low', [], session('locale')) }}</option>
-                        <option>{{ trans('messages.out_of_stock', [], session('locale')) }}</option>
-                        <option>{{ trans('messages.hidden', [], session('locale')) }}</option>
+                    <select id="stock_filter" class="shrink-0 rounded-xl border border-pink-200 h-11 text-sm">
+                        <option value="all">{{ trans('messages.all', [], session('locale')) }}</option>
+                        <option value="available">{{ trans('messages.available', [], session('locale')) }}</option>
+                        <option value="low">{{ trans('messages.low', [], session('locale')) }}</option>
+                        <option value="out_of_stock">{{ trans('messages.out_of_stock', [], session('locale')) }}</option>
                     </select>
-                    <button class="shrink-0 inline-flex items-center gap-1 rounded-xl px-3 h-11 text-sm text-white bg-[var(--primary-color)] hover:bg-pink-700 transition-all">
-                        <span class="material-symbols-outlined text-base">tune</span>
-                        {{ trans('messages.filter', [], session('locale')) }}
-                    </button>
                 </div>
             </div>
         </div>
@@ -143,18 +138,18 @@
 
     <!-- Desktop table -->
     <section class="hidden xl:block mt-6">
-        <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition">
-            <table class="w-full text-sm min-w-[1024px]">
-                <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800">
+        <div class="rounded-2xl overflow-x-auto border border-pink-100 bg-white shadow-md hover:shadow-lg transition mx-auto">
+            <table class="w-full text-sm min-w-full">
+                <thead class="bg-gradient-to-l from-pink-50 to-pink-100 text-gray-800 sticky top-0 z-10">
                     <tr>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.image', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.category', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
-                        <th class="text-right px-3 py-3 font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>
-                        <th class="text-center px-3 py-3 font-bold">{{ trans('messages.actions', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.image', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.code', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[150px]">{{ trans('messages.type', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[120px]">{{ trans('messages.category', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.size', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.color', [], session('locale')) }}</th>
+                        <th class="text-right px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[100px]">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                        <th class="text-center px-3 sm:px-4 md:px-6 py-3 font-bold whitespace-nowrap min-w-[200px]">{{ trans('messages.actions', [], session('locale')) }}</th>
                     </tr>
                 </thead>
 
@@ -210,18 +205,18 @@
                     <!-- Image + Basic Info -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="rounded-2xl overflow-hidden shadow-lg">
-                            <img id="stock_main_image" src="" class="w-full h-96 object-cover" alt="Abaya Image">
+                            <img id="stock_main_image" src="" class="w-full h-96 object-cover" alt="{{ trans('messages.abaya_image', [], session('locale')) }}">
                         </div>
 
 
                         <div class="space-y-4 text-gray-700">
-                            <p><strong>Code:</strong> <span id="abaya_code"></span></p>
-                            <p><strong>Design:</strong> <span id="design_name">-</span></p>
-                            <p><strong>Description:</strong> <span id="description">-</span></p>
-                            <p><strong>Barcode:</strong> <span id="barcode">-</span></p>
+                            <p><strong>{{ trans('messages.code', [], session('locale')) }}:</strong> <span id="abaya_code"></span></p>
+                            <p><strong>{{ trans('messages.design', [], session('locale')) }}:</strong> <span id="design_name">-</span></p>
+                            <p><strong>{{ trans('messages.description', [], session('locale')) }}:</strong> <span id="description">-</span></p>
+                            <p><strong>{{ trans('messages.barcode', [], session('locale')) }}:</strong> <span id="barcode">-</span></p>
 
                             <p>
-                                <strong>Status:</strong>
+                                <strong>{{ trans('messages.status', [], session('locale')) }}:</strong>
                                 <span id="status" class="font-bold"></span>
                             </p>
                         </div>
@@ -249,7 +244,7 @@
                             </div> -->
 
                             <div>
-                                <h4 class="font-semibold mb-2">By Size and Color</h4>
+                                <h4 class="font-semibold mb-2">{{ trans('messages.by_size_and_color', [], session('locale')) }}</h4>
                                 <div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="size_color_container">
                                         <!-- Dynamic items will be injected here -->
@@ -304,9 +299,9 @@
                 <div class="modal-header border-0 bg-gradient">
                     <h5 class="modal-title text-white fw-bold fs-4">
                         <i class="bi bi-box-seam me-2"></i>
-                        {{ trans('stock.manage_quantities', [], session('locale')) }}
+                        {{ trans('messages.manage_quantities', [], session('locale')) }}
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ trans('messages.close', [], session('locale')) }}"></button>
                 </div>              
 
                 <!-- Body -->
@@ -318,13 +313,13 @@
                             <input type="radio" class="btn-check" name="qtyType" id="add" value="add" x-model="actionType">
                             <label class="btn btn-outline-primary fw-semibold px-5" for="add">
                                 <i class="bi bi-plus-circle me-2"></i>
-                                {{ trans('stock.add_new', [], session('locale')) }}
+                                {{ trans('messages.add_new', [], session('locale')) }}
                             </label>
 
                             <input type="radio" class="btn-check" name="qtyType" id="pull" value="pull" x-model="actionType">
                             <label class="btn btn-outline-danger fw-semibold px-5" for="pull">
                                 <i class="bi bi-dash-circle me-2"></i>
-                                {{ trans('stock.pull_quantity', [], session('locale')) }}
+                                {{ trans('messages.pull_quantity', [], session('locale')) }}
                             </label>
                         </div>
                     </div>
@@ -333,7 +328,7 @@
                     <section class="mb-5 d-none">
                         <h6 class="fw-bold text-primary mb-3">
                             <span class="badge bg-primary rounded-pill me-2">1</span>
-                            {{ trans('stock.by_size', [], session('locale')) }}
+                            {{ trans('messages.by_size', [], session('locale')) }}
                         </h6>
                         <div id="sizecont"></div>
                     </section>
@@ -344,7 +339,7 @@
                     <section class="mb-5">
                         <h6 class="fw-bold text-primary mb-3">
                             <span class="badge bg-primary rounded-pill me-2">2</span>
-                            {{ trans('stock.by_size_and_color', [], session('locale')) }}
+                            {{ trans('messages.by_size_color', [], session('locale')) }}
                         </h6>
                         <div id="colorsize_container"></div>
                     </section>
@@ -355,7 +350,7 @@
                     <section class="mb-5 d-none">
                         <h6 class="fw-bold text-primary mb-3">
                             <span class="badge bg-primary rounded-pill me-2">3</span>
-                            {{ trans('stock.by_color_only', [], session('locale')) }}
+                            {{ trans('messages.by_color_only', [], session('locale')) }}
                         </h6>
                         <div id="colorcont"></div>
                     </section>
@@ -364,22 +359,22 @@
                     <div x-show="actionType === 'pull'" x-transition class="mt-5 p-4 bg-danger bg-opacity-10 border border-danger rounded-3">
                         <label class="form-label fw-bold text-danger mb-3">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            {{ trans('stock.pull_reason_required', [], session('locale')) }}
+                            {{ trans('messages.pull_reason_required', [], session('locale')) }}
                         </label>
                         <textarea name="pull_reason" class="form-control border-danger focus-ring focus-ring-danger" id="pull_reason" rows="4"
-                            placeholder="{{ trans('stock.pull_reason_placeholder', [], session('locale')) }}" ></textarea>
+                            placeholder="{{ trans('messages.pull_reason_placeholder', [], session('locale')) }}" ></textarea>
                     </div>
 
                     <!-- Hidden stock_id input -->
                     <input type="hidden" name="stock_id" id="stock_id" value="">
  <div class="modal-footer border-0 bg-light px-5 py-4" style="display: flex !important; flex-shrink: 0;">
                     <button type="button" class="btn btn-lg btn-outline-secondary px-5" data-bs-dismiss="modal">
-                        {{ trans('global.cancel', [], session('locale')) }}
+                        {{ trans('messages.cancel', [], session('locale')) }}
                     </button>
                     <button type="submit" class="btn btn-lg px-5 text-white shadow"
                         style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
                         <i class="bi bi-check2-all me-2"></i>
-                        {{ trans('global.save_operation', [], session('locale')) }}
+                        {{ trans('messages.save_operation', [], session('locale')) }}
                     </button>
                 </div>
                 </div>
@@ -406,7 +401,7 @@
                 <h5 class="modal-title text-[var(--primary-color)] fw-bold fs-4" id="fullStockDetailsModalLabel">
                     {{ __('messages.abaya_details') }}: <span id="full_modal_abaya_code"></span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ trans('messages.close', [], session('locale')) }}"></button>
             </div>
             
             <!-- Loader -->
