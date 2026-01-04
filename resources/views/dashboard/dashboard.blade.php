@@ -21,18 +21,64 @@
 </script>
 
 <style>
+      @media (prefers-color-scheme: dark) {
+        .dark\:text-gray-200 {
+            --tw-text-opacity: 1;
+            color: #1F2937!important;
+        }
+    }
+   
+
+    /* Blinking alert border */
+    .blink-danger {
+        animation: blinkBorder 1.1s ease-in-out infinite;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, .0);
+    }
+
+    @keyframes blinkBorder {
+        0% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, .0);
+            border-color: rgba(239, 68, 68, .35);
+        }
+
+        50% {
+            box-shadow: 0 0 0 6px rgba(239, 68, 68, .14);
+            border-color: rgba(239, 68, 68, .95);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, .0);
+            border-color: rgba(239, 68, 68, .35);
+        }
+    }
+
+    /* Hide elements during print */
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+
+        /*body {*/
+        /*    background: #fff;*/
+        /*}*/
+
+        .print-card {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+        }
+    }
     :root {
         --bg: #f7f7fb;
         --card: #ffffff;
-        --text: #1f2937;
+        --text: #333;
         --muted: #6b7280;
         --border: rgba(0, 0, 0, .06);
         --primary: #b34b8a;
-        /* premium rose */
+         premium rose 
         --primary2: #6d5bd0;
-        /* soft violet */
+         soft violet 
         --gold: #b68a2c;
-        /* warm gold */
+         warm gold 
         --danger: #ef4444;
         --dangerSoft: rgba(239, 68, 68, .12);
         --ok: #10b981;
@@ -76,9 +122,9 @@
             display: none !important;
         }
 
-        body {
-            background: #fff;
-        }
+        /*body {*/
+        /*    background: #fff;*/
+        /*}*/
 
         .print-card {
             box-shadow: none !important;
@@ -86,9 +132,9 @@
         }
     }
 </style>
-</head>
+<!--</head>-->
 
-<body class="min-h-screen">
+<!--<body class="min-h-screen">-->
     <!-- =========================
        HEADER (included)
   ========================== -->

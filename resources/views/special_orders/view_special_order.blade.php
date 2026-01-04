@@ -554,14 +554,15 @@
                   </button>
 
                   <button @click="openDeliverModal(order)"
-                          :disabled="order.status !== 'ready'"
-                          :class="order.status === 'ready'
+                          :disabled="order.status !== 'ready' || order.paid < order.total - 0.001"
+                          :class="(order.status === 'ready' && order.paid >= order.total - 0.001)
                                   ? 'text-amber-600 hover:text-amber-800'
                                   : 'text-gray-300 cursor-not-allowed'">
                     <span class="material-symbols-outlined text-base">done</span>
                   </button>
 
                   <button @click="deleteOrder(order.id)"
+                          x-show="order.status === 'new'"
                           class="text-red-600 hover:text-red-800">
                     <span class="material-symbols-outlined text-base">delete</span>
                   </button>
@@ -645,13 +646,14 @@
                 <span class="material-symbols-outlined text-base">payments</span>
               </button>
               <button @click="openDeliverModal(order)"
-                      :disabled="order.status !== 'ready'"
-                      :class="order.status === 'ready'
+                      :disabled="order.status !== 'ready' || order.paid < order.total - 0.001"
+                      :class="(order.status === 'ready' && order.paid >= order.total - 0.001)
                               ? 'text-amber-600 hover:text-amber-800 text-xs'
                               : 'text-gray-300 cursor-not-allowed text-xs'">
                 <span class="material-symbols-outlined text-base">done</span>
               </button>
               <button @click="deleteOrder(order.id)"
+                      x-show="order.status === 'new'"
                       class="text-red-600 hover:text-red-800 text-xs">
                 <span class="material-symbols-outlined text-base">delete</span>
               </button>

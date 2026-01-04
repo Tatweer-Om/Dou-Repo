@@ -189,8 +189,12 @@ td img{
       @if(isset($order) && $order)
         <div><strong>{{ trans('messages.order_number', [], session('locale')) }}:</strong> {{ $orderNo ?? 'A-' . str_pad($order->id ?? 0, 4, '0', STR_PAD_LEFT) }}</div>
         <div><strong>{{ trans('messages.source', [], session('locale')) }}:</strong> 
-          @if($order->order_type === 'delivery')
-            {{ trans('messages.delivery', [], session('locale')) }}
+          @if($order->channel_id && $order->channel)
+            @if(session('locale') === 'ar')
+              {{ $order->channel->channel_name_ar ?? $order->channel->channel_name_en ?? trans('messages.direct', [], session('locale')) }}
+            @else
+              {{ $order->channel->channel_name_en ?? $order->channel->channel_name_ar ?? trans('messages.direct', [], session('locale')) }}
+            @endif
           @else
             {{ trans('messages.direct', [], session('locale')) }}
           @endif

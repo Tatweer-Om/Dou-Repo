@@ -48,6 +48,7 @@
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.code', [], session('locale')) }}</th>
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.design_name', [], session('locale')) }}</th>
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.quantity_added', [], session('locale')) }}</th>
+                            <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.quantity_pulled', [], session('locale')) ?: 'Quantity Pulled' }}</th>
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.quantity_sold_pos', [], session('locale')) }}</th>
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.quantity_transferred_out', [], session('locale')) }}</th>
                             <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.quantity_received', [], session('locale')) }}</th>
@@ -56,7 +57,7 @@
                     </thead>
                     <tbody id="auditTableBody">
                         <tr>
-                            <td colspan="8" class="px-4 sm:px-6 py-8 text-center text-gray-500">
+                            <td colspan="9" class="px-4 sm:px-6 py-8 text-center text-gray-500">
                                 {{ trans('messages.loading', [], session('locale')) }}...
                             </td>
                         </tr>
@@ -67,7 +68,7 @@
 
         <!-- Pagination -->
         <div class="flex justify-center mt-6">
-            <ul id="pagination" class="dress_pagination flex gap-2"></ul>
+            <ul id="pagination" class="flex gap-2 items-center"></ul>
         </div>
     </div>
 

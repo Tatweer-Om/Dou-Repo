@@ -86,9 +86,7 @@
                             <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
                             ${trans.details}
                         </button>
-                                <button class="openQuantityBtn flex flex-col items-center"
-                                data-bs-toggle="modal"
-                                data-bs-target="#quantityModal"
+                                <button class="openQuantityBtn flex flex-col items-center gap-1 hover:text-green-600 transition"
                                 onclick="openStockQuantity(${stock.id})">
                             <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
                             ${trans.enter_quantity}
@@ -159,7 +157,8 @@
                         <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
                             ${trans.details}
                         </button>
-                        <button class="flex flex-col items-center gap-1 hover:text-green-600 transition"
+                        <button class="flex flex-col items-center gap-1 hover:text-green-600 transition openQuantityBtn"
+                                onclick="openStockQuantity(${stock.id})">
                             <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
                             ${trans.enter_quantity}
                         </button>
@@ -331,10 +330,36 @@ function stockDetails() {
 
 
 function openStockQuantity(stockId) {
-
-    // Show the modal
-    const modalEl = document.getElementById('quantityModal');
-    const bsModal = new bootstrap.Modal(modalEl);
+    // Get the Alpine.js component from the main element
+    const mainElement = document.querySelector('main[x-data]');
+    if (!mainElement) {
+        console.error('Main element with Alpine.js not found');
+        return;
+    }
+    
+    // Try multiple methods to access Alpine.js data
+    let alpineData = null;
+    try {
+        // Method 1: Direct access via _x_dataStack
+        if (mainElement._x_dataStack && mainElement._x_dataStack[0]) {
+            alpineData = mainElement._x_dataStack[0];
+        }
+        // Method 2: Use Alpine.$data if available
+        else if (window.Alpine && typeof window.Alpine.$data === 'function') {
+            alpineData = window.Alpine.$data(mainElement);
+        }
+        // Method 3: Try accessing via Alpine reactive
+        else if (window.Alpine && mainElement._x_dataStack) {
+            alpineData = mainElement._x_dataStack[0];
+        }
+    } catch (e) {
+        console.error('Error accessing Alpine.js data:', e);
+    }
+    
+    if (!alpineData) {
+        console.error('Could not access Alpine.js data');
+        return;
+    }
     
     // Set stock_id in the form before showing modal
     $('#stock_id').val(stockId);
@@ -342,23 +367,19 @@ function openStockQuantity(stockId) {
     // Reset form state
     $('#save_qty')[0].reset();
     $('#stock_id').val(stockId); // Set again after reset
-    $('input[name="qtyType"][value="add"]').prop('checked', true);
+    if (alpineData) {
+        alpineData.actionType = 'add';
+    }
     
     // Re-enable submit button and restore original text
     var submitBtn = $('#save_qty').find('button[type="submit"]');
     submitBtn.prop('disabled', false);
-    var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
-    submitBtn.html(originalBtnText);
+    submitBtn.html('<span class="material-symbols-outlined align-middle me-2 text-sm">check</span>{{ trans("messages.save_operation", [], session("locale")) }}');
     
-    // Ensure modal structure is visible
-    $('#quantityModal .modal-footer').css('display', 'flex');
-    $('#quantityModal .modal-body').css('overflow-y', 'auto');
-    
-    bsModal.show();
-
-    // Show loading state if you have a loader
-    const loader = document.getElementById('quantityLoader');
-    if (loader) loader.style.display = 'block';
+    // Show the modal using Alpine.js
+    if (alpineData) {
+        alpineData.showQuantity = true;
+    }
 
     // Fetch stock quantity data via AJAX
     $.ajax({
@@ -372,21 +393,11 @@ function openStockQuantity(stockId) {
                 $('#colorsize_container').html(response.size_color_html || '');
                 $('#colorcont').html(response.color || '');
             }
-            
-            // Ensure footer is visible after content loads
-            $('#quantityModal .modal-footer').css('display', 'flex');
         },
         error: function(err) {
             console.error('Error:', err);
             alert(trans.failed_to_load_details);
-            bsModal.hide(); // Close modal on error
-        },
-        complete: function() {
-            // Hide loader
-            if (loader) loader.style.display = 'none';
-            
-            // Ensure modal structure remains intact
-            $('#quantityModal .modal-footer').css('display', 'flex');
+            alpineData.showQuantity = false; // Close modal on error
         }
     });
 }
@@ -446,48 +457,64 @@ $(document).ready(function() {
 
         var form = $(this);
         var submitBtn = form.find('button[type="submit"]');
-        var cancelBtn = form.find('button[data-bs-dismiss="modal"]');
-        var modal = $('#quantityModal');
-        var modalBody = modal.find('.modal-body');
-        var modalFooter = modal.find('.modal-footer');
+        
+        // Get Alpine.js data
+        const mainElement = document.querySelector('main[x-data]');
+        if (!mainElement || !mainElement._x_dataStack || !mainElement._x_dataStack[0]) {
+            console.error('Alpine.js not initialized');
+            return false;
+        }
+        const alpineData = mainElement._x_dataStack[0];
+        
+        // Check for pull reason if action is pull
+        const actionType = alpineData.actionType || $('input[name="qtyType"]:checked').val();
+        const pullReason = $('#pull_reason').val() ? $('#pull_reason').val().trim() : '';
+        
+        if (actionType === 'pull' && pullReason === '') {
+            show_notification('error', '{{ trans("messages.please_enter_pull_notes", [], session("locale")) ?: "Please enter pull notes" }}');
+            return false;
+        }
+        
+        // Validate that at least one quantity field has a value > 0
+        let hasQuantity = false;
+        let validationError = null;
+        
+        // Check quantity inputs in all containers (using specific field names)
+        $('#colorsize_container input[name="size_color_qty[]"], #sizecont input[name="size_qty[]"], #colorcont input[name="color_qty[]"]').each(function() {
+            const $input = $(this);
+            const value = parseFloat($input.val()) || 0;
+            
+            if (value > 0) {
+                hasQuantity = true;
+                
+                // If pulling, check if quantity doesn't exceed available
+                if (actionType === 'pull') {
+                    const availableQty = parseFloat($input.data('available-qty')) || 0;
+                    if (value > availableQty) {
+                        validationError = '{{ trans("messages.pull_quantity_exceeds_available", [], session("locale")) ?: "Pull quantity cannot exceed available quantity" }}. ' + 
+                                         '{{ trans("messages.available", [], session("locale")) ?: "Available" }}: ' + availableQty;
+                        return false; // break the loop
+                    }
+                }
+            }
+        });
+        
+        if (validationError) {
+            show_notification('error', validationError);
+            return false;
+        }
+        
+        if (!hasQuantity) {
+            show_notification('error', '{{ trans("messages.please_enter_quantity", [], session("locale")) ?: "Please enter at least one quantity" }}');
+            return false;
+        }
         
         // Disable submit button to prevent double submission
-        submitBtn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-2"></i>' + trans.saving);
-        
-        // Ensure modal stays open and visible
-        modal.css('display', 'block').addClass('show');
-        modalFooter.css('display', 'flex');
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('submitBtn').addEventListener('click', function() {
-        const actionTypeEl = document.querySelector('input[name="qtyType"]:checked');
-        if (!actionTypeEl) return;
-
-        const actionType = actionTypeEl.value;
-        const pullTextarea = document.getElementById('pull_reason');
-
-        // Only check if textarea exists
-        const pullReason = pullTextarea ? pullTextarea.value.trim() : '';
-
-        if (actionType === 'pull' && pullReason === '') {
-            show_notification('error', trans.please_enter_pull_notes);
-            return;
-        }
-
-        console.log('Action Type:', actionType);
-        console.log('Pull Reason:', pullReason);
-    });
-});
-
-function show_notification(type, message) {
-    alert(`${type.toUpperCase()}: ${message}`);
-}
-
-        // Maintain scroll position
-        var scrollTop = modalBody.scrollTop();
+        submitBtn.prop('disabled', true).html('<span class="material-symbols-outlined align-middle me-2 text-sm animate-spin">hourglass_empty</span>' + trans.saving);
         
         var formData = form.serialize(); // serialize form fields
         formData += '&stock_id=' + $('#stock_id').val();
-        formData += '&actionType=' + $('input[name="qtyType"]:checked').val(); // include add/pull
+        formData += '&actionType=' + actionType; // include add/pull
 
         $.ajax({
             url: "{{ route('add_quantity') }}", // your Laravel route
@@ -495,13 +522,9 @@ function show_notification(type, message) {
             data: formData,
          
             success: function(response) {
-                // Restore scroll position
-                modalBody.scrollTop(scrollTop);
-                
               if (response.status === "success") {
     // Re-enable submit button before closing modal
-    var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
-    submitBtn.prop('disabled', false).html(originalBtnText);
+    submitBtn.prop('disabled', false).html('<span class="material-symbols-outlined align-middle me-2 text-sm">check</span>{{ trans("messages.save_operation", [], session("locale")) }}');
     
     Swal.fire({
         icon: 'success',
@@ -520,14 +543,9 @@ function show_notification(type, message) {
         location.reload();
     }
 
-    // Close modal
+    // Close modal using Alpine.js
     setTimeout(() => {
-        var bsModal = bootstrap.Modal.getInstance(modal[0]);
-        if (bsModal) {
-            bsModal.hide();
-        } else {
-            modal.modal('hide');
-        }
+        alpineData.showQuantity = false;
     }, 500);
 
 } else {
@@ -538,57 +556,42 @@ function show_notification(type, message) {
         text: response.message || trans.error_occurred
     });
 
-    submitBtn.prop('disabled', false).html(
-        '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}'
-    );
+    submitBtn.prop('disabled', false).html('<span class="material-symbols-outlined align-middle me-2 text-sm">check</span>{{ trans("messages.save_operation", [], session("locale")) }}');
 }
 
             },
             error: function(xhr, status, error) {
-                // Restore scroll position
-                modalBody.scrollTop(scrollTop);
-                
                 console.error('Error:', error);
                 console.error('Response:', xhr.responseText);
                 
-                var errorMsg = trans.error_saving;
+                var errorMsg = trans.error_saving || '{{ trans("messages.error_saving", [], session("locale")) ?: "Error saving" }}';
+                
+                // Check if response has JSON with message
                 if(xhr.responseJSON && xhr.responseJSON.message) {
                     errorMsg = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    try {
+                        const jsonResponse = JSON.parse(xhr.responseText);
+                        if (jsonResponse.message) {
+                            errorMsg = jsonResponse.message;
+                        }
+                    } catch (e) {
+                        // Not JSON, use default error message
+                    }
                 }
                 
                 Swal.fire({
                     icon: 'error',
-                    title: trans.error_title,
+                    title: trans.error_title || '{{ trans("messages.error", [], session("locale")) }}',
                     text: errorMsg
                 });
                 
                 // Re-enable submit button
-                submitBtn.prop('disabled', false).html('<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}');
-            },
-            complete: function() {
-                // Ensure modal remains visible and buttons are shown
-                modal.css('display', 'block').addClass('show');
-                modalFooter.css('display', 'flex');
+                submitBtn.prop('disabled', false).html('<span class="material-symbols-outlined align-middle me-2 text-sm">check</span>{{ trans("messages.save_operation", [], session("locale")) }}');
             }
         });
         
         return false; // Additional prevention
-    });
-    
-    // Ensure button is enabled when modal is shown
-    $('#quantityModal').on('show.bs.modal', function() {
-        var submitBtn = $('#save_qty').find('button[type="submit"]');
-        submitBtn.prop('disabled', false);
-        var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
-        submitBtn.html(originalBtnText);
-    });
-    
-    // Ensure button is enabled when modal is hidden (in case it was left disabled)
-    $('#quantityModal').on('hidden.bs.modal', function() {
-        var submitBtn = $('#save_qty').find('button[type="submit"]');
-        submitBtn.prop('disabled', false);
-        var originalBtnText = '<i class="bi bi-check2-all me-2"></i>{{ trans("global.save_operation", [], session("locale")) }}';
-        submitBtn.html(originalBtnText);
     });
 });
 $.ajaxSetup({
@@ -599,14 +602,36 @@ $.ajaxSetup({
 
 // Full Stock Details Modal Function
 function openFullStockDetails(stockId) {
-    const modal = new bootstrap.Modal(document.getElementById('fullStockDetailsModal'));
-    const loader = document.getElementById('fullStockDetailsLoader');
-    const body = document.getElementById('fullStockDetailsBody');
-
-    // Show modal and loader
-    modal.show();
-    loader.classList.remove('d-none');
-    body.classList.add('d-none');
+    // Get the Alpine.js component from the main element
+    const mainElement = document.querySelector('main[x-data]');
+    if (!mainElement) {
+        console.error('Main element with Alpine.js not found');
+        return;
+    }
+    
+    // Try multiple methods to access Alpine.js data
+    let alpineData = null;
+    try {
+        // Method 1: Direct access via _x_dataStack
+        if (mainElement._x_dataStack && mainElement._x_dataStack[0]) {
+            alpineData = mainElement._x_dataStack[0];
+        }
+        // Method 2: Use Alpine.$data if available
+        else if (window.Alpine && typeof window.Alpine.$data === 'function') {
+            alpineData = window.Alpine.$data(mainElement);
+        }
+        // Method 3: Try accessing via Alpine reactive
+        else if (window.Alpine && mainElement._x_dataStack) {
+            alpineData = mainElement._x_dataStack[0];
+        }
+    } catch (e) {
+        console.error('Error accessing Alpine.js data:', e);
+    }
+    
+    if (!alpineData) {
+        console.error('Could not access Alpine.js data');
+        return;
+    }
 
     // Clear previous data
     $('#full_modal_abaya_code').text('...');
@@ -621,6 +646,12 @@ function openFullStockDetails(stockId) {
     $('#full_total_quantity').text('0');
     $('#full_stock_images_container').html('');
     $('#full_size_color_container').html('');
+
+    // Show modal and loader using Alpine.js
+    if (alpineData) {
+        alpineData.showFullDetails = true;
+        alpineData.fullDetailsLoading = true;
+    }
 
     // Fetch full stock details
     $.ajax({
@@ -659,14 +690,12 @@ function openFullStockDetails(stockId) {
                     let imagesHtml = '';
                     response.images.forEach(function(imagePath, index) {
                         imagesHtml += `
-                            <div class="col-md-4 col-lg-3">
-                                <div class="card border-0 shadow-sm h-100">
-                                    <div class="card-img-top position-relative" style="height: 200px; overflow: hidden;">
-                                        <img src="${imagePath}" 
-                                             class="w-100 h-100 object-cover" 
-                                             alt="${trans.abaya_image} ${index + 1}"
-                                             onerror="this.src='/images/placeholder.png'">
-                                    </div>
+                            <div class="rounded-xl overflow-hidden shadow-sm">
+                                <div class="relative" style="height: 200px; overflow: hidden;">
+                                    <img src="${imagePath}" 
+                                         class="w-full h-full object-cover" 
+                                         alt="${trans.abaya_image} ${index + 1}"
+                                         onerror="this.src='/images/placeholder.png'">
                                 </div>
                             </div>
                         `;
@@ -674,8 +703,8 @@ function openFullStockDetails(stockId) {
                     $('#full_stock_images_container').html(imagesHtml);
                 } else {
                     $('#full_stock_images_container').html(`
-                        <div class="col-12">
-                            <p class="text-muted text-center">{{ trans('messages.no_images_available', [], session('locale')) }}</p>
+                        <div class="col-span-full">
+                            <p class="text-gray-500 text-center">{{ trans('messages.no_images_available', [], session('locale')) }}</p>
                         </div>
                     `);
                 }
@@ -685,23 +714,19 @@ function openFullStockDetails(stockId) {
                     let colorSizeHtml = '';
                     response.color_size_details.forEach(function(item) {
                         colorSizeHtml += `
-                            <div class="col-md-6 col-lg-4">
-                                <div class="card border-0 shadow-sm h-100">
-                                    <div class="card-body p-3">
-                                        <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <div>
-                                                <h6 class="mb-1 fw-bold text-gray-900">${item.size_name}</h6>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="rounded-circle border border-2" 
-                                                         style="width: 24px; height: 24px; background-color: ${item.color_code};"></div>
-                                                    <span class="text-muted small">${item.color_name}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="text-end">
-                                            <span class="badge bg-primary fs-6 px-3 py-2">${item.quantity} ${trans.pieces}</span>
+                            <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <h6 class="font-bold text-gray-900 mb-1">${item.size_name}</h6>
+                                        <div class="flex items-center gap-2">
+                                            <div class="rounded-full border-2 border-gray-300" 
+                                                 style="width: 24px; height: 24px; background-color: ${item.color_code};"></div>
+                                            <span class="text-gray-600 text-sm">${item.color_name}</span>
                                         </div>
                                     </div>
+                                </div>
+                                <div class="text-right mt-3">
+                                    <span class="bg-[var(--primary-color)] text-white rounded-full px-4 py-2 text-sm font-semibold">${item.quantity} ${trans.pieces}</span>
                                 </div>
                             </div>
                         `;
@@ -709,22 +734,24 @@ function openFullStockDetails(stockId) {
                     $('#full_size_color_container').html(colorSizeHtml);
                 } else {
                     $('#full_size_color_container').html(`
-                        <div class="col-12">
-                            <p class="text-muted text-center">{{ trans('messages.no_data_available', [], session('locale')) }}</p>
+                        <div class="col-span-full">
+                            <p class="text-gray-500 text-center">{{ trans('messages.no_data_available', [], session('locale')) }}</p>
                         </div>
                     `);
                 }
             }
 
-            // Hide loader and show body
-            loader.classList.add('d-none');
-            body.classList.remove('d-none');
+            // Hide loader
+            if (alpineData) {
+                alpineData.fullDetailsLoading = false;
+            }
         },
         error: function(err) {
             console.error('Error:', err);
             alert('{{ trans("messages.error_loading_details", [], session("locale")) }}');
-            loader.classList.add('d-none');
-            body.classList.remove('d-none');
+            if (alpineData) {
+                alpineData.fullDetailsLoading = false;
+            }
         }
     });
 }

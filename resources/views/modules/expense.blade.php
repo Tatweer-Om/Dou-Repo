@@ -41,7 +41,7 @@
 
         <!-- Expenses table -->
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden border border-[var(--border-color)] overflow-x-auto">
-            <table class="w-full text-sm text-right min-w-full">
+            <table class="w-full text-sm text-right min-w-full border-collapse">
                 <thead class="bg-gray-50 border-b border-[var(--border-color)]">
                     <tr>
                         <th class="px-4 sm:px-6 py-4 font-semibold text-[var(--text-secondary)]">{{ trans('messages.expense_name', [], session('locale')) }}</th>

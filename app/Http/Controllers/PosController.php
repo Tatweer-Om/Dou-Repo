@@ -24,6 +24,16 @@ use Illuminate\Support\Facades\Validator;
 class PosController extends Controller
 {
     public function index(){
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(8, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         // Fetch all categories
         $categories = Category::orderBy('id', 'ASC')->get();
         
@@ -32,15 +42,16 @@ class PosController extends Controller
         
         // Fetch stocks based on selected channel
         if ($selectedChannelId) {
-            // Get stock IDs that exist in this channel (only valid stock_ids)
+            // Get stock IDs that exist in this channel with quantity > 0
             $channelStockIds = ChannelStock::where('location_type', 'channel')
                 ->where('location_id', $selectedChannelId)
                 ->whereNotNull('stock_id')
+                ->where('quantity', '>', 0)
                 ->distinct()
                 ->pluck('stock_id')
                 ->toArray();
             
-            // Fetch only stocks that are in the channel
+            // Fetch only stocks that are in the channel (already filtered by quantity > 0 in query above)
             if (!empty($channelStockIds)) {
                 $stocks = Stock::with(['images', 'category'])
                     ->whereNotNull('category_id')
@@ -52,11 +63,15 @@ class PosController extends Controller
                 $stocks = collect([]);
             }
         } else {
-            // Fetch all stocks if no channel selected
-            $stocks = Stock::with(['images', 'category'])
+            // Fetch all stocks if no channel selected, but filter those with quantity > 0
+            $stocks = Stock::with(['images', 'category', 'colorSizes', 'sizes', 'colors'])
                 ->whereNotNull('category_id')
                 ->orderBy('id', 'DESC')
-                ->get();
+                ->get()
+                ->filter(function($stock) {
+                    // Check if stock has at least one item with quantity > 0
+                    return $this->hasAvailableQuantity($stock);
+                });
         }
 
         // Areas for delivery selects
@@ -91,19 +106,28 @@ class PosController extends Controller
         
         // If channel is selected, filter by channel stock
         if ($selectedChannelId) {
-            // Get channel stock items for this stock
+            // Get channel stock items for this stock and aggregate quantities by color/size combination
             $channelStocks = ChannelStock::where('location_type', 'channel')
                 ->where('location_id', $selectedChannelId)
                 ->where('stock_id', $id)
                 ->get();
             
-            // Build color/size combinations from channel stock
-            foreach ($channelStocks as $channelStock) {
-                $sizeId = $channelStock->size_id;
-                $colorId = $channelStock->color_id;
+            // Group by color_id and size_id to aggregate quantities
+            $groupedStocks = $channelStocks->groupBy(function($item) {
+                return ($item->color_id ?? 'null') . '_' . ($item->size_id ?? 'null');
+            });
+            
+            // Build color/size combinations from aggregated channel stock
+            foreach ($groupedStocks as $key => $items) {
+                $firstItem = $items->first();
+                $sizeId = $firstItem->size_id;
+                $colorId = $firstItem->color_id;
+                
+                // Sum quantities for this color/size combination
+                $totalQuantity = $items->sum('quantity');
                 
                 // Get size name
-                $sizeName = $channelStock->size_name;
+                $sizeName = $firstItem->size_name;
                 if (!$sizeName && $sizeId) {
                     $size = Size::find($sizeId);
                     $sizeName = session('locale') === 'ar' 
@@ -112,7 +136,7 @@ class PosController extends Controller
                 }
                 
                 // Get color name and code
-                $colorName = $channelStock->color_name;
+                $colorName = $firstItem->color_name;
                 $colorCode = '#000000';
                 if ($colorId) {
                     $color = Color::find($colorId);
@@ -132,7 +156,7 @@ class PosController extends Controller
                     'color_id' => $colorId,
                     'color_name' => $colorName ?? '-',
                     'color_code' => $colorCode,
-                    'quantity' => $channelStock->quantity ?? 0,
+                    'quantity' => $totalQuantity,
                 ];
             }
         } else {
@@ -306,6 +330,9 @@ class PosController extends Controller
             $deliveryPaid = (bool)($totals['delivery_paid'] ?? false);
         }
 
+        // Get selected channel from session
+        $selectedChannelId = session('pos_selected_channel_id', null);
+
         $order = PosOrders::create([
             'customer_id' => $customerId,
             'order_type' => $request->input('order_type', 'direct'),
@@ -323,6 +350,7 @@ class PosController extends Controller
             'notes' => $request->input('notes') ?? ($customerInput['address'] ?? null),
             'added_by' => $userName,
             'user_id' => $userId,
+            'channel_id' => $selectedChannelId,
         ]);
 
         /* ================= ORDER ITEMS ================= */
@@ -378,6 +406,7 @@ class PosController extends Controller
                 'added_by' => $userName,
                 'user_id' => $userId,
                 'branch_id' => $item['branch_id'] ?? null,
+                'channel_id' => $selectedChannelId,
             ]);
 
             // Reduce stock quantity from ColorSize table
@@ -397,6 +426,23 @@ class PosController extends Controller
                     $stockTotalQty = ColorSize::where('stock_id', $item['id'])->sum('qty');
                     $stock->quantity = $stockTotalQty;
                     $stock->save();
+                }
+                
+                // If channel is selected, also reduce ChannelStock quantity
+                if ($selectedChannelId) {
+                    $channelStock = ChannelStock::where('location_type', 'channel')
+                        ->where('location_id', $selectedChannelId)
+                        ->where('stock_id', $item['id'])
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->first();
+                    
+                    if ($channelStock) {
+                        $currentChannelQty = (int)($channelStock->quantity ?? 0);
+                        $newChannelQty = max(0, $currentChannelQty - $qty);
+                        $channelStock->quantity = $newChannelQty;
+                        $channelStock->save();
+                    }
                 }
             }
         }
@@ -466,7 +512,29 @@ class PosController extends Controller
         }
 
         DB::commit();
+        
+        // Get customer contact (phone) for SMS
+        $customerContact = null;
+        if ($order->customer && $order->customer->phone) {
+            $customerContact = $order->customer->phone;
+        } elseif (isset($customer) && $customer->phone) {
+            $customerContact = $customer->phone;
+        }
+        
+        // Prepare SMS parameters for POS order
+        $smsParams = [
+            'sms_status' => 1, // 1 is for POS order
+            'order_id' => $order->id,
+            'contact' => $customerContact, // Customer phone number for sending SMS
+        ];
 
+        $smsContent = \get_sms($smsParams);
+        
+        // Send SMS if contact is available and content is generated
+        if (!empty($customerContact) && !empty($smsContent)) {
+            \sms_module($customerContact, $smsContent);
+        }
+        
         return response()->json([
             'success' => true,
             'order_id' => $order->id,
@@ -490,6 +558,16 @@ class PosController extends Controller
      */
     public function ordersList()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(8, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('pos.orders_list');
     }
 
@@ -652,6 +730,7 @@ class PosController extends Controller
 
         $order = PosOrders::with([
             'customer',
+            'channel',
             'details.stock.images',
             'details.color',
             'details.size',
@@ -781,5 +860,24 @@ class PosController extends Controller
                 : ($channel->channel_name_en ?? $channel->channel_name_ar),
             'stock_count' => $stockCount
         ]);
+    }
+
+    /**
+     * Check if a stock has at least one item with quantity > 0
+     */
+    private function hasAvailableQuantity($stock)
+    {
+        $mode = $stock->mode ?? 'color_size';
+        
+        if ($mode === 'size') {
+            // Check if any size has quantity > 0
+            return $stock->sizes->sum('qty') > 0;
+        } elseif ($mode === 'color') {
+            // Check if any color has quantity > 0
+            return $stock->colors->sum('qty') > 0;
+        } else {
+            // Check if any color+size combination has quantity > 0
+            return $stock->colorSizes->sum('qty') > 0;
+        }
     }
 }

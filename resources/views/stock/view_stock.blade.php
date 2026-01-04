@@ -9,44 +9,9 @@
     [x-cloak] {
         display: none !important;
     }
-    
-    .modal-backdrop.show {
-    opacity: 0 !important;
-    display: none !important; /* Optional: removes the backdrop entirely */
-}
-    /* Ensure modal footer stays visible during form submission */
-    #quantityModal .modal-footer {
-        display: flex !important;
-        flex-shrink: 0;
-        position: relative;
-        z-index: 10;
-    }
-    
-    /* Ensure modal body is scrollable and footer stays at bottom */
-    #quantityModal .modal-dialog-scrollable .modal-body {
-        overflow-y: auto;
-        max-height: calc(100vh - 200px);
-    }
-    
-    /* Prevent modal from closing during form submission */
-    #quantityModal.show {
-        display: block !important;
-    }
-    
-    /* Ensure modal content structure stays intact */
-    #quantityModal .modal-content {
-        display: flex;
-        flex-direction: column;
-        max-height: 90vh;
-    }
-    
-    #quantityModal .modal-body {
-        flex: 1 1 auto;
-        overflow-y: auto;
-    }
 </style>
 <main class="flex-1 p-4 md:p-6"
-    x-data="{ showDetails: false, loading: false, showQuantity: false, actionType: 'add' }">
+    x-data="{ showDetails: false, loading: false, showQuantity: false, showFullDetails: false, actionType: 'add', fullDetailsLoading: false }">
     <div class="w-full max-w-[1920px] mx-auto">
 
         <!-- Page title and add button -->
@@ -277,111 +242,120 @@
 
 
 
-</main>
-
-<!-- Bootstrap Quantity Modal -->
-
-<!-- Enhanced Quantity Modal - Laravel Blade + trans() -->
-<!-- Modal -->
-<div class="modal fade" id="quantityModal" tabindex="-1" aria-hidden="true" x-data="{ actionType: 'add' }">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content shadow-lg border-0 rounded-4 overflow-hidden">
-
-         
+    <!-- Alpine.js Quantity Modal -->
+    <div x-show="showQuantity"
+        x-transition
+        x-cloak
+        class="fixed inset-0 bg-black/60 z-[9998] flex items-center justify-center p-4 overflow-y-auto"
+        @keydown.escape.window="showQuantity = false">
+        <div @click.away="showQuantity = false" @click.stop
+            class="bg-white w-full max-w-6xl my-8 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-4rem)]">
+            
             <!-- Form start -->
-            <form id="save_qty">
+            <form id="save_qty" class="flex flex-col h-full">
                 @csrf
 
                 <!-- Header -->
-                <div class="modal-header border-0 bg-gradient">
-                    <h5 class="modal-title text-white fw-bold fs-4">
-                        <i class="bi bi-box-seam me-2"></i>
+                <div class="flex justify-between items-center p-4 md:p-5 border-b bg-gradient-to-r from-[var(--primary-color)] to-[#5e4a9e] flex-shrink-0">
+                    <h5 class="text-white text-lg md:text-xl font-bold flex items-center">
+                        <span class="material-symbols-outlined me-2">inventory_2</span>
                         {{ trans('messages.manage_quantities', [], session('locale')) }}
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ trans('messages.close', [], session('locale')) }}"></button>
-                </div>              
+                    <button type="button" @click="showQuantity = false" class="text-white hover:text-gray-200 transition">
+                        <span class="material-symbols-outlined text-2xl md:text-3xl">close</span>
+                    </button>
+                </div>
 
-                <!-- Body -->
-                <div class="modal-body p-4 p-lg-5" style="background:#fafafa;">
+                <!-- Body - Scrollable -->
+                <div class="p-4 md:p-6 overflow-y-auto flex-1 bg-gray-50 min-h-0" style="max-height: calc(90vh - 180px);">
 
                     <!-- Action Type Tabs -->
-                    <div class="d-flex justify-content-center mb-5">
-                        <div class="btn-group shadow-sm" role="group">
-                            <input type="radio" class="btn-check" name="qtyType" id="add" value="add" x-model="actionType">
-                            <label class="btn btn-outline-primary fw-semibold px-5" for="add">
-                                <i class="bi bi-plus-circle me-2"></i>
+                    <div class="flex justify-center mb-4 md:mb-6 sticky top-0 bg-gray-50 pb-4 z-10">
+                        <div class="inline-flex rounded-lg shadow-sm border border-gray-200 bg-white overflow-hidden" role="group">
+                            <input type="radio" class="hidden" name="qtyType" id="add" value="add" x-model="actionType">
+                            <label for="add" 
+                                :class="actionType === 'add' ? 'bg-[var(--primary-color)] text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+                                class="px-4 md:px-5 py-2 md:py-3 text-sm md:text-base font-semibold cursor-pointer transition-colors flex items-center border-r border-gray-200">
+                                <span class="material-symbols-outlined me-1 md:me-2 text-base md:text-lg">add_circle</span>
                                 {{ trans('messages.add_new', [], session('locale')) }}
                             </label>
 
-                            <input type="radio" class="btn-check" name="qtyType" id="pull" value="pull" x-model="actionType">
-                            <label class="btn btn-outline-danger fw-semibold px-5" for="pull">
-                                <i class="bi bi-dash-circle me-2"></i>
+                            <input type="radio" class="hidden" name="qtyType" id="pull" value="pull" x-model="actionType">
+                            <label for="pull"
+                                :class="actionType === 'pull' ? 'bg-red-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+                                class="px-4 md:px-5 py-2 md:py-3 text-sm md:text-base font-semibold cursor-pointer transition-colors flex items-center">
+                                <span class="material-symbols-outlined me-1 md:me-2 text-base md:text-lg">remove_circle</span>
                                 {{ trans('messages.pull_quantity', [], session('locale')) }}
                             </label>
                         </div>
                     </div>
 
                     <!-- 1. By Size -->
-                    <section class="mb-5 d-none">
-                        <h6 class="fw-bold text-primary mb-3">
-                            <span class="badge bg-primary rounded-pill me-2">1</span>
+                    <section class="mb-4 md:mb-6 hidden">
+                        <h6 class="font-bold text-[var(--primary-color)] mb-2 md:mb-3 flex items-center text-sm md:text-base">
+                            <span class="bg-[var(--primary-color)] text-white rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center text-xs mr-2">1</span>
                             {{ trans('messages.by_size', [], session('locale')) }}
                         </h6>
                         <div id="sizecont"></div>
                     </section>
 
-                    <hr class="my-5">
+                    <hr class="my-4 md:my-6 border-gray-300">
 
                     <!-- 2. By Size + Color -->
-                    <section class="mb-5">
-                        <h6 class="fw-bold text-primary mb-3">
-                            <span class="badge bg-primary rounded-pill me-2">2</span>
+                    <section class="mb-4 md:mb-6">
+                        <h6 class="font-bold text-[var(--primary-color)] mb-2 md:mb-3 flex items-center text-sm md:text-base">
+                            <span class="bg-[var(--primary-color)] text-white rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center text-xs mr-2">2</span>
                             {{ trans('messages.by_size_color', [], session('locale')) }}
                         </h6>
                         <div id="colorsize_container"></div>
                     </section>
 
-                    <hr class="my-5">
+                    <hr class="my-4 md:my-6 border-gray-300">
 
                     <!-- 3. By Color Only -->
-                    <section class="mb-5 d-none">
-                        <h6 class="fw-bold text-primary mb-3">
-                            <span class="badge bg-primary rounded-pill me-2">3</span>
+                    <section class="mb-4 md:mb-6 hidden">
+                        <h6 class="font-bold text-[var(--primary-color)] mb-2 md:mb-3 flex items-center text-sm md:text-base">
+                            <span class="bg-[var(--primary-color)] text-white rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center text-xs mr-2">3</span>
                             {{ trans('messages.by_color_only', [], session('locale')) }}
                         </h6>
                         <div id="colorcont"></div>
                     </section>
 
                     <!-- Pull Reason (only visible when actionType is 'pull') -->
-                    <div x-show="actionType === 'pull'" x-transition class="mt-5 p-4 bg-danger bg-opacity-10 border border-danger rounded-3">
-                        <label class="form-label fw-bold text-danger mb-3">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <div x-show="actionType === 'pull'" 
+                        x-transition
+                        class="mt-4 md:mt-6 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                        <label class="block font-bold text-red-600 mb-2 md:mb-3 flex items-center text-sm md:text-base">
+                            <span class="material-symbols-outlined me-2 text-base md:text-lg">warning</span>
                             {{ trans('messages.pull_reason_required', [], session('locale')) }}
                         </label>
-                        <textarea name="pull_reason" class="form-control border-danger focus-ring focus-ring-danger" id="pull_reason" rows="4"
-                            placeholder="{{ trans('messages.pull_reason_placeholder', [], session('locale')) }}" ></textarea>
+                        <textarea name="pull_reason" 
+                            id="pull_reason" 
+                            rows="3"
+                            placeholder="{{ trans('messages.pull_reason_placeholder', [], session('locale')) }}"
+                            class="w-full border-2 border-red-300 rounded-lg p-2 md:p-3 text-sm md:text-base focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition resize-none"></textarea>
                     </div>
 
                     <!-- Hidden stock_id input -->
                     <input type="hidden" name="stock_id" id="stock_id" value="">
- <div class="modal-footer border-0 bg-light px-5 py-4" style="display: flex !important; flex-shrink: 0;">
-                    <button type="button" class="btn btn-lg btn-outline-secondary px-5" data-bs-dismiss="modal">
+                </div>
+
+                <!-- Footer - Always Visible -->
+                <div class="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 p-4 md:p-5 border-t bg-white flex-shrink-0 shadow-lg">
+                    <button type="button" 
+                        @click="showQuantity = false"
+                        class="w-full sm:w-auto px-4 md:px-5 py-2.5 md:py-3 rounded-lg border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition text-sm md:text-base">
                         {{ trans('messages.cancel', [], session('locale')) }}
                     </button>
-                    <button type="submit" class="btn btn-lg px-5 text-white shadow"
+                    <button type="submit" 
+                        class="w-full sm:w-auto px-4 md:px-5 py-2.5 md:py-3 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transition text-sm md:text-base"
                         style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
-                        <i class="bi bi-check2-all me-2"></i>
+                        <span class="material-symbols-outlined align-middle me-2 text-base">check</span>
                         {{ trans('messages.save_operation', [], session('locale')) }}
                     </button>
                 </div>
-                </div>
-
-                <!-- Footer -->
-               
-            </form>
-            <!-- Form end -->
-
-        </div>
+        </form>
+        <!-- Form end -->
     </div>
 </div>
 
@@ -389,120 +363,130 @@
 
 
 
-<!-- Full Stock Details Modal -->
-<div class="modal fade" id="fullStockDetailsModal" tabindex="-1" aria-labelledby="fullStockDetailsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content shadow-lg border-0 rounded-4 overflow-hidden">
-            <!-- Header -->
-            <div class="modal-header border-0 bg-gradient-to-r from-pink-50 to-purple-50">
-                <h5 class="modal-title text-[var(--primary-color)] fw-bold fs-4" id="fullStockDetailsModalLabel">
-                    {{ __('messages.abaya_details') }}: <span id="full_modal_abaya_code"></span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ trans('messages.close', [], session('locale')) }}"></button>
-            </div>
-            
-            <!-- Loader -->
-            <div id="fullStockDetailsLoader" class="d-flex flex-column align-items-center justify-content-center p-5 d-none">
-                <div class="spinner-border text-[var(--primary-color)]" role="status">
-                    <span class="visually-hidden">{{ __('messages.loading') }}...</span>
-                </div>
-                <p class="mt-3 text-muted">{{ __('messages.loading_details') }}</p>
-            </div>
-            
-            <!-- Body -->
-            <div class="modal-body p-4 p-lg-5" id="fullStockDetailsBody">
-                <!-- Total Quantity Badge at Top -->
-                <div class="text-center mb-4">
-                    <div class="d-inline-block p-3 rounded-4 shadow-sm" style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
-                        <h6 class="text-white mb-1 fw-semibold">{{ __('messages.total_quantity') }}</h6>
-                        <h3 class="text-white mb-0 fw-bold" id="full_total_quantity">0</h3>
-                    </div>
-                </div>
+    <!-- Full Stock Details Modal - Alpine.js -->
+   <div x-show="showFullDetails"
+    x-transition
+    x-cloak
+    class="fixed inset-0 bg-black/60 z-[9998] flex items-center justify-center p-4"
+    @keydown.escape.window="showFullDetails = false">
 
-                <!-- Images Gallery -->
-                <div class="mb-5">
-                    <h6 class="fw-bold text-[var(--primary-color)] mb-3">
-                        <i class="bi bi-images me-2"></i>{{ __('messages.images') }}
+    <div @click.away="showFullDetails = false" @click.stop
+        class="bg-white w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+
+        <!-- Header -->
+        <div class="flex justify-between items-center p-5 border-b bg-gradient-to-r from-pink-50 to-purple-50 flex-shrink-0">
+            <h5 class="text-[var(--primary-color)] text-xl font-bold">
+                {{ trans('messages.abaya_details', [], session('locale')) }}:
+                <span id="full_modal_abaya_code">...</span>
+            </h5>
+            <button type="button" @click="showFullDetails = false"
+                class="text-gray-500 hover:text-gray-800 transition">
+                <span class="material-symbols-outlined text-3xl">close</span>
+            </button>
+        </div>
+
+        <!-- Loader -->
+        <div x-show="fullDetailsLoading" class="flex flex-col items-center justify-center p-12">
+            <div class="border-4 border-pink-200 border-t-[var(--primary-color)] rounded-full w-16 h-16 animate-spin mb-4"></div>
+            <p class="text-gray-600 font-semibold">
+                {{ trans('messages.loading_details', [], session('locale')) }}
+            </p>
+        </div>
+
+        <!-- Body -->
+        <div x-show="!fullDetailsLoading"
+            class="p-4 md:p-6 overflow-y-auto flex-1"
+            id="fullStockDetailsBody">
+
+            <!-- Total Quantity -->
+            <div class="text-center mb-6">
+                <div class="inline-block p-4 rounded-2xl shadow-md"
+                    style="background: linear-gradient(135deg, var(--primary-color), #5e4a9e);">
+                    <h6 class="text-white mb-1 font-semibold text-sm">
+                        {{ trans('messages.total_quantity', [], session('locale')) }}
                     </h6>
-                    <div id="full_stock_images_container" class="row g-3">
-                        <!-- Images will be injected here -->
-                    </div>
+                    <h3 class="text-white mb-0 font-bold text-3xl" id="full_total_quantity">0</h3>
                 </div>
+            </div>
 
-                <hr class="my-4 border-dashed border-gray-300">
+            <!-- Images -->
+            <div class="mb-6">
+                <h6 class="font-bold text-[var(--primary-color)] mb-3 flex items-center">
+                    <span class="material-symbols-outlined me-2">images</span>
+                    {{ trans('messages.images', [], session('locale')) }}
+                </h6>
+                <div id="full_stock_images_container"
+                    class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+            </div>
 
-                <!-- Basic Information -->
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <div class="card card-body h-100 border-0 shadow-sm p-4">
-                            <h6 class="fw-bold text-[var(--primary-color)] mb-3">{{ __('messages.basic_info') }}</h6>
-                            <div class="space-y-2">
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.code') }}:</strong> 
-                                    <span id="full_abaya_code" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.design') }}:</strong> 
-                                    <span id="full_design_name" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.description') }}:</strong> 
-                                    <span id="full_description" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.barcode') }}:</strong> 
-                                    <span id="full_barcode" class="text-gray-900">-</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card card-body h-100 border-0 shadow-sm p-4">
-                            <h6 class="fw-bold text-[var(--primary-color)] mb-3">{{ __('messages.price_info') }}</h6>
-                            <div class="space-y-2">
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.cost_price') }}:</strong> 
-                                    <span id="full_cost_price" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.sales_price') }}:</strong> 
-                                    <span id="full_sales_price" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.tailor_charges') }}:</strong> 
-                                    <span id="full_tailor_charges" class="text-gray-900">-</span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong class="text-gray-700">{{ __('messages.tailors') }}:</strong> 
-                                    <span id="full_tailor_names" class="text-gray-900">-</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <hr class="my-6 border-dashed border-gray-300">
 
-                <hr class="my-4 border-dashed border-gray-300">
-
-                <!-- Color-Size Combinations -->
-                <div class="mb-4">
-                    <h6 class="fw-bold text-[var(--primary-color)] mb-3">
-                        <i class="bi bi-palette me-2"></i>{{ __('messages.by_color_and_size') }}
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h6 class="font-bold text-[var(--primary-color)] mb-3">
+                        {{ trans('messages.basic_info', [], session('locale')) }}
                     </h6>
-                    <div class="row g-3" id="full_size_color_container">
-                        <!-- Dynamic items will be injected here -->
-                    </div>
+
+                    <p><strong>{{ trans('messages.code', [], session('locale')) }}:</strong>
+                        <span id="full_abaya_code">-</span></p>
+
+                    <p><strong>{{ trans('messages.design', [], session('locale')) }}:</strong>
+                        <span id="full_design_name">-</span></p>
+
+                    <p><strong>{{ trans('messages.description', [], session('locale')) }}:</strong>
+                        <span id="full_description">-</span></p>
+
+                    <p><strong>{{ trans('messages.barcode', [], session('locale')) }}:</strong>
+                        <span id="full_barcode">-</span></p>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <h6 class="font-bold text-[var(--primary-color)] mb-3">
+                        {{ trans('messages.price_info', [], session('locale')) }}
+                    </h6>
+
+                    <p><strong>{{ trans('messages.cost_price', [], session('locale')) }}:</strong>
+                        <span id="full_cost_price">-</span></p>
+
+                    <p><strong>{{ trans('messages.sales_price', [], session('locale')) }}:</strong>
+                        <span id="full_sales_price">-</span></p>
+
+                    <p><strong>{{ trans('messages.tailor_charges', [], session('locale')) }}:</strong>
+                        <span id="full_tailor_charges">-</span></p>
+
+                    <p><strong>{{ trans('messages.tailors', [], session('locale')) }}:</strong>
+                        <span id="full_tailor_names">-</span></p>
                 </div>
             </div>
-            
-            <!-- Footer -->
-            <div class="modal-footer border-0 bg-light px-5 py-4">
-                <button type="button" class="btn btn-lg btn-outline-secondary px-5" data-bs-dismiss="modal">
-                    {{ __('messages.close') }}
-                </button>
+
+            <hr class="my-6 border-dashed border-gray-300">
+
+            <!-- Color / Size -->
+            <div>
+                <h6 class="font-bold text-[var(--primary-color)] mb-3 flex items-center">
+                    <span class="material-symbols-outlined me-2">palette</span>
+                    {{ trans('messages.by_color_and_size', [], session('locale')) }}
+                </h6>
+
+                <div id="full_size_color_container"
+                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                </div>
             </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end p-5 border-t bg-gray-50">
+            <button @click="showFullDetails = false"
+                class="px-5 py-3 rounded-lg border bg-white text-gray-700 font-semibold hover:bg-gray-50">
+                {{ trans('messages.close', [], session('locale')) }}
+            </button>
         </div>
     </div>
 </div>
+
+
+</main>
 
 @include('layouts.footer')
 @endsection

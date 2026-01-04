@@ -26,6 +26,7 @@ class PosOrders extends Model
         'notes',
         'added_by',
         'user_id',
+        'channel_id',
     ];
 
     public function details()
@@ -41,5 +42,10 @@ class PosOrders extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function channel()
+    {
+        return $this->belongsTo(Channel::class, 'channel_id');
     }
 }

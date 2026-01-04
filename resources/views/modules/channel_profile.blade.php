@@ -37,11 +37,11 @@
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
       <div class="p-4 rounded-2xl bg-gradient-to-br from-pink-50 to-purple-100 shadow-md flex items-center justify-between">
         <div>
-          <p class="text-sm text-gray-600">{{ trans('messages.total_items', [], session('locale')) ?? 'Total Items' }}</p>
-          <h3 class="text-2xl font-extrabold text-[var(--primary-color)]">{{ number_format($totalItems) }}</h3>
+          <p class="text-sm text-gray-600">{{ trans('messages.total_quantity_sent', [], session('locale')) ?? 'Total Quantity Sent' }}</p>
+          <h3 class="text-2xl font-extrabold text-[var(--primary-color)]">{{ number_format($totalQuantitySent ?? 0) }}</h3>
         </div>
         <span class="material-symbols-outlined bg-[var(--primary-color)]/10 text-[var(--primary-color)] rounded-full p-3">
           inventory_2
@@ -56,19 +56,49 @@
           local_shipping
         </span>
       </div>
-      <div class="p-4 rounded-2xl bg-gradient-to-br from-pink-50 to-purple-100 shadow-md flex items-center justify-between">
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-green-50 to-emerald-100 shadow-md flex items-center justify-between">
         <div>
-          <p class="text-sm text-gray-600">{{ trans('messages.channel_name', [], session('locale')) ?? 'Channel Name' }}</p>
-          <h3 class="text-lg font-extrabold text-[var(--primary-color)]">
-            @if(session('locale') == 'ar')
-              {{ $channel->channel_name_ar ?? '-' }}
-            @else
-              {{ $channel->channel_name_en ?? '-' }}
-            @endif
-          </h3>
+          <p class="text-sm text-gray-600">{{ trans('messages.total_sales', [], session('locale')) ?? 'Total Sales' }}</p>
+          <h3 class="text-2xl font-extrabold text-green-600">{{ number_format($totalSales ?? 0, 2) }}</h3>
         </div>
-        <span class="material-symbols-outlined bg-[var(--primary-color)]/10 text-[var(--primary-color)] rounded-full p-3">
-          store
+        <span class="material-symbols-outlined bg-green-100 text-green-600 rounded-full p-3">
+          point_of_sale
+        </span>
+      </div>
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-100 shadow-md flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-600">{{ trans('messages.total_orders', [], session('locale')) ?? 'Total Orders' }}</p>
+          <h3 class="text-2xl font-extrabold text-blue-600">{{ number_format($totalOrders ?? 0) }}</h3>
+        </div>
+        <span class="material-symbols-outlined bg-blue-100 text-blue-600 rounded-full p-3">
+          receipt_long
+        </span>
+      </div>
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 shadow-md flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-600">{{ trans('messages.items_sold', [], session('locale')) ?? 'Items Sold' }}</p>
+          <h3 class="text-2xl font-extrabold text-orange-600">{{ number_format($totalItemsSold ?? 0) }}</h3>
+        </div>
+        <span class="material-symbols-outlined bg-orange-100 text-orange-600 rounded-full p-3">
+          shopping_cart
+        </span>
+      </div>
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 shadow-md flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-600">{{ trans('messages.profit_earned', [], session('locale')) ?? 'Profit Earned' }}</p>
+          <h3 class="text-2xl font-extrabold text-indigo-600">{{ number_format($totalProfit ?? 0, 2) }}</h3>
+        </div>
+        <span class="material-symbols-outlined bg-indigo-100 text-indigo-600 rounded-full p-3">
+          trending_up
+        </span>
+      </div>
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-100 shadow-md flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-600">{{ trans('messages.available_items', [], session('locale')) ?? 'Available Items' }}</p>
+          <h3 class="text-2xl font-extrabold text-teal-600">{{ number_format($availableItems ?? 0) }}</h3>
+        </div>
+        <span class="material-symbols-outlined bg-teal-100 text-teal-600 rounded-full p-3">
+          check_circle
         </span>
       </div>
     </div>
@@ -112,6 +142,11 @@
 
     <!-- Tabs -->
     <div class="flex gap-3 border-b border-pink-100 overflow-x-auto no-scrollbar bg-white rounded-xl shadow-sm px-4">
+      <button @click="tab='sales'"
+              :class="tab==='sales' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-3 flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">point_of_sale</span> {{ trans('messages.sales', [], session('locale')) ?? 'Sales' }}
+      </button>
       <button @click="tab='transfers'"
               :class="tab==='transfers' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
               class="py-3 px-3 flex items-center gap-1">
@@ -122,7 +157,75 @@
               class="py-3 px-3 flex items-center gap-1">
         <span class="material-symbols-outlined text-base">inventory</span> {{ trans('messages.transfer_items', [], session('locale')) ?? 'Transfer Items' }}
       </button>
+      <button @click="tab='item_status'"
+              :class="tab==='item_status' ? 'text-[var(--primary-color)] border-b-2 border-[var(--primary-color)] font-bold' : 'text-gray-600'"
+              class="py-3 px-3 flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">check_circle</span> {{ trans('messages.item_status', [], session('locale')) ?? 'Item Status' }}
+      </button>
     </div>
+
+    <!-- SALES TAB -->
+    <section x-show="tab==='sales'" x-transition>
+      <div class="bg-white border border-pink-100 rounded-2xl p-6 mt-4">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <input x-model="salesSearch" type="text" 
+                 :placeholder="'{{ trans('messages.search', [], session('locale')) ?? 'Search' }}...'"
+                 class="h-10 px-3 border border-pink-200 rounded-lg flex-1 focus:ring-2 focus:ring-[var(--primary-color)]"
+                 @input="filterSales()">
+          <input x-model="salesDateFrom" type="date" 
+                 class="h-10 px-2 border border-pink-200 rounded-lg" 
+                 @change="filterSales()">
+          <input x-model="salesDateTo" type="date" 
+                 class="h-10 px-2 border border-pink-200 rounded-lg" 
+                 @change="filterSales()">
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[800px]">
+            <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
+              <tr>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.order_no', [], session('locale')) ?? 'Order No' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.order_date', [], session('locale')) ?? 'Order Date' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.abaya_code', [], session('locale')) ?? 'Abaya Code' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.design_name', [], session('locale')) ?? 'Design Name' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) ?? 'Color' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) ?? 'Size' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.actions', [], session('locale')) ?? 'Actions' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="filteredSales.length === 0">
+                <tr>
+                  <td colspan="8" class="px-3 py-4 text-center text-gray-500">
+                    {{ trans('messages.no_sales_found', [], session('locale')) ?? 'No sales found' }}
+                  </td>
+                </tr>
+              </template>
+              <template x-for="sale in filteredSales" :key="sale.id">
+                <tr class="border-t hover:bg-pink-50/60">
+                  <td class="px-3 py-2 text-center font-semibold" x-text="sale.order_no || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.order_date || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.abaya_code || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.design_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.color_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.size_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="sale.quantity || 0"></td>
+                  <td class="px-3 py-2 text-center">
+                    <a :href="'/pos_bill?order_id=' + (sale.order_id || '')" 
+                       target="_blank"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition text-xs font-semibold">
+                      <span class="material-symbols-outlined text-base">receipt</span>
+                      {{ trans('messages.receipt', [], session('locale')) ?? 'Receipt' }}
+                    </a>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- TRANSFERS TAB -->
     <section x-show="tab==='transfers'" x-transition>
@@ -144,40 +247,28 @@
           <table class="w-full text-sm min-w-[1000px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_code', [], session('locale')) ?? 'Transfer Code' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_date', [], session('locale')) ?? 'Date' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_type', [], session('locale')) ?? 'Type' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.channel_type', [], session('locale')) ?? 'Channel Type' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.from', [], session('locale')) ?? 'From' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.to', [], session('locale')) ?? 'To' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.items_count', [], session('locale')) ?? 'Items Count' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.notes', [], session('locale')) ?? 'Notes' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_code', [], session('locale')) ?? 'Transfer Code' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_date', [], session('locale')) ?? 'Date' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.from', [], session('locale')) ?? 'From' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.to', [], session('locale')) ?? 'To' }}</th>
               </tr>
             </thead>
             <tbody>
               <template x-if="filteredTransfers.length === 0">
                 <tr>
-                  <td colspan="9" class="px-3 py-4 text-center text-gray-500">
+                  <td colspan="5" class="px-3 py-4 text-center text-gray-500">
                     {{ trans('messages.no_transfers_found', [], session('locale')) ?? 'No transfers found' }}
                   </td>
                 </tr>
               </template>
               <template x-for="transfer in filteredTransfers" :key="transfer.id">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold" x-text="transfer.transfer_code"></td>
-                  <td class="px-3 py-2" x-text="transfer.date"></td>
-                  <td class="px-3 py-2">
-                    <span class="px-2 py-1 rounded-full text-xs font-semibold"
-                          :class="transfer.transfer_type === 'add' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                          x-text="transfer.transfer_type === 'add' ? '{{ trans('messages.add', [], session('locale')) ?? 'Add' }}' : '{{ trans('messages.minus', [], session('locale')) ?? 'Minus' }}'"></span>
-                  </td>
-                  <td class="px-3 py-2" x-text="transfer.channel_type || '-'"></td>
-                  <td class="px-3 py-2" x-text="transfer.quantity || '-'"></td>
-                  <td class="px-3 py-2" x-text="transfer.from || '-'"></td>
-                  <td class="px-3 py-2" x-text="transfer.to || '-'"></td>
-                  <td class="px-3 py-2" x-text="transfer.items_count || 0"></td>
-                  <td class="px-3 py-2" x-text="transfer.notes || '-'"></td>
+                  <td class="px-3 py-2 text-center font-semibold" x-text="transfer.transfer_code"></td>
+                  <td class="px-3 py-2 text-center" x-text="transfer.date"></td>
+                  <td class="px-3 py-2 text-center" x-text="transfer.quantity || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="transfer.from || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="transfer.to || '-'"></td>
                 </tr>
               </template>
             </tbody>
@@ -203,41 +294,99 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-sm min-w-[1200px]">
+          <table class="w-full text-sm min-w-[900px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_code', [], session('locale')) ?? 'Transfer Code' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_date', [], session('locale')) ?? 'Transfer Date' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.abaya_code', [], session('locale')) ?? 'Abaya Code' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.item_type', [], session('locale')) ?? 'Item Type' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) ?? 'Color' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) ?? 'Size' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.from_location', [], session('locale')) ?? 'From Location' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.to_location', [], session('locale')) ?? 'To Location' }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.created_at', [], session('locale')) ?? 'Created At' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_code', [], session('locale')) ?? 'Transfer Code' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_date', [], session('locale')) ?? 'Transfer Date' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.abaya_code', [], session('locale')) ?? 'Abaya Code' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) ?? 'Color' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) ?? 'Size' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.from_location', [], session('locale')) ?? 'From Location' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.to_location', [], session('locale')) ?? 'To Location' }}</th>
               </tr>
             </thead>
             <tbody>
               <template x-if="filteredTransferItems.length === 0">
                 <tr>
-                  <td colspan="10" class="px-3 py-4 text-center text-gray-500">
+                  <td colspan="8" class="px-3 py-4 text-center text-gray-500">
                     {{ trans('messages.no_transfer_items_found', [], session('locale')) ?? 'No transfer items found' }}
                   </td>
                 </tr>
               </template>
               <template x-for="item in filteredTransferItems" :key="item.id">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold" x-text="item.transfer_code || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.transfer_date || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.abaya_code || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.item_type || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.color_name || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.size_name || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.quantity || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.from_location || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.to_location || '-'"></td>
-                  <td class="px-3 py-2" x-text="item.created_at || '-'"></td>
+                  <td class="px-3 py-2 text-center font-semibold" x-text="item.transfer_code || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.transfer_date || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.abaya_code || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.color_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.size_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.quantity || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.from_location || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.to_location || '-'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ITEM STATUS TAB -->
+    <section x-show="tab==='item_status'" x-transition>
+      <div class="bg-white border border-pink-100 rounded-2xl p-6 mt-4">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <input x-model="itemStatusSearch" type="text" 
+                 :placeholder="'{{ trans('messages.search', [], session('locale')) ?? 'Search' }}...'"
+                 class="h-10 px-3 border border-pink-200 rounded-lg flex-1 focus:ring-2 focus:ring-[var(--primary-color)]"
+                 @input="filterItemStatus()">
+          <select x-model="itemStatusFilter" 
+                  class="h-10 px-3 border border-pink-200 rounded-lg"
+                  @change="filterItemStatus()">
+            <option value="all">{{ trans('messages.all', [], session('locale')) ?? 'All' }}</option>
+            <option value="available">{{ trans('messages.available', [], session('locale')) ?? 'Available' }}</option>
+            <option value="sold">{{ trans('messages.sold', [], session('locale')) ?? 'Sold' }}</option>
+          </select>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[900px]">
+            <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
+              <tr>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.abaya_code', [], session('locale')) ?? 'Abaya Code' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.design_name', [], session('locale')) ?? 'Design Name' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) ?? 'Color' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) ?? 'Size' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) ?? 'Quantity' }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.status', [], session('locale')) ?? 'Status' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="filteredItemStatus.length === 0">
+                <tr>
+                  <td colspan="6" class="px-3 py-4 text-center text-gray-500">
+                    {{ trans('messages.no_items_found', [], session('locale')) ?? 'No items found' }}
+                  </td>
+                </tr>
+              </template>
+              <template x-for="item in filteredItemStatus" :key="item.id">
+                <tr class="border-t hover:bg-pink-50/60">
+                  <td class="px-3 py-2 text-center font-semibold" x-text="item.abaya_code || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.design_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.color_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.size_name || '-'"></td>
+                  <td class="px-3 py-2 text-center" x-text="item.quantity || 0"></td>
+                  <td class="px-3 py-2 text-center">
+                    <span x-show="item.status === 'sold'" 
+                          class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      {{ trans('messages.sold', [], session('locale')) ?? 'Sold' }}
+                    </span>
+                    <span x-show="item.status === 'available'" 
+                          class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                      {{ trans('messages.available', [], session('locale')) ?? 'Available' }}
+                    </span>
+                  </td>
                 </tr>
               </template>
             </tbody>
@@ -249,121 +398,7 @@
   </div>
 </main>
 
-<script>
-function channelProfile() {
-  return {
-    tab: 'transfers',
-    transfers: [],
-    transferItems: [],
-    filteredTransfers: [],
-    filteredTransferItems: [],
-    transferSearch: '',
-    transferDateFrom: '',
-    transferDateTo: '',
-    itemSearch: '',
-    itemDateFrom: '',
-    itemDateTo: '',
-    loading: false,
 
-    async init() {
-      await this.loadTransfers();
-      await this.loadTransferItems();
-    },
-
-    async loadTransfers() {
-      this.loading = true;
-      try {
-        const response = await fetch('/channel_profile/{{ $channel->id }}/transfers');
-        const data = await response.json();
-        this.transfers = data || [];
-        this.filteredTransfers = this.transfers;
-      } catch (error) {
-        console.error('Error loading transfers:', error);
-        this.transfers = [];
-        this.filteredTransfers = [];
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    async loadTransferItems() {
-      this.loading = true;
-      try {
-        const response = await fetch('/channel_profile/{{ $channel->id }}/transfer-items');
-        const data = await response.json();
-        this.transferItems = data || [];
-        this.filteredTransferItems = this.transferItems;
-      } catch (error) {
-        console.error('Error loading transfer items:', error);
-        this.transferItems = [];
-        this.filteredTransferItems = [];
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    filterTransfers() {
-      let filtered = [...this.transfers];
-
-      // Search filter
-      if (this.transferSearch) {
-        const search = this.transferSearch.toLowerCase();
-        filtered = filtered.filter(transfer => 
-          (transfer.transfer_code && transfer.transfer_code.toLowerCase().includes(search)) ||
-          (transfer.from && transfer.from.toLowerCase().includes(search)) ||
-          (transfer.to && transfer.to.toLowerCase().includes(search)) ||
-          (transfer.notes && transfer.notes.toLowerCase().includes(search))
-        );
-      }
-
-      // Date filters
-      if (this.transferDateFrom) {
-        filtered = filtered.filter(transfer => 
-          transfer.date && transfer.date >= this.transferDateFrom
-        );
-      }
-
-      if (this.transferDateTo) {
-        filtered = filtered.filter(transfer => 
-          transfer.date && transfer.date <= this.transferDateTo
-        );
-      }
-
-      this.filteredTransfers = filtered;
-    },
-
-    filterTransferItems() {
-      let filtered = [...this.transferItems];
-
-      // Search filter
-      if (this.itemSearch) {
-        const search = this.itemSearch.toLowerCase();
-        filtered = filtered.filter(item => 
-          (item.transfer_code && item.transfer_code.toLowerCase().includes(search)) ||
-          (item.abaya_code && item.abaya_code.toLowerCase().includes(search)) ||
-          (item.color_name && item.color_name.toLowerCase().includes(search)) ||
-          (item.size_name && item.size_name.toLowerCase().includes(search))
-        );
-      }
-
-      // Date filters
-      if (this.itemDateFrom) {
-        filtered = filtered.filter(item => 
-          item.transfer_date && item.transfer_date >= this.itemDateFrom
-        );
-      }
-
-      if (this.itemDateTo) {
-        filtered = filtered.filter(item => 
-          item.transfer_date && item.transfer_date <= this.itemDateTo
-        );
-      }
-
-      this.filteredTransferItems = filtered;
-    }
-  }
-}
-</script>
 
 @endsection
 

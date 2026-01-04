@@ -126,6 +126,8 @@ Route::post('channels/{channel}/update-status', [ChannelController::class, 'upda
 Route::get('channel_profile/{id}', [ChannelController::class, 'profile'])->name('channel_profile');
 Route::get('channel_profile/{id}/transfers', [ChannelController::class, 'getTransfers'])->name('channel_profile.transfers');
 Route::get('channel_profile/{id}/transfer-items', [ChannelController::class, 'getTransferItems'])->name('channel_profile.transfer_items');
+Route::get('channel_profile/{id}/sales', [ChannelController::class, 'getSales'])->name('channel_profile.sales');
+Route::get('channel_profile/{id}/item-status', [ChannelController::class, 'getItemStatus'])->name('channel_profile.item_status');
 
 Route::get('categories', [CategoryController::class, 'index'])->name('category');
 Route::post('categories', [CategoryController::class, 'store']);

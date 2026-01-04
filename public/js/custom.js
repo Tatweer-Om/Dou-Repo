@@ -176,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Ensure overlay is hidden on page load
   overlay.style.display = "none";
+  overlay.classList.remove("show");
 
   // عند الضغط على زر القائمة
   menuBtn.addEventListener("click", (e) => {
@@ -201,4 +202,45 @@ document.addEventListener("DOMContentLoaded", () => {
       overlay.style.display = "none";
     }
   });
+
+  // Scroll sidebar to active link after a delay to ensure submenus are expanded
+  setTimeout(() => {
+    scrollSidebarToActiveLink();
+  }, 200);
 });
+
+// Function to scroll sidebar to show the active link
+function scrollSidebarToActiveLink() {
+  const sidebarNav = document.querySelector('#sidebar nav');
+  if (!sidebarNav) return;
+
+  // Find active link (has bg-cyan-100 class which indicates active state)
+  const activeLink = sidebarNav.querySelector('a.bg-cyan-100, button.bg-cyan-100');
+  if (!activeLink) return;
+
+  // Get bounding rectangles for accurate positioning
+  const navRect = sidebarNav.getBoundingClientRect();
+  const linkRect = activeLink.getBoundingClientRect();
+  
+  // Calculate current scroll position
+  const currentScrollTop = sidebarNav.scrollTop;
+  
+  // Calculate the link's position relative to the nav container's content (not viewport)
+  // linkRect.top is relative to viewport, navRect.top is relative to viewport
+  // So linkRect.top - navRect.top gives us position relative to nav's visible top
+  // Adding currentScrollTop gives us the absolute position in the scrollable content
+  const linkTopInContent = currentScrollTop + (linkRect.top - navRect.top);
+  
+  // Get the nav container's visible height
+  const navHeight = sidebarNav.clientHeight;
+  const linkHeight = activeLink.offsetHeight;
+  
+  // Calculate scroll position to center the link in the viewport
+  const scrollPosition = linkTopInContent - (navHeight / 2) + (linkHeight / 2);
+  
+  // Scroll smoothly to show the active link
+  sidebarNav.scrollTo({
+    top: Math.max(0, scrollPosition),
+    behavior: 'smooth'
+  });
+}

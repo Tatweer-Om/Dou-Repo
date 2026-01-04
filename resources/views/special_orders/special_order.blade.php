@@ -2,7 +2,7 @@
 
 @section('main')
 @push('title')
-<title>{{ trans('messages.add_stock_lang', [], session('locale')) }}</title>
+<title>{{ trans('messages.special_order', [], session('locale')) }}</title>
 @endpush
 
 <main class="flex-1 p-4 md:p-6" x-data="tailorApp">
@@ -178,7 +178,7 @@
 
         <div>
           <label class="block text-sm font-medium mb-1">{{ trans('messages.quantity', [], session('locale')) }}</label>
-          <input type="number" min="1" x-model="order.quantity" class="form-input w-full border-gray-300 rounded-lg">
+          <input type="number" min="1" x-model="order.quantity" data-validate="quantity" @keydown="validateQuantityInput($event)" @paste="cleanQuantityOnPaste($event)" class="form-input w-full border-gray-300 rounded-lg">
         </div>
       </div>
 
@@ -423,18 +423,30 @@
             <label class="block text-sm mb-1">{{ trans('messages.current_payment_amount', [], session('locale')) }}</label>
             <input type="number" step="0.001" min="0" :max="calculateTotal()"
                    x-model="paymentAmount"
+                   data-validate="amount"
+                   @input="paymentError = ''"
+                   @keydown="validateAmountInput($event)"
+                   @paste="cleanAmountOnPaste($event)"
                    class="form-input w-full rounded-xl border-gray-300" />
           </div>
 
           <div class="mt-3">
             <label class="block text-sm mb-1">{{ trans('messages.payment_method', [], session('locale')) }}</label>
             <select x-model="selectedAccountId"
+                    @change="paymentError = ''"
                     class="form-select w-full rounded-xl border-gray-300">
               <option value="">{{ trans('messages.select_account', [], session('locale')) ?: 'Select Account' }}</option>
               <template x-for="account in accounts" :key="account.id">
                 <option :value="account.id" x-text="account.account_name + (account.account_no ? ' (' + account.account_no + ')' : '')"></option>
               </template>
             </select>
+          </div>
+
+          <!-- Error Message -->
+          <div x-show="paymentError" 
+               x-transition
+               class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-sm text-red-700" x-text="paymentError"></p>
           </div>
 
         </div>

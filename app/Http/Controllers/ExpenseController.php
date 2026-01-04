@@ -15,6 +15,16 @@ class ExpenseController extends Controller
 {
     public function index()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(3, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         $categories = ExpenseCategory::orderBy('category_name', 'ASC')->get();
         $accounts = Account::orderBy('account_name', 'ASC')->get();
         

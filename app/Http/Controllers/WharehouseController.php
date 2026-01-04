@@ -25,8 +25,17 @@ use Illuminate\Support\Facades\File;
 class WharehouseController extends Controller
 {
     public function index(){
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
 
-    return view ('wharehouse.wharehouse');
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(6, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
+        return view ('wharehouse.wharehouse');
 
     }
 
@@ -187,6 +196,16 @@ public function delete_wharehouse(Request $request)
 
 public function manage_quantity()
 {
+    if (!Auth::check()) {
+        return redirect()->route('login_page')->with('error', 'Please login first');
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+
+    if (!in_array(6, $permissions)) {
+        return redirect()->route('login_page')->with('error', 'Permission denied');
+    }
+
     $locale = session('locale'); 
 
     $total_stock = Stock::sum('quantity');
@@ -241,6 +260,11 @@ public function get_inventory(Request $request)
         if ($mode === 'size') {
             // Get all sizes for this stock
             foreach ($stock->sizes as $stockSize) {
+                // Only include items with quantity > 0
+                if ((int)$stockSize->qty <= 0) {
+                    continue;
+                }
+                
                 $size = $stockSize->size;
                 $sizeName = $size ? ($locale == 'ar' ? $size->size_name_ar : $size->size_name_en) : null;
                 $uid = $code . '|' . ($sizeName ? $sizeName : '') . '|';
@@ -259,6 +283,11 @@ public function get_inventory(Request $request)
         } elseif ($mode === 'color') {
             // Get all colors for this stock
             foreach ($stock->colors as $stockColor) {
+                // Only include items with quantity > 0
+                if ((int)$stockColor->qty <= 0) {
+                    continue;
+                }
+                
                 $color = $stockColor->color;
                 $colorName = $color ? ($locale == 'ar' ? $color->color_name_ar : $color->color_name_en) : null;
                 $colorCode = $color ? ($color->color_code ?? '#000000') : '#000000';
@@ -278,6 +307,11 @@ public function get_inventory(Request $request)
         } elseif ($mode === 'color_size') {
             // Get all color+size combinations for this stock
             foreach ($stock->colorSizes as $colorSize) {
+                // Only include items with quantity > 0
+                if ((int)$colorSize->qty <= 0) {
+                    continue;
+                }
+                
                 $color = $colorSize->color;
                 $size = $colorSize->size;
                 $colorName = $color ? ($locale == 'ar' ? $color->color_name_ar : $color->color_name_en) : null;
@@ -321,10 +355,12 @@ public function get_channel_inventory(Request $request)
     // Get stocks from channel_stocks table
     $channelStocks = ChannelStock::where('location_type', $channelType)
         ->where('location_id', $locationId)
+        ->where('quantity', '>', 0) // Only get items with quantity > 0
         ->with(['stock'])
         ->get();
 
-    $inventory = [];
+    // Group by uid (code|size|color) to aggregate quantities
+    $groupedInventory = [];
     
     foreach ($channelStocks as $channelStock) {
         $stock = $channelStock->stock;
@@ -353,17 +389,25 @@ public function get_channel_inventory(Request $request)
             $colorCode = $color ? ($color->color_code ?? '#000000') : '#000000';
         }
 
-        $inventory[] = [
-            'uid' => $uid,
-            'code' => $code,
-            'name' => $name,
-            'type' => $itemType,
-            'size' => $sizeName,
-            'color' => $colorName,
-            'color_code' => $colorCode,
-            'available' => (int)$channelStock->quantity
-        ];
+        // Aggregate quantities for the same uid
+        if (!isset($groupedInventory[$uid])) {
+            $groupedInventory[$uid] = [
+                'uid' => $uid,
+                'code' => $code,
+                'name' => $name,
+                'type' => $itemType,
+                'size' => $sizeName,
+                'color' => $colorName,
+                'color_code' => $colorCode,
+                'available' => 0
+            ];
+        }
+        
+        $groupedInventory[$uid]['available'] += (int)$channelStock->quantity;
     }
+    
+    // Convert grouped array to indexed array
+    $inventory = array_values($groupedInventory);
     
     return response()->json($inventory);
 }
@@ -521,7 +565,7 @@ public function execute_transfer(Request $request)
             $history->quantity_action = $fromChannel === 'main' ? 'pulled' : 'transferred';
             $history->item_new_quantity = ($item['available'] ?? 0) - (int)$item['qty'];
             $history->quantity_pulled = $fromChannel === 'main' ? (int)$item['qty'] : 0;
-            $history->quantity_pushed = $toChannel !== 'main' ? (int)$item['qty'] : 0;
+            $history->quantity_pushed = $toChannel === 'main' ? (int)$item['qty'] : 0;
             $history->added_by = $user_name;
             $history->user_id = $user_id;
             $history->save();

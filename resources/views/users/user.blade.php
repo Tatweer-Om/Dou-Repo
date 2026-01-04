@@ -154,18 +154,18 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto">
                                 @php
                                     $permissions = [
-                                        'user' => trans('messages.user', [], session('locale')) ?: 'User',
-                                        'account' => trans('messages.accounts', [], session('locale')) ?: 'Account',
-                                        'expense' => trans('messages.expenses', [], session('locale')) ?: 'Expense',
-                                        'sms' => trans('messages.sms_panel', [], session('locale')) ?: 'SMS',
-                                        'special_order' => trans('messages.special_orders', [], session('locale')) ?: 'Special Orders',
-                                        'manage_quantity' => trans('messages.transfer_stock', [], session('locale')) ?: 'Manage Quantity',
-                                        'tailor_order' => trans('messages.tailor_orders', [], session('locale')) ?: 'Tailor Orders',
-                                        'pos' => trans('messages.pos', [], session('locale')) ?: 'POS',
-                                        'stock' => trans('messages.view_stock_lang', [], session('locale')) ?: 'Stock',
-                                        'reports' => trans('messages.reports', [], session('locale')) ?: 'Reports',
-                                        'boutique' => trans('messages.boutique_management', [], session('locale')) ?: 'Boutique',
-                                        'tailor' => trans('messages.tailors', [], session('locale')) ?: 'Tailor',
+                                        1 => trans('messages.user', [], session('locale')) ?: 'User',
+                                        2 => trans('messages.accounts', [], session('locale')) ?: 'Account',
+                                        3 => trans('messages.expenses', [], session('locale')) ?: 'Expense',
+                                        4 => trans('messages.sms_panel', [], session('locale')) ?: 'SMS',
+                                        5 => trans('messages.special_orders', [], session('locale')) ?: 'Special Orders',
+                                        6 => trans('messages.transfer_stock', [], session('locale')) ?: 'Manage Quantity',
+                                        7 => trans('messages.tailor_orders', [], session('locale')) ?: 'Tailor Orders',
+                                        8 => trans('messages.pos', [], session('locale')) ?: 'POS',
+                                        9 => trans('messages.view_stock_lang', [], session('locale')) ?: 'Stock',
+                                        10 => trans('messages.reports', [], session('locale')) ?: 'Reports',
+                                        11 => trans('messages.boutique_management', [], session('locale')) ?: 'Boutique',
+                                        12 => trans('messages.tailors', [], session('locale')) ?: 'Tailor',
                                     ];
                                 @endphp
                                 @foreach($permissions as $key => $label)

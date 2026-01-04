@@ -15,11 +15,21 @@ use Illuminate\Support\Str;
 use App\Models\StockHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Auth;
 
 class StockController extends Controller
 {
     public function index()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(9, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
 
         $tailors = Tailor::all();
         $colors = Color::all();
@@ -74,6 +84,16 @@ public function edit_stock($id)
 
      public function view_stock()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(9, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('stock.view_stock');
     }
 
@@ -124,25 +144,64 @@ if (!empty($request->color_sizes)) {
     $stock->mode               = $request->mode;
     $stock->save();
 
+    // Get authenticated user info for history tracking
+    $user_id = \Illuminate\Support\Facades\Auth::id();
+    $user = \App\Models\User::find($user_id);
+    $user_name = $user ? $user->user_name : 'System';
+
     // ========= 1️⃣ Save Color Only =========
     if (!empty($request->colors)) {
         foreach ($request->colors as $color) {
+            $qty = $color['qty'] ?? 0;
             $stockColor = new StockColor();
             $stockColor->stock_id = $stock->id;
             $stockColor->color_id = $color['color_id'];
-            $stockColor->qty      = $color['qty'] ?? 0;
+            $stockColor->qty      = $qty;
             $stockColor->save();
+
+            // Create StockHistory record for initial addition
+            if ($qty > 0) {
+                StockHistory::create([
+                    'stock_id'    => $stock->id,
+                    'size_id'     => null,
+                    'color_id'    => $color['color_id'],
+                    'old_qty'     => 0,
+                    'changed_qty' => $qty,
+                    'new_qty'     => $qty,
+                    'action_type' => 1, // 1 = addition
+                    'pull_notes'  => null,
+                    'user_id'     => $user_id ? (string)$user_id : null,
+                    'added_by'    => $user_name,
+                ]);
+            }
         }
     }
 
     // ========= 2️⃣ Save Size Only =========
     if (!empty($request->sizes)) {
         foreach ($request->sizes as $size_id => $size) {
+            $qty = $size['qty'] ?? 0;
             $stockSize = new StockSize();
             $stockSize->stock_id = $stock->id;
             $stockSize->size_id  = $size_id;
-            $stockSize->qty      = $size['qty'] ?? 0;
+            $stockSize->qty      = $qty;
             $stockSize->save();
+
+            // Create StockHistory record for initial addition
+            if ($qty > 0) {
+                StockHistory::create([
+                    'stock_id'    => $stock->id,
+                    'size_id'     => $size_id,
+                    'color_id'    => null,
+                    'old_qty'     => 0,
+                    'changed_qty' => $qty,
+                    'new_qty'     => $qty,
+                    'action_type' => 1, // 1 = addition
+                    'pull_notes'  => null,
+                    'user_id'     => $user_id ? (string)$user_id : null,
+                    'added_by'    => $user_name,
+                ]);
+            }
         }
     }
 
@@ -150,12 +209,29 @@ if (!empty($request->color_sizes)) {
     if (!empty($request->color_sizes)) {
         foreach ($request->color_sizes as $color_id => $sizes) {
             foreach ($sizes as $size_id => $data) {
+                $qty = $data['qty'] ?? 0;
                 $colorSize = new ColorSize();
                 $colorSize->stock_id = $stock->id;
                 $colorSize->color_id = $color_id;
                 $colorSize->size_id  = $data['size_id'];
-                $colorSize->qty      = $data['qty'] ?? 0;
+                $colorSize->qty      = $qty;
                 $colorSize->save();
+
+                // Create StockHistory record for initial addition
+                if ($qty > 0) {
+                    StockHistory::create([
+                        'stock_id'    => $stock->id,
+                        'size_id'     => $data['size_id'],
+                        'color_id'    => $color_id,
+                        'old_qty'     => 0,
+                        'changed_qty' => $qty,
+                        'new_qty'     => $qty,
+                        'action_type' => 1, // 1 = addition
+                        'pull_notes'  => null,
+                        'user_id'     => $user_id ? (string)$user_id : null,
+                        'added_by'    => $user_name,
+                    ]);
+                }
             }
         }
     }
@@ -541,7 +617,9 @@ foreach ($stock_sizescolor as $item) {
                 min="0" 
                 name="size_color_qty[]" 
                 class="form-control form-control-sm text-center rounded-pill shadow-sm"
-                placeholder="0">
+                placeholder="0"
+                data-available-qty="' . htmlspecialchars($qty) . '"
+                max="' . ($qty > 0 ? htmlspecialchars($qty) : '') . '">
         </div>
     </div>
 </div>';
@@ -576,7 +654,9 @@ $htmlSizeColor .= '</div>'; // end row
                     </div>
                     <input type="number" min="0" value="' . htmlspecialchars($qty) . '"
                         class="form-control form-control-lg text-center rounded-pill" name="color_qty[]"
-                        placeholder="0">
+                        placeholder="0"
+                        data-available-qty="' . htmlspecialchars($qty) . '"
+                        max="' . ($qty > 0 ? htmlspecialchars($qty) : '') . '">
                 </div>
             </div>
         </div>';
@@ -606,7 +686,9 @@ foreach ($stock_sizes as $stock_size) {
 
                 <input type="number" min="0" value="' . htmlspecialchars($qty) . '" 
                     name="size_qty[]" class="form-control form-control-lg text-center rounded-pill"
-                    placeholder="0">
+                    placeholder="0"
+                    data-available-qty="' . htmlspecialchars($qty) . '"
+                    max="' . ($qty > 0 ? htmlspecialchars($qty) : '') . '">
             </div>
         </div>
     </div>';
@@ -634,6 +716,12 @@ public function add_quantity(Request $request)
     $stock_id = $request->stock_id;
     $isPull   = $request->qtyType === "pull";
     $actionType = $isPull ? 2 : 1;
+    
+    // Get authenticated user info for pull operations
+    $user_id = \Illuminate\Support\Facades\Auth::id();
+    $user = \App\Models\User::find($user_id);
+    $user_name = $user ? $user->user_name : 'System';
+    $pull_reason = $isPull ? ($request->pull_reason ?? '') : null;
 
     if ($request->filled('stock_size_id')) {
 
@@ -650,6 +738,15 @@ public function add_quantity(Request $request)
 
             $old = $item->qty;
             $change = (int) $request->size_color_qty[$i];
+            
+            // Validate pull quantity doesn't exceed available
+            if ($isPull && $change > $old) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Pull quantity (' . $change . ') cannot exceed available quantity (' . $old . ')'
+                ], 400);
+            }
+            
             $new = $isPull ? $old - $change : $old + $change;
 
             if ($isPull) {
@@ -667,6 +764,9 @@ public function add_quantity(Request $request)
                 'changed_qty' => $change,
                 'new_qty'     => $new,
                 'action_type' => $actionType,
+                'pull_notes'  => $pull_reason,
+                'user_id'     => $user_id ? (string)$user_id : null,
+                'added_by'    => $user_name,
             ]);
         }
     }
@@ -682,6 +782,16 @@ public function add_quantity(Request $request)
      */
     public function stockAudit()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(9, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('stock.stock_audit');
     }
 
@@ -704,6 +814,7 @@ public function add_quantity(Request $request)
             foreach ($stocks as $stock) {
                 // Aggregate totals across all color/size combinations for this stock
                 $totalAdded = 0;
+                $totalPulled = 0;
                 $totalPosSold = 0;
                 $totalTransferredOut = 0;
                 $totalTransferredIn = 0;
@@ -726,6 +837,13 @@ public function add_quantity(Request $request)
                         ->where('color_id', $colorId)
                         ->where('size_id', $sizeId)
                         ->where('action_type', 1)
+                        ->sum('changed_qty');
+
+                    // Total pulled from history (action_type = 2 means pull)
+                    $totalPulled += StockHistory::where('stock_id', $stock->id)
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->where('action_type', 2)
                         ->sum('changed_qty');
 
                     // Total POS sold
@@ -756,11 +874,39 @@ public function add_quantity(Request $request)
                         ->where('quantity_pushed', '>', 0)
                         ->with('transfer')
                         ->get()
-                        ->filter(function($transfer) use ($colorName, $sizeName) {
-                            $transferColor = $transfer->item_color ?? '';
-                            $transferSize = $transfer->item_size ?? '';
-                            $colorMatch = empty($transferColor) || empty($colorName) || $transferColor === $colorName;
-                            $sizeMatch = empty($transferSize) || empty($sizeName) || $transferSize === $sizeName;
+                        ->filter(function($transferItem) use ($colorName, $sizeName) {
+                            $transfer = $transferItem->transfer;
+                            if (!$transfer) return false;
+                            
+                            // Only include transfers TO main warehouse
+                            $toLocation = $transfer->to ?? '';
+                            if ($toLocation !== 'main') return false;
+                            
+                            // Match by color and size - be flexible with empty values
+                            $transferColor = trim($transferItem->item_color ?? '');
+                            $transferSize = trim($transferItem->item_size ?? '');
+                            $stockColorName = trim($colorName ?? '');
+                            $stockSizeName = trim($sizeName ?? '');
+                            
+                            // If both color and size are empty in transfer, match this color/size combination
+                            if (empty($transferColor) && empty($transferSize)) {
+                                return true;
+                            }
+                            
+                            // If transfer has no color but has size, match by size only
+                            if (empty($transferColor) && !empty($transferSize)) {
+                                return empty($stockSizeName) || strtolower($transferSize) === strtolower($stockSizeName);
+                            }
+                            
+                            // If transfer has color but no size, match by color only
+                            if (!empty($transferColor) && empty($transferSize)) {
+                                return empty($stockColorName) || strtolower($transferColor) === strtolower($stockColorName);
+                            }
+                            
+                            // Both color and size exist in transfer - both must match
+                            $colorMatch = empty($stockColorName) || strtolower($transferColor) === strtolower($stockColorName);
+                            $sizeMatch = empty($stockSizeName) || strtolower($transferSize) === strtolower($stockSizeName);
+                            
                             return $colorMatch && $sizeMatch;
                         });
                     
@@ -773,6 +919,8 @@ public function add_quantity(Request $request)
                     'abaya_code' => $stock->abaya_code,
                     'design_name' => $stock->design_name ?? $stock->abaya_code,
                     'quantity_added' => (int)$totalAdded,
+                    'stock_addition' => (int)$totalAdded,
+                    'quantity_pulled' => (int)$totalPulled,
                     'quantity_sold_pos' => (int)$totalPosSold,
                     'quantity_transferred_out' => (int)$totalTransferredOut,
                     'quantity_received' => (int)$totalTransferredIn,
@@ -782,7 +930,7 @@ public function add_quantity(Request $request)
 
             // Paginate results
             $page = $request->input('page', 1);
-            $perPage = 20;
+            $perPage = 10;
             $offset = ($page - 1) * $perPage;
             $total = count($auditList);
             $paginated = array_slice($auditList, $offset, $perPage);
@@ -837,7 +985,8 @@ public function add_quantity(Request $request)
                             'name' => $locationName,
                             'quantity' => (int)$transferItem->quantity_pulled,
                             'date' => $transfer->date ? $transfer->date->format('Y-m-d') : '',
-                            'type' => strpos($toLocation, 'boutique-') === 0 ? 'boutique' : 'channel'
+                            'type' => strpos($toLocation, 'boutique-') === 0 ? 'boutique' : 'channel',
+                            'transfer_code' => $transfer->transfer_code ?? ''
                         ];
                     }
                 }
@@ -846,37 +995,118 @@ public function add_quantity(Request $request)
                 // But for now, we'll show transfers OUT when type is 'transferred'
                 // The "received" column can use the same type but we'll differentiate if needed
             } elseif ($type === 'pos') {
-                // Get all POS sales
+                // Get all POS sales with color and size
                 $posSales = \App\Models\PosOrdersDetail::where('item_id', $stockId)
-                    ->with('order')
+                    ->with(['color', 'size', 'order'])
                     ->get();
 
-                // Group by order to show order numbers
-                $grouped = $posSales->groupBy('order_id');
-                foreach ($grouped as $orderId => $items) {
-                    $order = $items->first()->order;
-                    $totalQty = $items->sum('item_quantity');
+                // Group by order_no to show order_no and quantity
+                foreach ($posSales as $posSale) {
+                    $orderNo = $posSale->order ? ($posSale->order->order_no ?? '-') : '-';
                     
                     $details[] = [
-                        'name' => $order ? ('Order #' . ($order->order_no ?? $orderId)) : 'Order #' . $orderId,
-                        'quantity' => (int)$totalQty,
-                        'date' => $order && $order->created_at ? $order->created_at->format('Y-m-d') : '',
+                        'name' => $orderNo,
+                        'order_no' => $orderNo,
+                        'quantity' => (int)$posSale->item_quantity,
+                        'date' => $posSale->order && $posSale->order->created_at ? $posSale->order->created_at->format('Y-m-d') : '',
                         'type' => 'pos'
+                    ];
+                }
+                
+                // Aggregate by order_no if there are duplicates
+                $aggregated = [];
+                foreach ($details as $detail) {
+                    $key = $detail['order_no'];
+                    if (!isset($aggregated[$key])) {
+                        $aggregated[$key] = [
+                            'name' => $detail['name'],
+                            'order_no' => $detail['order_no'],
+                            'quantity' => 0,
+                            'date' => $detail['date'],
+                            'type' => 'pos'
+                        ];
+                    }
+                    $aggregated[$key]['quantity'] += $detail['quantity'];
+                }
+                $details = array_values($aggregated);
+            } elseif ($type === 'received') {
+                // Get all transfers IN (from channels/boutiques to main/warehouse)
+                $transfersIn = \App\Models\TransferItemHistory::where('item_code', $stock->abaya_code)
+                    ->where('quantity_pushed', '>', 0)
+                    ->with('transfer')
+                    ->get();
+
+                foreach ($transfersIn as $transferItem) {
+                    $transfer = $transferItem->transfer;
+                    if (!$transfer) continue;
+
+                    $fromLocation = $transfer->from ?? '';
+                    $toLocation = $transfer->to ?? '';
+                    
+                    // Only include if transferred TO main warehouse FROM a channel or boutique
+                    if ($toLocation === 'main' && $fromLocation !== 'main') {
+                        $locationName = $this->getLocationName($fromLocation, $locale);
+                        
+                        if (!empty($locationName)) {
+                            $details[] = [
+                                'name' => $locationName,
+                                'quantity' => (int)$transferItem->quantity_pushed,
+                                'date' => $transfer->date ? $transfer->date->format('Y-m-d') : '',
+                                'type' => strpos($fromLocation, 'boutique-') === 0 ? 'boutique' : 'channel'
+                            ];
+                        }
+                    }
+                }
+            } elseif ($type === 'pulled') {
+                // Get all pulled quantities from history
+                $pulledHistory = StockHistory::where('stock_id', $stockId)
+                    ->where('action_type', 2)
+                    ->with(['size', 'color'])
+                    ->orderBy('created_at', 'DESC')
+                    ->get();
+
+                foreach ($pulledHistory as $history) {
+                    $sizeName = $history->size ? ($locale === 'ar' ? ($history->size->size_name_ar ?? $history->size->size_name_en) : ($history->size->size_name_en ?? $history->size->size_name_ar)) : '-';
+                    $colorName = $history->color ? ($locale === 'ar' ? ($history->color->color_name_ar ?? $history->color->color_name_en) : ($history->color->color_name_en ?? $history->color->color_name_ar)) : '-';
+                    
+                    $details[] = [
+                        'name' => ($sizeName !== '-' && $colorName !== '-') ? "{$sizeName} / {$colorName}" : ($sizeName !== '-' ? $sizeName : ($colorName !== '-' ? $colorName : 'N/A')),
+                        'quantity' => (int)$history->changed_qty,
+                        'date' => $history->created_at ? $history->created_at->format('Y-m-d H:i') : '',
+                        'user' => $history->added_by ?? '-',
+                        'reason' => $history->pull_notes ?? '-',
                     ];
                 }
             } elseif ($type === 'added') {
                 // Get all additions from stock history
                 $additions = StockHistory::where('stock_id', $stockId)
                     ->where('action_type', 1)
+                    ->with(['size', 'color'])
                     ->orderBy('created_at', 'DESC')
                     ->get();
 
                 foreach ($additions as $addition) {
+                    $sizeName = $addition->size ? ($locale === 'ar' ? ($addition->size->size_name_ar ?? $addition->size->size_name_en) : ($addition->size->size_name_en ?? $addition->size->size_name_ar)) : '';
+                    $colorName = $addition->color ? ($locale === 'ar' ? ($addition->color->color_name_ar ?? $addition->color->color_name_en) : ($addition->color->color_name_en ?? $addition->color->color_name_ar)) : '';
+                    
+                    // Format name based on what's available
+                    $name = '';
+                    if (!empty($sizeName) && !empty($colorName)) {
+                        $name = "{$sizeName} / {$colorName}";
+                    } elseif (!empty($sizeName)) {
+                        $name = $sizeName;
+                    } elseif (!empty($colorName)) {
+                        $name = $colorName;
+                    } else {
+                        $name = 'N/A';
+                    }
+                    
                     $details[] = [
-                        'name' => 'Stock Addition',
+                        'name' => $name,
                         'quantity' => (int)$addition->changed_qty,
-                        'date' => $addition->created_at ? $addition->created_at->format('Y-m-d') : '',
-                        'type' => 'added'
+                        'date' => $addition->created_at ? $addition->created_at->format('Y-m-d H:i') : '',
+                        'added_by' => $addition->added_by ?? '-',
+                        'added_on' => $addition->created_at ? $addition->created_at->format('Y-m-d H:i') : '',
                     ];
                 }
             }

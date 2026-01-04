@@ -4,6 +4,11 @@
     $currentRoute = Route::currentRouteName();
     $currentLocale = session('locale', 'ar');
     $htmlDir = $currentLocale === 'en' ? 'ltr' : 'rtl';
+    $permissions = [];
+    if (auth()->check() && auth()->user()) {
+        $userPermissions = auth()->user()->permissions ?? [];
+        $permissions = is_array($userPermissions) ? $userPermissions : [];
+    }
 @endphp
 <html class="light" dir="{{ $htmlDir }}" lang="{{ $currentLocale }}">
 <head>
@@ -51,7 +56,7 @@
 
 <body class="bg-background-light dark:bg-background-dark font-display text-text-primary dark:text-gray-200">
 
-  <div id="overlay" class="overlay" style="display: none;"></div>
+  <div id="overlay" class="overlay" style="display: none !important;"></div>
   <div class="flex flex-col min-h-screen">
     <div class="flex flex-1">
 
@@ -75,9 +80,10 @@
     </a>
 
     <!-- Inventory -->
+    @if(in_array(9, $permissions) || in_array(6, $permissions))
     <div>
         @php
-            $inventoryMenuActive = strpos($currentPath, 'manage_quantity') === 0 || strpos($currentPath, 'inventory') === 0;
+            $inventoryMenuActive = strpos($currentPath, 'manage_quantity') === 0 || strpos($currentPath, 'inventory') === 0 || strpos($currentPath, 'view_stock') === 0 || strpos($currentPath, 'stock') === 0;
         @endphp
         <button onclick="toggleSubmenu('inventoryMenu')" 
             class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $inventoryMenuActive ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
@@ -89,20 +95,21 @@
         </button>
 
         <div id="inventoryMenu" class="submenu mt-2 pl-8 space-y-1 {{ $inventoryMenuActive ? 'active' : '' }}">
+            @if(in_array(9, $permissions))
             <a href="{{url('view_stock')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'view_stock') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.inventory', [], session('locale')) }}
             </a>
+            @endif
 
+            @if(in_array(6, $permissions))
             <a href="{{url('manage_quantity')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'manage_quantity') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.transfer_stock', [], session('locale')) }}
             </a>
-
-            <a href="{{url('send_request')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'send_request') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ trans('messages.send_orders_to_tailors', [], session('locale')) }}
-            </a>
+            @endif
+            
+            @if(in_array(9, $permissions))
              <a href="{{url('stock')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock' || (strpos(request()->path(), 'stock/') === 0 && trim(request()->path(), '/') !== 'stock/audit')) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.add_stock_lang', [], session('locale')) }}
@@ -120,6 +127,7 @@
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.stock_audit', [], session('locale')) }}
             </a>
+            @endif
 
             <!-- <a href="#" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
@@ -127,6 +135,7 @@
             </a> -->
         </div>
     </div>
+    @endif
 
 
     <!-- Customers -->
@@ -151,9 +160,10 @@
         </div>
     </div>
     <!-- Boutiques -->
+    @if(in_array(11, $permissions))
     <div>
         @php
-            $boutiquesMenuActive = in_array($currentPath, ['boutique_list', 'boutique', 'channels', 'settlement']) || strpos($currentPath, 'boutique') === 0;
+            $boutiquesMenuActive = in_array($currentPath, ['boutique_list', 'boutique', 'channels', 'settlement', 'movements_log']) || strpos($currentPath, 'boutique') === 0;
         @endphp
         <button onclick="toggleSubmenu('boutiquesMenu')" 
             class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $boutiquesMenuActive ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
@@ -183,10 +193,17 @@
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.settlement_lang', [], session('locale')) }}
             </a>
+
+            <a href="{{url('movements_log')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'movements_log') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.movements_log', [], session('locale')) }}
+            </a>
         </div>
     </div>
+    @endif
 
     <!-- Tailor Orders -->
+    @if(in_array(7, $permissions) || in_array(12, $permissions))
     <div>
         @php
             $tailorMenuActive = in_array($currentPath, ['send_request', 'tailor']) || strpos($currentPath, 'tailor') === 0;
@@ -201,23 +218,29 @@
         </button>
 
         <div id="tailorMenu" class="submenu mt-2 pl-8 space-y-1 {{ $tailorMenuActive ? 'active' : '' }}">
+            @if(in_array(7, $permissions))
             <a href="{{url('send_request')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'send_request') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ trans('messages.tailor_request', [], session('locale')) }}
-            </a>
-
-            <a href="{{url('tailor')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'tailor') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
-                <span class="material-symbols-outlined text-sm">chevron_right</span> 
-                {{ trans('messages.tailors', [], session('locale')) }}
+                {{ trans('messages.send_orders_to_tailors', [], session('locale')) }}
             </a>
 
             <a href="{{url('tailor-orders-list')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'tailor-orders-list') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.tailor_orders_list', [], session('locale')) }}
             </a>
+            @endif
+
+            @if(in_array(12, $permissions))
+            <a href="{{url('tailor')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'tailor') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.tailors', [], session('locale')) }}
+            </a>
+            @endif
         </div>
     </div>
+    @endif
 
+     @if(in_array(5, $permissions))
      <div>
         @php
             $specialOrdersMenuActive = in_array($currentPath, ['view_special_order', 'spcialorder', 'maintenance']) || strpos($currentPath, 'special-order') === 0 || strpos($currentPath, 'special_orders') === 0 || strpos($currentPath, 'maintenance') === 0;
@@ -248,8 +271,10 @@
             </a>
         </div>
     </div>
+    @endif
 
     <!-- POS -->
+    @if(in_array(8, $permissions))
     <div>
         @php
             $posMenuActive = strpos($currentPath, 'pos') === 0;
@@ -275,6 +300,7 @@
             </a>
         </div>
     </div>
+    @endif
 
     <!-- Other main links -->
 <!-- 
@@ -284,6 +310,7 @@
     </a> -->
 
     <!-- Expenses -->
+    @if(in_array(3, $permissions))
     <div>
         @php
             $expensesMenuActive = strpos($currentPath, 'expenses') === 0 || strpos($currentPath, 'expense-categories') === 0;
@@ -309,21 +336,28 @@
             </a>
         </div>
     </div>
+    @endif
 
+    @if(in_array(2, $permissions))
     <a href="{{url('accounts')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'accounts' || strpos(request()->path(), 'accounts/') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
         <span class="material-symbols-outlined text-xl">account_balance</span>
         <span class="font-medium text-sm">{{ trans('messages.accounts', [], session('locale')) }}</span>
     </a>
+    @endif
 
+    @if(in_array(1, $permissions))
     <a href="{{url('user')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'user' || strpos(request()->path(), 'user/') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
         <span class="material-symbols-outlined text-xl">group</span>
         <span class="font-medium text-sm">{{ trans('messages.users', [], session('locale')) }}</span>
     </a>
+    @endif
 
+    @if(in_array(4, $permissions))
     <a href="{{url('sms')}}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'sms' || strpos(request()->path(), 'sms/') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
         <span class="material-symbols-outlined text-xl">sms</span>
         <span class="font-medium text-sm">{{ trans('messages.sms_panel', [], session('locale')) }}</span>
     </a>
+    @endif
 
     <!-- Settings -->
     <div>
@@ -367,10 +401,12 @@
         </div>
     </div>
 
+    @if(in_array(10, $permissions))
     <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent">
         <span class="material-symbols-outlined text-xl">assessment</span>
         <span class="font-medium text-sm">{{ trans('messages.reports', [], session('locale')) }}</span>
     </a>
+    @endif
 
 </nav>
 

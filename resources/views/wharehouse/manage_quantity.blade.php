@@ -5,6 +5,7 @@
 <title>{{ trans('messages.transfer_quantities_between_channels', [], session('locale')) }}</title>
 @endpush
 
+ 
 
 <main class="flex-1 p-4 md:p-6" x-data="transferPage()" x-init="init()">
   <div class="w-full max-w-screen-xl mx-auto space-y-6">
@@ -47,19 +48,19 @@
 
       <!-- Step 1: type -->
       <div class="flex flex-wrap gap-3 mb-5">
-        <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
-               :class="mode==='main_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="main_to_channel" @change="resetChannelsForMode()">
+        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border"
+               :class="(basket.length > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer') + ' ' + (mode==='main_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200')">
+          <input type="radio" class="sr-only" x-model="mode" value="main_to_channel" @change="resetChannelsForMode()" :disabled="basket.length > 0">
           <span class="material-symbols-outlined text-[var(--primary-color)]">call_made</span> {{ trans('messages.from_warehouse_to_channel', [], session('locale')) }}
         </label>
-        <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
-               :class="mode==='channel_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="channel_to_channel" @change="resetChannelsForMode()">
+        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border"
+               :class="(basket.length > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer') + ' ' + (mode==='channel_to_channel' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200')">
+          <input type="radio" class="sr-only" x-model="mode" value="channel_to_channel" @change="resetChannelsForMode()" :disabled="basket.length > 0">
           <span class="material-symbols-outlined text-[var(--primary-color)]">swap_horiz</span> {{ trans('messages.from_channel_to_channel', [], session('locale')) }}
         </label>
-        <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border"
-               :class="mode==='channel_to_main' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200'">
-          <input type="radio" class="sr-only" x-model="mode" value="channel_to_main" @change="resetChannelsForMode()">
+        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border"
+               :class="(basket.length > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer') + ' ' + (mode==='channel_to_main' ? 'border-[var(--primary-color)] bg-pink-50' : 'border-pink-200')">
+          <input type="radio" class="sr-only" x-model="mode" value="channel_to_main" @change="resetChannelsForMode()" :disabled="basket.length > 0">
           <span class="material-symbols-outlined text-[var(--primary-color)]">call_received</span> {{ trans('messages.from_channel_to_warehouse', [], session('locale')) }}
         </label>
       </div>
@@ -70,7 +71,9 @@
         <div>
           <label class="text-sm font-semibold text-gray-700">{{ trans('messages.from', [], session('locale')) }}</label>
           <select class="w-full h-11 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
-                  x-model="fromChannel">
+                  :class="basket.length > 0 ? 'bg-gray-100 cursor-not-allowed' : ''"
+                  x-model="fromChannel"
+                  :disabled="basket.length > 0">
             <option value="" disabled selected>{{ trans('messages.select_channel', [], session('locale')) }}</option>
             <template x-if="mode==='main_to_channel'">
               <option value="main">{{ trans('messages.main_warehouse', [], session('locale')) }}</option>
@@ -101,7 +104,9 @@
         <div>
           <label class="text-sm font-semibold text-gray-700">{{ trans('messages.to', [], session('locale')) }}</label>
           <select class="w-full h-11 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
-                  x-model="toChannel">
+                  :class="basket.length > 0 ? 'bg-gray-100 cursor-not-allowed' : ''"
+                  x-model="toChannel"
+                  :disabled="basket.length > 0">
             <option value="" disabled selected>{{ trans('messages.select_channel', [], session('locale')) }}</option>
             <template x-if="mode==='channel_to_main'">
               <option value="main">{{ trans('messages.main_warehouse', [], session('locale')) }}</option>
@@ -130,10 +135,12 @@
 
         <!-- Transfer Date -->
         <div>
-          <label class="text-sm font-semibold text-gray-700">{{ trans('messages.transfer_date', [], session('locale')) }}</label>
+          <label class="text-sm font-semibold text-gray-700">{{ trans('messages.transfer_date', [], session('locale')) }} <span class="text-red-500">*</span></label>
           <input type="date" 
+                 required
                  class="w-full h-11 rounded-xl border border-pink-200 focus:ring-2 focus:ring-[var(--primary-color)] px-3"
-                 x-model="transferDate">
+                 x-model="transferDate"
+                 :class="!transferDate ? 'border-red-300' : ''">
         </div>
       </div>
 
@@ -155,19 +162,19 @@
         </template>
       </div>
 
-      <!-- Basket -->
+      <!-- Transfer Basket -->
       <div class="mt-6">
         <h4 class="font-bold text-gray-800 mb-2">{{ trans('messages.transfer_basket', [], session('locale')) }}</h4>
         <div class="overflow-x-auto">
           <table class="w-full text-sm min-w-[920px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.available', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.available', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.remove', [], session('locale')) }}</th>
               </tr>
             </thead>
@@ -179,22 +186,25 @@
               </template>
               <template x-for="(row,idx) in basket" :key="row.uid">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold" x-text="row.code"></td>
-                  <td class="px-3 py-2" x-text="typeLabel(row.type)"></td>
-                  <td class="px-3 py-2">
+                  <td class="px-3 py-2 text-center font-semibold" x-text="row.code"></td>
+                  <td class="px-3 py-2 text-center" x-text="typeLabel(row.type)"></td>
+                  <td class="px-3 py-2 text-center">
                     <template x-if="row.color">
-                      <span class="inline-flex items-center gap-2">
+                      <span class="inline-flex items-center justify-center gap-2">
                         <span class="w-4 h-4 rounded-full border" :style="'background:'+row.color_code"></span>
                         <span x-text="row.color"></span>
                       </span>
                     </template>
                     <template x-if="!row.color">—</template>
                   </td>
-                  <td class="px-3 py-2" x-text="row.size ? row.size : '—'"></td>
-                  <td class="px-3 py-2" x-text="row.available"></td>
-                  <td class="px-3 py-2">
+                  <td class="px-3 py-2 text-center" x-text="row.size ? row.size : '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.available"></td>
+                  <td class="px-3 py-2 text-center">
                     <input type="number" min="0" :max="row.available"
-                           class="h-10 w-24 border border-pink-200 rounded-lg text-center"
+                           data-validate="quantity"
+                           @keydown="validateQuantityInput($event)"
+                           @paste="cleanQuantityOnPaste($event)"
+                           class="h-10 w-24 border border-pink-200 rounded-lg text-center mx-auto"
                            x-model.number="row.qty">
                   </td>
                   <td class="px-3 py-2 text-center">
@@ -251,11 +261,11 @@
         <table class="w-full text-sm min-w-[900px]">
           <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
             <tr>
-              <th class="px-3 py-2 text-right font-bold">{{ trans('messages.operation_number', [], session('locale')) }}</th>
-              <th class="px-3 py-2 text-right font-bold">{{ trans('messages.date', [], session('locale')) }}</th>
-              <th class="px-3 py-2 text-right font-bold">{{ trans('messages.from', [], session('locale')) }}</th>
-              <th class="px-3 py-2 text-right font-bold">{{ trans('messages.to', [], session('locale')) }}</th>
-              <th class="px-3 py-2 text-right font-bold">{{ trans('messages.number_of_items', [], session('locale')) }}</th>
+              <th class="px-3 py-2 text-center font-bold">{{ trans('messages.operation_number', [], session('locale')) }}</th>
+              <th class="px-3 py-2 text-center font-bold">{{ trans('messages.date', [], session('locale')) }}</th>
+              <th class="px-3 py-2 text-center font-bold">{{ trans('messages.from', [], session('locale')) }}</th>
+              <th class="px-3 py-2 text-center font-bold">{{ trans('messages.to', [], session('locale')) }}</th>
+              <th class="px-3 py-2 text-center font-bold">{{ trans('messages.number_of_items', [], session('locale')) }}</th>
               <th class="px-3 py-2 text-center font-bold">{{ trans('messages.details', [], session('locale')) }}</th>
             </tr>
           </thead>
@@ -267,11 +277,11 @@
             </template>
             <template x-for="row in filteredHistory" :key="row.no">
               <tr class="border-t hover:bg-pink-50/60">
-                <td class="px-3 py-2 font-semibold" x-text="row.no"></td>
-                <td class="px-3 py-2" x-text="row.date"></td>
-                <td class="px-3 py-2" x-text="channelName(row.from)"></td>
-                <td class="px-3 py-2" x-text="channelName(row.to)"></td>
-                <td class="px-3 py-2" x-text="row.total"></td>
+                <td class="px-3 py-2 text-center font-semibold" x-text="row.no"></td>
+                <td class="px-3 py-2 text-center" x-text="row.date"></td>
+                <td class="px-3 py-2 text-center" x-text="channelName(row.from)"></td>
+                <td class="px-3 py-2 text-center" x-text="channelName(row.to)"></td>
+                <td class="px-3 py-2 text-center" x-text="row.total"></td>
                 <td class="px-3 py-2 text-center">
                   <button @click="openHistoryDetails(row)"
                           class="px-3 py-1 rounded-lg bg-pink-100 hover:bg-pink-200 text-[var(--primary-color)] text-xs font-semibold">
@@ -329,14 +339,14 @@
           <table class="w-full text-sm min-w-[1100px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.name', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.name', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.type', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold" x-show="mode!=='main_to_channel'">{{ trans('messages.in_source', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold" x-show="mode!=='channel_to_main'">{{ trans('messages.in_destination', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold" x-show="mode!=='channel_to_channel'">{{ trans('messages.available_warehouse', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold" x-show="mode!=='channel_to_channel'">{{ trans('messages.available_warehouse', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.add', [], session('locale')) }}</th>
               </tr>
             </thead>
@@ -354,19 +364,19 @@
               <template x-for="row in pickerFiltered" :key="row.uid">
                 <tr class="border-t hover:bg-pink-50/60"
                     :class="selectedUids.includes(row.uid) ? 'bg-purple-50' : ''">
-                  <td class="px-3 py-2 font-semibold" x-text="row.code || '—'"></td>
-                  <td class="px-3 py-2" x-text="row.name || '—'"></td>
-                  <td class="px-3 py-2" x-text="typeLabel(row.type)"></td>
-                  <td class="px-3 py-2">
+                  <td class="px-3 py-2 text-center font-semibold" x-text="row.code || '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.name || '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="typeLabel(row.type)"></td>
+                  <td class="px-3 py-2 text-center">
                     <template x-if="row.color">
-                      <span class="inline-flex items-center gap-2">
+                      <span class="inline-flex items-center justify-center gap-2">
                         <span class="w-4 h-4 rounded-full border" :style="'background:'+(row.color_code || '#000000')"></span>
                         <span x-text="row.color"></span>
                       </span>
                     </template>
                     <template x-if="!row.color">—</template>
                   </td>
-                  <td class="px-3 py-2" x-text="row.size ? row.size : '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.size ? row.size : '—'"></td>
 
                   <!-- Qty in source -->
                   <td class="px-3 py-2 text-center" x-show="mode!=='main_to_channel'"
@@ -378,7 +388,7 @@
                       x-text="getQtyInChannel(toChannel, row)"
                       @load="loadChannelStocks(toChannel)"></td>
 
-                  <td class="px-3 py-2" x-show="mode!=='channel_to_channel'" x-text="getWarehouseAvailable(row)"></td>
+                  <td class="px-3 py-2 text-center" x-show="mode!=='channel_to_channel'" x-text="getWarehouseAvailable(row)"></td>
                   <td class="px-3 py-2 text-center">
                     <template x-if="!selectedUids.includes(row.uid)">
                       <button @click="addToBasket(row)"
@@ -431,19 +441,19 @@
           <table class="w-full text-sm min-w-[600px]">
             <thead class="bg-pink-50 text-gray-700">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.code', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.color', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.size', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.quantity', [], session('locale')) }}</th>
               </tr>
             </thead>
             <tbody>
               <template x-for="it in currentHistory.items" :key="it.code + (it.size||'') + (it.color||'')">
                 <tr>
-                  <td class="px-3 py-2" x-text="it.code"></td>
-                  <td class="px-3 py-2" x-text="it.color || '—'"></td>
-                  <td class="px-3 py-2" x-text="it.size || '—'"></td>
-                  <td class="px-3 py-2" x-text="it.qty"></td>
+                  <td class="px-3 py-2 text-center" x-text="it.code"></td>
+                  <td class="px-3 py-2 text-center" x-text="it.color || '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="it.size || '—'"></td>
+                  <td class="px-3 py-2 text-center" x-text="it.qty"></td>
                 </tr>
               </template>
             </tbody>
@@ -632,6 +642,7 @@ function transferPage() {
     // Execute enable
     get canExecute() {
       if (!this.fromChannel || !this.toChannel) return false;
+      if (!this.transferDate) return false; // Transfer date is required
       if (this.mode==='main_to_channel' && this.fromChannel!=='main') return false;
       if (this.mode==='channel_to_main' && this.toChannel!=='main') return false;
       if (this.mode==='channel_to_channel' && (this.fromChannel==='main' || this.toChannel==='main')) return false;
@@ -742,7 +753,22 @@ function transferPage() {
 
     // Execute transfer - call backend
     async executeTransfer(){
-      if (!this.canExecute) return;
+      if (!this.canExecute) {
+        if (!this.transferDate) {
+          this.toast.msg = '{{ trans('messages.transfer_date_required', [], session('locale')) ?: 'Transfer Date is required' }}';
+          this.toast.show = true;
+          setTimeout(()=> this.toast.show=false, 3000);
+        }
+        return;
+      }
+
+      // Validate transfer date is provided
+      if (!this.transferDate) {
+        this.toast.msg = '{{ trans('messages.transfer_date_required', [], session('locale')) ?: 'Transfer Date is required' }}';
+        this.toast.show = true;
+        setTimeout(()=> this.toast.show=false, 3000);
+        return;
+      }
 
       try {
         const response = await fetch('/execute_transfer', {
@@ -755,7 +781,7 @@ function transferPage() {
             mode: this.mode,
             from: this.fromChannel,
             to: this.toChannel,
-            transfer_date: this.transferDate || new Date().toISOString().slice(0,10),
+            transfer_date: this.transferDate,
             note: this.transferNote,
             basket: this.basket.map(b => ({
               code: b.code,
@@ -829,6 +855,13 @@ function transferPage() {
     async init(){
       // defaults
       this.fromChannel='main'; this.toChannel='';
+      
+      // Set transfer date to today's date (YYYY-MM-DD format)
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      this.transferDate = `${year}-${month}-${day}`;
       
       // Load data on page load
       await Promise.all([

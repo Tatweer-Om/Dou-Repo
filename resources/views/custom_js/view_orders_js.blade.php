@@ -96,10 +96,11 @@ document.addEventListener('alpine:init', () => {
           if (q) {
             const customerMatch = (o.customer || '').toLowerCase().includes(q);
             const idMatch = String(o.id).includes(q);
+            const orderNoMatch = (o.order_no || '').toLowerCase().includes(q);
             const sourceMatch = this.sourceLabel(o.source).toLowerCase().includes(q);
             const statusMatch = this.statusLabel(o.status).toLowerCase().includes(q);
             
-            if (!customerMatch && !idMatch && !sourceMatch && !statusMatch) {
+            if (!customerMatch && !idMatch && !orderNoMatch && !sourceMatch && !statusMatch) {
               return false;
             }
           }

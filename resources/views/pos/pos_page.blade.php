@@ -418,7 +418,7 @@
           class="flex-1 h-14 rounded-xl bg-gray-100 font-bold hover:bg-gray-200 transition">
           {{ trans('messages.cancel', [], session('locale')) }}
         </button>
-        <button id="confirmPaymentBtn" class="flex-1 h-14 rounded-xl bg-primary text-white font-bold">
+        <button id="confirmPaymentBtn" class="flex-1 h-14 rounded-xl bg-primary text-white font-bold hover:bg-primary-dark transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed disabled:pointer-events-none">
           {{ trans('messages.confirm_payment', [], session('locale')) }}
         </button>
       </div>
@@ -462,7 +462,7 @@
     </span>
   </button>
 
-  <<!-- Mobile Cart Modal -->
+  <!-- Mobile Cart Modal -->
     <!-- Mobile Cart Modal -->
     <div
       id="cartMobile"

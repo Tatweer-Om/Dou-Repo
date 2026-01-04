@@ -70,6 +70,17 @@
          @include('custom_js.customer_profile_js')
             @elseif ($route_name == 'pos')
          @include('custom_js.pos_js')
+                    @elseif ($route_name == 'bouttique_profile')
+         @include('custom_js.boutique_profile_js')
+           @elseif ($route_name == 'channel_profile')
+         @include('custom_js.channel_profile_js')
+           @elseif ($route_name == 'maintenance')
+         @include('custom_js.maintenance_js')
+               @elseif ($route_name == 'manage_quantity')
+         @include('custom_js.manage_quantity_js')
+          @elseif ($route_name == 'movements_log')
+         @include('custom_js.movement_log_js')
+
     @endif
          
   </body>

@@ -1663,6 +1663,40 @@ return;
             });
           }
         });
+
+        /* ===============================
+           BUTTON STATE MANAGEMENT
+        ================================ */
+        function setConfirmButtonLoading(isLoading) {
+          const confirmBtn = document.getElementById('confirmPaymentBtn');
+          if (!confirmBtn) return;
+
+          // Store original HTML if not already stored
+          if (!confirmBtn.dataset.originalHtml) {
+            confirmBtn.dataset.originalHtml = confirmBtn.innerHTML;
+          }
+
+          if (isLoading) {
+            // Disable button and show loading state
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+            confirmBtn.style.transition = 'all 0.3s ease';
+            confirmBtn.innerHTML = `
+              <span class="flex items-center justify-center gap-2">
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>{{ trans('messages.processing', [], session('locale')) ?: 'Processing...' }}</span>
+              </span>
+            `;
+          } else {
+            // Re-enable button and restore original text
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+            confirmBtn.innerHTML = confirmBtn.dataset.originalHtml || "{{ trans('messages.confirm_payment', [], session('locale')) }}";
+          }
+        }
       </script>
 
       <script>
@@ -1780,69 +1814,74 @@ return;
         }
 
         async function submitPosOrder() {
-          if (!cart.length) {
-            Swal.fire({ icon: 'error', title: translations.cartEmpty || 'Cart empty' });
-            return;
-          }
-
-          const subtotal = getCartSubtotal();
-          const discountAmount = getDiscountAmount(subtotal);
-          
-          // Get delivery charge using the helper function (which checks if paid)
-          const deliveryCharge = getDeliveryCharge();
-          const wilayahSelect = document.getElementById('deliveryWilayah');
-          const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
-          const orderType = selectedOrderType || 'direct';
-          
-          // Get raw delivery charge (before checking if paid) for saving to DB
-          let rawDeliveryCharge = 0;
-          let deliveryPaid = false;
-          
-          if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
-            const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
-            rawDeliveryCharge = parseFloat(selectedOption.dataset.charge || 0);
-            deliveryPaid = deliveryPaidCheckbox ? deliveryPaidCheckbox.checked : false;
-          }
-          
-          // Total includes delivery charge only if not paid (getDeliveryCharge already handles this)
-          const total = subtotal - discountAmount + deliveryCharge;
-
-          // Use the final payable amount from payment modal (which already includes delivery if not paid)
-          const finalPayable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
-          const payments = buildPaymentsPayload(finalPayable);
-          if (!payments.length) {
-            Swal.fire({ icon: 'error', title: "{{ trans('messages.select', [], session('locale')) }}", text: "{{ trans('messages.payment_method', [], session('locale')) }}" });
-            return;
-          }
-
-          const customerPayload = {
-            name: document.getElementById('customerName')?.value || '',
-            phone: document.getElementById('customerPhone')?.value || '',
-            address: document.getElementById('deliveryAddress')?.value || '',
-            area: document.getElementById('deliveryArea')?.value || '',
-            wilayah: document.getElementById('deliveryWilayah')?.value || ''
-          };
-
-          const payload = {
-            items: buildItemsPayload(),
-            payments,
-            totals: {
-              subtotal,
-              discount: discountAmount,
-              total: finalPayable, // Use final payable which includes delivery if not paid
-              delivery_charges: rawDeliveryCharge, // Raw delivery charge for DB
-              delivery_paid: deliveryPaid
-            },
-            discount: {
-              type: discount.type,
-              value: discount.value
-            },
-            order_type: orderType,
-            notes: document.getElementById('deliveryAddress')?.value || null,
-            customer: customerPayload,
-          };
+          // Disable button immediately on click
+          setConfirmButtonLoading(true);
 
           try {
+            if (!cart.length) {
+              Swal.fire({ icon: 'error', title: translations.cartEmpty || 'Cart empty' });
+              setConfirmButtonLoading(false);
+              return;
+            }
+
+            const subtotal = getCartSubtotal();
+            const discountAmount = getDiscountAmount(subtotal);
+            
+            // Get delivery charge using the helper function (which checks if paid)
+            const deliveryCharge = getDeliveryCharge();
+            const wilayahSelect = document.getElementById('deliveryWilayah');
+            const deliveryPaidCheckbox = document.getElementById('deliveryPaid');
+            const orderType = selectedOrderType || 'direct';
+            
+            // Get raw delivery charge (before checking if paid) for saving to DB
+            let rawDeliveryCharge = 0;
+            let deliveryPaid = false;
+            
+            if (orderType === 'delivery' && wilayahSelect && wilayahSelect.value) {
+              const selectedOption = wilayahSelect.options[wilayahSelect.selectedIndex];
+              rawDeliveryCharge = parseFloat(selectedOption.dataset.charge || 0);
+              deliveryPaid = deliveryPaidCheckbox ? deliveryPaidCheckbox.checked : false;
+            }
+            
+            // Total includes delivery charge only if not paid (getDeliveryCharge already handles this)
+            const total = subtotal - discountAmount + deliveryCharge;
+
+            // Use the final payable amount from payment modal (which already includes delivery if not paid)
+            const finalPayable = parseMoneyFromText($("paymentTotal")?.innerText || "0");
+            const payments = buildPaymentsPayload(finalPayable);
+            if (!payments.length) {
+              Swal.fire({ icon: 'error', title: "{{ trans('messages.select', [], session('locale')) }}", text: "{{ trans('messages.payment_method', [], session('locale')) }}" });
+              setConfirmButtonLoading(false);
+              return;
+            }
+
+            const customerPayload = {
+              name: document.getElementById('customerName')?.value || '',
+              phone: document.getElementById('customerPhone')?.value || '',
+              address: document.getElementById('deliveryAddress')?.value || '',
+              area: document.getElementById('deliveryArea')?.value || '',
+              wilayah: document.getElementById('deliveryWilayah')?.value || ''
+            };
+
+            const payload = {
+              items: buildItemsPayload(),
+              payments,
+              totals: {
+                subtotal,
+                discount: discountAmount,
+                total: finalPayable, // Use final payable which includes delivery if not paid
+                delivery_charges: rawDeliveryCharge, // Raw delivery charge for DB
+                delivery_paid: deliveryPaid
+              },
+              discount: {
+                type: discount.type,
+                value: discount.value
+              },
+              order_type: orderType,
+              notes: document.getElementById('deliveryAddress')?.value || null,
+              customer: customerPayload,
+            };
+
             const res = await fetch(`{{ url('pos/orders') }}`, {
               method: 'POST',
               headers: {
@@ -1879,12 +1918,17 @@ return;
               renderCart();
               recalculateTotals();
               closePaymentModal();
+              
+              // Re-enable button after successful completion
+              setConfirmButtonLoading(false);
             } else {
               Swal.fire({ icon: 'error', title: data.message || 'Error saving order' });
+              setConfirmButtonLoading(false);
             }
           } catch (error) {
             console.error(error);
             Swal.fire({ icon: 'error', title: 'Error', text: error.message || 'Failed to save order' });
+            setConfirmButtonLoading(false);
           }
         }
 

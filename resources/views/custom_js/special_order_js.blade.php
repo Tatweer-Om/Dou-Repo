@@ -18,6 +18,8 @@ document.addEventListener('alpine:init', () => {
     selectedAccountId: '',
     accounts: [],
     paymentProcessing: false,
+    paymentError: '',
+    orderSubmitted: false,
     customer: { 
       source: '', 
       name: '', 
@@ -384,10 +386,11 @@ document.addEventListener('alpine:init', () => {
     },
     
     async submitOrders() {
-      if (this.loading) return;
+      if (this.loading || this.orderSubmitted) return;
       
       // Disable button immediately to prevent multiple clicks
       this.loading = true;
+      this.orderSubmitted = true;
       
       try {
         const formData = {
@@ -444,18 +447,21 @@ document.addEventListener('alpine:init', () => {
             // Set payment amount to total (remaining amount for new order)
             this.paymentAmount = this.calculateTotal().toFixed(3);
             this.selectedAccountId = '';
+            this.paymentError = '';
             // Show payment modal
             this.showPaymentModal = true;
           }
         } else {
           // Re-enable button on error
           this.loading = false;
+          this.orderSubmitted = false;
           throw new Error(data.message || 'Error saving order');
         }
       } catch (error) {
         console.error('Error:', error);
         // Re-enable button on error so user can try again
         this.loading = false;
+        this.orderSubmitted = false;
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
@@ -471,31 +477,25 @@ document.addEventListener('alpine:init', () => {
     async confirmPayment() {
       if (!this.savedOrderId) return;
 
+      // Clear previous error
+      this.paymentError = '';
+
       const amount = parseFloat(this.paymentAmount);
       if (isNaN(amount) || amount <= 0) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'warning',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: '{{ trans('messages.please_enter_valid_amount', [], session('locale')) }}'
-          });
-        } else {
-          alert('{{ trans('messages.please_enter_valid_amount', [], session('locale')) }}');
-        }
+        this.paymentError = '{{ trans('messages.please_enter_valid_amount', [], session('locale')) }}';
         return;
       }
 
       // Validate account selection
       if (!this.selectedAccountId) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'warning',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: '{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}'
-          });
-        } else {
-          alert('{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}');
-        }
+        this.paymentError = '{{ trans('messages.please_select_account', [], session('locale')) ?: 'Please select an account' }}';
+        return;
+      }
+
+      // Validate amount doesn't exceed total
+      const total = this.calculateTotal();
+      if (amount > total + 0.001) {
+        this.paymentError = '{{ trans('messages.amount_exceeds_remaining', [], session('locale')) ?: 'Payment amount exceeds remaining amount' }}';
         return;
       }
 
@@ -520,6 +520,7 @@ document.addEventListener('alpine:init', () => {
 
         if (data.success) {
           this.showPaymentModal = false;
+          this.paymentError = '';
           
           // Open bill in new window
           const billUrl = '{{ url("special-order-bill") }}/' + this.savedOrderId;
@@ -541,19 +542,13 @@ document.addEventListener('alpine:init', () => {
             this.resetForm();
           }
         } else {
-          throw new Error(data.message || 'Failed to record payment');
+          // Show error in modal, don't close it
+          this.paymentError = data.message || '{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}';
         }
       } catch (error) {
         console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: error.message || '{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}'
-          });
-        } else {
-          alert('{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}');
-        }
+        // Show error in modal, don't close it
+        this.paymentError = error.message || '{{ trans('messages.error_recording_payment', [], session('locale')) ?: 'Error recording payment' }}';
       } finally {
         this.paymentProcessing = false;
       }
@@ -561,6 +556,7 @@ document.addEventListener('alpine:init', () => {
 
     skipPayment() {
       this.showPaymentModal = false;
+      this.paymentError = '';
       
       // Open bill in new window
       if (this.savedOrderId) {
@@ -568,27 +564,18 @@ document.addEventListener('alpine:init', () => {
         window.open(billUrl, '_blank');
       }
       
-      // Show success message
-      if (typeof Swal !== 'undefined') {
-        Swal.fire({
-          icon: 'success',
-          title: '{{ trans('messages.order_saved_successfully', [], session('locale')) }}',
-          timer: 2000,
-          showConfirmButton: false
-        }).then(() => {
-          this.resetForm();
-        });
-      } else {
-        alert('{{ trans('messages.order_saved_successfully', [], session('locale')) }}');
-        this.resetForm();
-      }
+      // Reset form and redirect to view_special_order
+      this.resetForm();
+      window.location.href = '{{ route('view_special_order') }}';
     },
 
     resetForm() {
       this.loading = false;
+      this.orderSubmitted = false;
       this.savedOrderId = null;
       this.paymentAmount = '';
       this.selectedAccountId = '';
+      this.paymentError = '';
               this.customer = { 
                 source: '', 
                 name: '', 

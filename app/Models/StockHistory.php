@@ -17,6 +17,20 @@ class StockHistory extends Model
         'changed_qty',
         'new_qty',
         'action_type',
+        'pull_notes',
+        'user_id',
+        'added_by',
     ];
+    
+    // Relationships
+    public function size()
+    {
+        return $this->belongsTo(Size::class, 'size_id');
+    }
+    
+    public function color()
+    {
+        return $this->belongsTo(Color::class, 'color_id');
+    }
 
 }

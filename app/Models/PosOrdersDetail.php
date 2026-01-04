@@ -24,6 +24,7 @@ class PosOrdersDetail extends Model
         'added_by',
         'user_id',
         'branch_id',
+        'channel_id',
     ];
 
     public function order()
@@ -44,5 +45,10 @@ class PosOrdersDetail extends Model
     public function size()
     {
         return $this->belongsTo(Size::class, 'size_id');
+    }
+
+    public function channel()
+    {
+        return $this->belongsTo(Channel::class, 'channel_id');
     }
 }

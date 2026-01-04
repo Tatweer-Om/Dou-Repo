@@ -138,65 +138,6 @@
 
 
 
-    <!-- Edit Size Modal -->
-    <!-- <div x-show="edit" x-cloak
-        class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-        <div @click.away="edit = false"
-            class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 sm:p-8">
-            <div class="flex justify-between items-start mb-6">
-                <h1 class="text-xl sm:text-2xl font-bold">تعديل المقاس</h1>
-                <button @click="edit = false" class="text-gray-400 hover:text-gray-600">
-                    <span class="material-symbols-outlined text-3xl">close</span>
-                </button>
-            </div>
-            <form>
-                <div class="space-y-6">
-                    <div>
-                        <label class="block text-base font-medium mb-2">اسم المقاس</label>
-                        <input type="text" value="كبير"
-                            class="w-full border rounded-lg p-3 focus:ring focus:ring-[var(--primary-color)]">
-                    </div>
-                    <div>
-                        <label class="block text-base font-medium mb-2">الرمز</label>
-                        <input type="text" value="L"
-                            class="w-full border rounded-lg p-3 focus:ring focus:ring-[var(--primary-color)]">
-                    </div>
-                </div>
-                <div class="mt-8 pt-6 border-t flex gap-4">
-                    <button type="button" @click="edit = false"
-                        class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">
-                        إلغاء
-                    </button>
-                    <button type="submit"
-                        class="flex-1 bg-[var(--primary-color)] text-white font-bold py-3 rounded-lg hover:bg-[var(--primary-darker)]">
-                        حفظ التعديلات
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div> -->
-
-    <!-- Delete Size Modal -->
-    <!-- Delete Confirmation Modal -->
-    <!-- <div x-show="del" x-cloak
-     class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-    <div @click.away="del = false"
-         class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 sm:p-8 text-center">
-        <span class="material-symbols-outlined text-red-500 text-5xl mb-4">warning</span>
-        <h2 class="text-xl font-bold mb-4">{{ trans('messages.delete_confirm_title', [], session('locale')) }}</h2>
-        <p class="text-gray-600 mb-6">{{ trans('messages.delete_confirm_text', [], session('locale')) }}</p>
-        <div class="flex gap-4">
-            <button @click="del = false"
-                    class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">
-                {{ trans('messages.cancel', [], session('locale')) }}
-            </button>
-            <button @click="confirmDelete()"
-                    class="flex-1 bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600">
-                {{ trans('messages.confirm_delete', [], session('locale')) }}
-            </button>
-        </div>
-    </div>
-</div> -->
 
 
 </main>

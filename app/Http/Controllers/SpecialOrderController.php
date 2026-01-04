@@ -17,10 +17,19 @@ use Illuminate\Support\Facades\Auth;
 class SpecialOrderController extends Controller
 {
        public function index(){
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
 
-$stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales_price')->get();
+        $permissions = Auth::user()->permissions ?? [];
 
-    return view ('special_orders.special_order', compact('stock'));
+        if (!in_array(5, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
+        $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales_price')->get();
+
+        return view ('special_orders.special_order', compact('stock'));
 
     }
 
@@ -200,6 +209,27 @@ $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales
         }
 
         DB::commit();
+        
+        // Refresh the special order to ensure items are loaded
+        $specialOrder->refresh();
+        $specialOrder->load('items');
+        
+        // Get customer contact (phone) for SMS
+        $customerContact = $customer->phone ?? null;
+        
+        // Prepare SMS parameters for Special Order
+        $smsParams = [
+            'sms_status' => 2, // 2 is for Special Order
+            'special_order_id' => $specialOrder->id,
+            'contact' => $customerContact, // Customer phone number for sending SMS
+        ];
+
+        $smsContent = \get_sms($smsParams);
+        
+        // Send SMS if contact is available and content is generated
+        if (!empty($customerContact) && !empty($smsContent)) {
+            \sms_module($customerContact, $smsContent);
+        }
 
         return response()->json([
             'success' => true,
@@ -348,6 +378,16 @@ public function searchAbayas(Request $request)
 
 public function view_special_order()
 {
+    if (!Auth::check()) {
+        return redirect()->route('login_page')->with('error', 'Please login first');
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+
+    if (!in_array(5, $permissions)) {
+        return redirect()->route('login_page')->with('error', 'Permission denied');
+    }
+
     return view('special_orders.view_special_order');
 }
 
@@ -604,6 +644,16 @@ public function deleteOrder(Request $request)
 
 public function send_request()
 {
+    if (!Auth::check()) {
+        return redirect()->route('login_page')->with('error', 'Please login first');
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+
+    if (!in_array(7, $permissions)) {
+        return redirect()->route('login_page')->with('error', 'Permission denied');
+    }
+
     return view('special_orders.send_request');
 }
 
@@ -1049,6 +1099,16 @@ public function markTailorItemsReceived(Request $request)
 
 public function maintenance()
 {
+    if (!Auth::check()) {
+        return redirect()->route('login_page')->with('error', 'Please login first');
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+
+    if (!in_array(5, $permissions)) {
+        return redirect()->route('login_page')->with('error', 'Permission denied');
+    }
+
     return view('special_orders.maintenance');
 }
 
@@ -1223,9 +1283,11 @@ public function sendForRepair(Request $request)
 public function receiveFromTailor(Request $request)
 {
     try {
+        DB::beginTransaction();
+
         $itemId = $request->input('item_id');
-        $deliveryCharges = $request->input('delivery_charges', 0);
-        $repairCost = $request->input('repair_cost', 0);
+        $deliveryCharges = floatval($request->input('delivery_charges', 0));
+        $repairCost = floatval($request->input('repair_cost', 0));
         $costBearer = $request->input('cost_bearer');
 
         if (!$itemId) {
@@ -1242,19 +1304,63 @@ public function receiveFromTailor(Request $request)
             ], 422);
         }
 
-        $item = SpecialOrderItem::findOrFail($itemId);
+        // Ensure charges are 0 if company is the bearer
+        if ($costBearer === 'company') {
+            $deliveryCharges = 0;
+            $repairCost = 0;
+        }
+
+        $item = SpecialOrderItem::with('specialOrder')->findOrFail($itemId);
+        $order = $item->specialOrder;
+
+        if (!$order) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Special order not found for this item'
+            ], 404);
+        }
+
+        // Build maintenance notes with cost details
+        $costDetails = [];
+        if ($deliveryCharges > 0) {
+            $costDetails[] = 'Delivery Charges: ' . number_format($deliveryCharges, 3) . ' ر.ع';
+        }
+        if ($repairCost > 0) {
+            $costDetails[] = 'Repair Cost: ' . number_format($repairCost, 3) . ' ر.ع';
+        }
+        $costDetailsText = !empty($costDetails) ? "\n" . implode("\n", $costDetails) . "\nCost Bearer: " . ($costBearer === 'customer' ? 'Customer' : 'Company') : '';
+
+        // Update item
         $item->maintenance_status = 'received_from_tailor';
         $item->maintenance_delivery_charges = $deliveryCharges;
         $item->maintenance_repair_cost = $repairCost;
         $item->maintenance_cost_bearer = $costBearer;
         $item->repaired_at = now();
+        
+        // Append cost details to maintenance_notes if not empty
+        if (!empty($costDetailsText)) {
+            $existingNotes = $item->maintenance_notes ?? '';
+            $item->maintenance_notes = $existingNotes . $costDetailsText;
+        }
+        
         $item->save();
+
+        // If customer is the cost bearer, add charges to order total
+        if ($costBearer === 'customer' && ($deliveryCharges > 0 || $repairCost > 0)) {
+            $totalAdditionalCharges = $deliveryCharges + $repairCost;
+            $order->total_amount = floatval($order->total_amount) + $totalAdditionalCharges;
+            $order->save();
+        }
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
             'message' => 'Item received from tailor successfully'
         ]);
     } catch (\Exception $e) {
+        DB::rollBack();
         \Log::error('Error in receiveFromTailor: ' . $e->getMessage());
         return response()->json([
             'success' => false,
@@ -1317,6 +1423,16 @@ public function showBill($id)
      */
     public function tailorOrdersList()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(7, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         $tailors = Tailor::orderBy('tailor_name')->get();
         return view('tailors.tailor_orders_list', compact('tailors'));
     }
@@ -1538,6 +1654,8 @@ public function showBill($id)
             if (class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
                 $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                 $sheet = $spreadsheet->getActiveSheet();
+                
+                // Use fromArray - PhpSpreadsheet handles UTF-8 automatically
                 $sheet->fromArray($data, null, 'A1');
                 
                 // Auto-size columns
@@ -1548,20 +1666,27 @@ public function showBill($id)
                 $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                 $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.xlsx';
                 
+                // UTF-8 encoding is handled by PhpSpreadsheet automatically
                 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                header('Content-Disposition: attachment;filename="' . $filename . '"');
+                header('Content-Disposition: attachment;filename="' . rawurlencode($filename) . '"');
                 header('Cache-Control: max-age=0');
                 
                 $writer->save('php://output');
                 exit;
             } else {
-                // Fallback: CSV export
+                // Fallback: CSV export with UTF-8 BOM for Excel
                 $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.csv';
-                header('Content-Type: text/csv');
+                header('Content-Type: text/csv; charset=utf-8');
                 header('Content-Disposition: attachment;filename="' . $filename . '"');
                 
                 $output = fopen('php://output', 'w');
+                // Add UTF-8 BOM for proper Excel display
+                fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
                 foreach ($data as $row) {
+                    // Ensure UTF-8 encoding
+                    $row = array_map(function($value) {
+                        return mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+                    }, $row);
                     fputcsv($output, $row);
                 }
                 fclose($output);

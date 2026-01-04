@@ -5,10 +5,21 @@ namespace App\Http\Controllers;
 use App\Models\Boutique;
 use App\Models\BoutiqueInvo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class BoutiqueController extends Controller
 {
  public function index() {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(11, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('boutique.boutique');
     }
 
@@ -285,12 +296,40 @@ class BoutiqueController extends Controller
                 ];
             }
             
+            // Get "from" channel/boutique name
+            $fromLocation = $transfer->from ?? 'main';
+            $fromName = trans('messages.main_warehouse', [], session('locale'));
+            if ($fromLocation !== 'main') {
+                if (strpos($fromLocation, 'channel-') === 0) {
+                    $channelId = (int)explode('-', $fromLocation)[1];
+                    $channel = \App\Models\Channel::find($channelId);
+                    if ($channel) {
+                        $fromName = session('locale') === 'ar' 
+                            ? ($channel->channel_name_ar ?? $channel->channel_name_en ?? $fromLocation)
+                            : ($channel->channel_name_en ?? $channel->channel_name_ar ?? $fromLocation);
+                    } else {
+                        $fromName = $fromLocation;
+                    }
+                } elseif (strpos($fromLocation, 'boutique-') === 0) {
+                    $boutiqueId = (int)explode('-', $fromLocation)[1];
+                    $boutique = \App\Models\Boutique::find($boutiqueId);
+                    if ($boutique) {
+                        $fromName = $boutique->boutique_name ?? $fromLocation;
+                    } else {
+                        $fromName = $fromLocation;
+                    }
+                } else {
+                    $fromName = $fromLocation;
+                }
+            }
+            
             $shipmentsData[] = [
                 'transfer_code' => $transfer->transfer_code,
                 'transfer_id' => $transfer->id,
                 'date' => $transfer->date->format('Y-m-d'),
                 'total_items' => $itemsCount,
                 'total_amount' => $totalAmount,
+                'from_channel' => $fromName,
                 'items' => $shipmentItems
             ];
         }
@@ -412,6 +451,16 @@ public function show($id) {
     
     public function boutique_list(Request $request)
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(11, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         // Generate missing invoice records for all boutiques
         $this->generateMissingInvoices();
         

@@ -317,6 +317,9 @@
                       </td>
                       <td class="px-4 py-2 border">
                         <input type="number" 
+                               data-validate="quantity"
+                               @keydown="validateQuantityInput($event)"
+                               @paste="cleanQuantityOnPaste($event)"
                                class="h-10 w-24 text-center rounded-md border border-gray-300 focus:ring-2 focus:ring-primary/50" 
                                :name="'colors[' + row.color_id + '][qty]'"
                                x-model="row.qty" 
@@ -387,6 +390,9 @@
                       </td>
                       <td class="border px-4 py-2">
                         <input type="number" 
+                               data-validate="quantity"
+                               @keydown="validateQuantityInput($event)"
+                               @paste="cleanQuantityOnPaste($event)"
                                class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
                                :name="'sizes['+row.size_id+'][qty]'"
                                x-model="row.qty" 
@@ -480,6 +486,9 @@
                         </td>
                         <td class="border px-4 py-2">
                           <input type="number"
+                                 data-validate="quantity"
+                                 @keydown="validateQuantityInput($event)"
+                                 @paste="cleanQuantityOnPaste($event)"
                                  class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
                                  :name="'color_sizes[' + color.id + '][' + size.size_id + '][qty]'"
                                  x-model="size.qty"

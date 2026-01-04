@@ -10,6 +10,16 @@ class AccountController extends Controller
 {
     public function index()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(2, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('modules.account');
     }
 

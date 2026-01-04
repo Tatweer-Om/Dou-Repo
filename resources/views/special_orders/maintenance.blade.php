@@ -406,11 +406,23 @@
       </div>
 
       <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
+        <label class="block text-sm font-medium mb-2">{{ trans('messages.cost_bearer', [], session('locale')) }}</label>
+        <select x-model="costBearer" 
+                @change="handleCostBearerChange()"
+                class="form-select w-full border-gray-300 rounded-lg">
+          <option value="">{{ trans('messages.select_cost_bearer', [], session('locale')) }}</option>
+          <option value="customer">{{ trans('messages.customer_bearer', [], session('locale')) }}</option>
+          <option value="company">{{ trans('messages.company_bearer', [], session('locale')) }}</option>
+        </select>
+      </div>
+
+      <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
         <label class="block text-sm font-medium mb-2">{{ trans('messages.delivery_charges_omr', [], session('locale')) }}</label>
         <input type="number" 
                step="0.001"
                x-model="deliveryCharges"
-               class="form-input w-full border-gray-300 rounded-lg">
+               :disabled="costBearer === 'company'"
+               :class="costBearer === 'company' ? 'form-input w-full border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed' : 'form-input w-full border-gray-300 rounded-lg'">
       </div>
 
       <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
@@ -418,17 +430,8 @@
         <input type="number" 
                step="0.001"
                x-model="repairCost"
-               class="form-input w-full border-gray-300 rounded-lg">
-      </div>
-
-      <div class="mb-4" x-show="selectedItem.maintenance_status === 'delivered_to_tailor'">
-        <label class="block text-sm font-medium mb-2">{{ trans('messages.cost_bearer', [], session('locale')) }}</label>
-        <select x-model="costBearer" 
-                class="form-select w-full border-gray-300 rounded-lg">
-          <option value="">{{ trans('messages.select_cost_bearer', [], session('locale')) }}</option>
-          <option value="customer">{{ trans('messages.customer_bearer', [], session('locale')) }}</option>
-          <option value="company">{{ trans('messages.company_bearer', [], session('locale')) }}</option>
-        </select>
+               :disabled="costBearer === 'company'"
+               :class="costBearer === 'company' ? 'form-input w-full border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed' : 'form-input w-full border-gray-300 rounded-lg'">
       </div>
 
       <div class="flex gap-3 justify-end">
@@ -479,6 +482,20 @@
       <div class="bg-gray-50 rounded-lg p-4 mb-4">
         <p class="text-sm text-gray-600 mb-2 font-medium">{{ trans('messages.notes', [], session('locale')) }}:</p>
         <p class="text-gray-800 whitespace-pre-wrap break-words" x-text="selectedNotesItem.maintenance_notes || '—'"></p>
+        <template x-if="selectedNotesItem.delivery_charges || selectedNotesItem.repair_cost">
+          <div class="mt-3 pt-3 border-t border-gray-300">
+            <p class="text-sm text-gray-600 mb-1 font-medium">{{ trans('messages.cost_details', [], session('locale')) }}:</p>
+            <p class="text-sm text-gray-700" x-show="selectedNotesItem.delivery_charges">
+              {{ trans('messages.delivery_charges', [], session('locale')) }}: <span class="font-semibold" x-text="selectedNotesItem.delivery_charges + ' ر.ع'"></span>
+            </p>
+            <p class="text-sm text-gray-700" x-show="selectedNotesItem.repair_cost">
+              {{ trans('messages.repair_cost', [], session('locale')) }}: <span class="font-semibold" x-text="selectedNotesItem.repair_cost + ' ر.ع'"></span>
+            </p>
+            <p class="text-sm text-gray-700 mt-1" x-show="selectedNotesItem.cost_bearer">
+              {{ trans('messages.cost_bearer', [], session('locale')) }}: <span class="font-semibold" x-text="selectedNotesItem.cost_bearer === 'customer' ? '{{ trans('messages.customer_bearer', [], session('locale')) }}' : '{{ trans('messages.company_bearer', [], session('locale')) }}'"></span>
+            </p>
+          </div>
+        </template>
       </div>
 
       <div class="flex justify-end">
@@ -492,358 +509,7 @@
 
 </main>
 
-<script>
-document.addEventListener('alpine:init', () => {
-  Alpine.data('maintenanceApp', () => ({
-    loading: false,
-    loadingHistory: false,
-    activeTab: 'current',
-    search: '',
-    items: [],
-    repairHistory: [],
-    tailors: [],
-    showActionModal: false,
-    showNotesModal: false,
-    selectedItem: {},
-    selectedNotesItem: {},
-    selectedTailorId: '',
-    deliveryCharges: 0,
-    repairCost: 0,
-    costBearer: '',
-    maintenanceNotes: '',
 
-    // Pagination
-    page: 1,
-    perPage: 10,
-
-    statistics: {
-      delivered_to_tailor: 0,
-      received_from_tailor: 0,
-    },
-
-    async init() {
-      await this.loadData();
-      await this.loadRepairHistory();
-      // Reset to page 1 when search changes
-      this.$watch('search', () => {
-        this.page = 1;
-      });
-    },
-
-    async loadData() {
-      this.loading = true;
-      try {
-        const response = await fetch('{{ route('maintenance.data') }}');
-        const data = await response.json();
-        
-        if (data.success) {
-          this.statistics = data.statistics || {};
-          this.items = data.items || [];
-          this.tailors = data.tailors || [];
-          // Debug: log first item to check data structure
-          if (this.items.length > 0) {
-            console.log('First item data:', this.items[0]);
-          }
-        } else {
-          throw new Error(data.message || '{{ trans('messages.failed_to_load_data', [], session('locale')) }}');
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: error.message
-          });
-        } else {
-          alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
-        }
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    async loadRepairHistory() {
-      this.loadingHistory = true;
-      try {
-        const response = await fetch('{{ route('maintenance.history') }}');
-        const data = await response.json();
-        
-        if (data.success) {
-          this.repairHistory = data.history || [];
-        } else {
-          throw new Error(data.message || '{{ trans('messages.failed_to_load_repair_history', [], session('locale')) }}');
-        }
-      } catch (error) {
-        console.error('Error loading repair history:', error);
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: error.message
-          });
-        }
-      } finally {
-        this.loadingHistory = false;
-      }
-    },
-
-    filteredItems() {
-      if (!this.search) return this.items;
-
-      const searchLower = this.search.toLowerCase();
-      return this.items.filter(item => 
-        item.design_name.toLowerCase().includes(searchLower) ||
-        item.abaya_code.toLowerCase().includes(searchLower) ||
-        item.customer_name.toLowerCase().includes(searchLower) ||
-        item.customer_phone.includes(this.search) ||
-        (item.order_no && item.order_no.toLowerCase().includes(searchLower))
-      );
-    },
-
-    paginatedItems() {
-      const filtered = this.filteredItems();
-      const start = (this.page - 1) * this.perPage;
-      return filtered.slice(start, start + this.perPage);
-    },
-
-    totalPages() {
-      const total = this.filteredItems().length;
-      return total === 0 ? 1 : Math.ceil(total / this.perPage);
-    },
-
-    pageNumbers() {
-      const total = this.totalPages();
-      const current = this.page;
-      const pages = [];
-      
-      if (total <= 5) {
-        // Show all pages if 5 or fewer
-        for (let i = 1; i <= total; i++) {
-          pages.push(i);
-        }
-      } else {
-        // Show pages around current page
-        let start = Math.max(1, current - 2);
-        let end = Math.min(total, start + 4);
-        
-        // Adjust if we're near the end
-        if (end - start < 4) {
-          start = Math.max(1, end - 4);
-        }
-        
-        for (let i = start; i <= end; i++) {
-          pages.push(i);
-        }
-      }
-      
-      return pages;
-    },
-
-    startItem() {
-      if (this.filteredItems().length === 0) return 0;
-      return (this.page - 1) * this.perPage + 1;
-    },
-
-    endItem() {
-      return Math.min(this.page * this.perPage, this.filteredItems().length);
-    },
-
-    nextPage() {
-      if (this.page < this.totalPages()) {
-        this.page++;
-        this.scrollToTop();
-      }
-    },
-
-    prevPage() {
-      if (this.page > 1) {
-        this.page--;
-        this.scrollToTop();
-      }
-    },
-
-    goToPage(pageNum) {
-      if (pageNum >= 1 && pageNum <= this.totalPages()) {
-        this.page = pageNum;
-        this.scrollToTop();
-      }
-    },
-
-    scrollToTop() {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    },
-
-    openActionModal(item) {
-      this.selectedItem = item;
-      this.selectedTailorId = '';
-      this.deliveryCharges = item.delivery_charges || 0;
-      this.repairCost = item.repair_cost || 0;
-      this.costBearer = item.cost_bearer || '';
-      this.maintenanceNotes = item.maintenance_notes || '';
-      this.showActionModal = true;
-    },
-
-    openNotesModal(item) {
-      this.selectedNotesItem = item;
-      this.showNotesModal = true;
-    },
-
-    openNotesModal(item) {
-      this.selectedNotesItem = item;
-      this.showNotesModal = true;
-    },
-
-    async performAction() {
-      if (this.selectedItem.maintenance_status === 'received_from_tailor') {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'info',
-            title: '{{ trans('messages.already_completed', [], session('locale')) }}',
-            text: '{{ trans('messages.already_received_message', [], session('locale')) }}'
-          });
-        }
-        return;
-      }
-
-      if (this.selectedItem.maintenance_status === 'delivered_to_tailor') {
-        // Receive from tailor
-        if (!this.costBearer) {
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'warning',
-              title: '{{ trans('messages.required_field', [], session('locale')) }}',
-              text: '{{ trans('messages.please_select_cost_bearer', [], session('locale')) }}'
-            });
-          } else {
-            alert('{{ trans('messages.please_select_cost_bearer', [], session('locale')) }}');
-          }
-          return;
-        }
-
-        try {
-          const response = await fetch('{{ route('maintenance.receive') }}', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify({
-              item_id: this.selectedItem.id,
-              delivery_charges: this.deliveryCharges,
-              repair_cost: this.repairCost,
-              cost_bearer: this.costBearer
-            })
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            if (typeof Swal !== 'undefined') {
-              Swal.fire({
-                icon: 'success',
-                title: '{{ trans('messages.success', [], session('locale')) }}',
-                text: data.message
-              });
-            } else {
-              alert(data.message);
-            }
-            this.showActionModal = false;
-            await this.loadData();
-          } else {
-            throw new Error(data.message || '{{ trans('messages.failed_to_receive_item', [], session('locale')) }}');
-          }
-        } catch (error) {
-          console.error('Error:', error);
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'error',
-              title: '{{ trans('messages.error', [], session('locale')) }}',
-              text: error.message
-            });
-          } else {
-            alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
-          }
-        }
-      } else {
-        // Send to tailor
-        if (!this.selectedTailorId) {
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'warning',
-              title: '{{ trans('messages.select_tailor_title', [], session('locale')) }}',
-              text: '{{ trans('messages.please_select_tailor', [], session('locale')) }}'
-            });
-          } else {
-            alert('{{ trans('messages.please_select_tailor', [], session('locale')) }}');
-          }
-          return;
-        }
-
-        try {
-          const response = await fetch('{{ route('maintenance.send_repair') }}', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify({
-              item_id: this.selectedItem.id,
-              tailor_id: this.selectedTailorId,
-              maintenance_notes: this.maintenanceNotes || ''
-            })
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            if (typeof Swal !== 'undefined') {
-              Swal.fire({
-                icon: 'success',
-                title: '{{ trans('messages.success', [], session('locale')) }}',
-                text: data.message
-              });
-            } else {
-              alert(data.message);
-            }
-            this.showActionModal = false;
-            await this.loadData();
-          } else {
-            throw new Error(data.message || '{{ trans('messages.failed_to_send_item', [], session('locale')) }}');
-          }
-        } catch (error) {
-          console.error('Error:', error);
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'error',
-              title: '{{ trans('messages.error', [], session('locale')) }}',
-              text: error.message
-            });
-          } else {
-            alert('{{ trans('messages.error', [], session('locale')) }}: ' + error.message);
-          }
-        }
-      }
-    },
-
-    getStatusLabel(status) {
-      const labels = {
-        'delivered_to_tailor': '{{ trans('messages.delivered_to_tailor', [], session('locale')) }}',
-        'received_from_tailor': '{{ trans('messages.received_from_tailor', [], session('locale')) }}'
-      };
-      return labels[status] || '{{ trans('messages.not_in_maintenance', [], session('locale')) }}';
-    },
-
-    getStatusBadgeClass(status) {
-      const classes = {
-        'delivered_to_tailor': 'bg-orange-100 text-orange-800',
-        'received_from_tailor': 'bg-blue-100 text-blue-800'
-      };
-      return classes[status] || 'bg-gray-100 text-gray-800';
-    }
-  }));
-});
-</script>
 
 @include('layouts.footer')
 @endsection

@@ -11,18 +11,25 @@
             const accountName = expense.account ? expense.account.account_name : '-';
             const expenseDate = expense.expense_date ? new Date(expense.expense_date).toLocaleDateString() : '-';
             
+            // Check if receipt exists
+            const receiptButton = expense.expense_image ? 
+                `<button class="view-receipt-btn icon-btn hover:text-blue-500" data-file="${expense.expense_image}" title="View/Download Receipt">
+                    <span class="material-symbols-outlined">receipt</span>
+                </button>` : '';
+
             rows += `
-            <tr class="hover:bg-pink-50/50 transition-colors" data-id="${expense.id}">
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-medium">${expense.expense_name || '-'}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${categoryName}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] font-bold text-red-600">${expense.amount ? parseFloat(expense.amount).toFixed(3) : '0.000'}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${accountName}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${expenseDate}</td>
-                <td class="px-4 sm:px-6 py-5 text-center">
+            <tr class="hover:bg-pink-50/50 transition-colors border-b border-gray-100" data-id="${expense.id}">
+                <td class="px-4 sm:px-6 py-3 text-[var(--text-primary)] font-medium">${expense.expense_name || '-'}</td>
+                <td class="px-4 sm:px-6 py-3 text-[var(--text-primary)]">${categoryName}</td>
+                <td class="px-4 sm:px-6 py-3 text-[var(--text-primary)] font-bold text-red-600">${expense.amount ? parseFloat(expense.amount).toFixed(3) : '0.000'}</td>
+                <td class="px-4 sm:px-6 py-3 text-[var(--text-primary)]">${accountName}</td>
+                <td class="px-4 sm:px-6 py-3 text-[var(--text-primary)]">${expenseDate}</td>
+                <td class="px-4 sm:px-6 py-3 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
                         <button class="edit-btn icon-btn">
                             <span class="material-symbols-outlined">edit</span>
                         </button>
+                        ${receiptButton}
                         <button class="delete-btn icon-btn hover:text-red-500">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
@@ -38,22 +45,30 @@
 
         // Previous
         pagination += `
-        <li class="px-3 py-1 rounded-full ${!res.prev_page_url ? 'opacity-50 pointer-events-none' : 'bg-gray-200 hover:bg-gray-300'}">
+        <li class="${!res.prev_page_url ? 'disabled' : ''}">
             <a href="${res.prev_page_url ? res.prev_page_url : '#'}">&laquo;</a>
         </li>`;
 
         // Page numbers
         for (let i = 1; i <= res.last_page; i++) {
-            pagination += `
-            <li class="px-3 py-1 rounded-full ${res.current_page == i ? 'bg-[var(--primary-color)] text-white' : 'bg-gray-200 hover:bg-gray-300'}">
-                <a href="{{ url('expenses/list') }}?page=${i}">${i}</a>
-            </li>
-            `;
+            if (res.current_page == i) {
+                pagination += `
+                <li class="active">
+                    <span>${i}</span>
+                </li>
+                `;
+            } else {
+                pagination += `
+                <li>
+                    <a href="{{ url('expenses/list') }}?page=${i}">${i}</a>
+                </li>
+                `;
+            }
         }
 
         // Next
         pagination += `
-        <li class="px-3 py-1 rounded-full ${!res.next_page_url ? 'opacity-50 pointer-events-none' : 'bg-gray-200 hover:bg-gray-300'}">
+        <li class="${!res.next_page_url ? 'disabled' : ''}">
             <a href="${res.next_page_url ? res.next_page_url : '#'}">&raquo;</a>
         </li>`;
 
@@ -251,6 +266,78 @@ $(document).on('click', '#pagination a', function(e) {
                     });
                 }
             });
+        });
+
+        // View/Download receipt
+        $(document).on('click', '.view-receipt-btn', function() {
+            let fileName = $(this).data('file');
+            let fileUrl = '<?= url("uploads/expense_files") ?>/' + fileName;
+            
+            // Determine file type based on extension
+            let fileExtension = fileName.split('.').pop().toLowerCase();
+            let isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension);
+            let isPdf = fileExtension === 'pdf';
+            
+            if (isImage) {
+                // For images, open in a modal
+                Swal.fire({
+                    title: 'Receipt',
+                    html: `<img src="${fileUrl}" style="max-width: 100%; max-height: 70vh; border-radius: 8px;" alt="Receipt">`,
+                    showCloseButton: true,
+                    showConfirmButton: true,
+                    confirmButtonText: 'Download',
+                    confirmButtonColor: '#3085d6',
+                    showCancelButton: true,
+                    cancelButtonText: 'Close',
+                    width: 'auto',
+                    padding: '20px'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Download the image
+                        let link = document.createElement('a');
+                        link.href = fileUrl;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                });
+            } else if (isPdf) {
+                // For PDFs, show options to view or download
+                Swal.fire({
+                    title: 'Receipt PDF',
+                    text: 'Choose an action',
+                    icon: 'info',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'View',
+                    denyButtonText: 'Download',
+                    cancelButtonText: 'Close',
+                    confirmButtonColor: '#3085d6',
+                    denyButtonColor: '#28a745'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Open PDF in new tab
+                        window.open(fileUrl, '_blank');
+                    } else if (result.isDenied) {
+                        // Download PDF
+                        let link = document.createElement('a');
+                        link.href = fileUrl;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                });
+            } else {
+                // For other file types, download directly
+                let link = document.createElement('a');
+                link.href = fileUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         });
 
     });

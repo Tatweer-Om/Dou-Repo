@@ -72,6 +72,30 @@
                                 class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
                                 {abaya_category}
                             </button>
+                            <button type="button" onclick="insertVariable('{color}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {color}
+                            </button>
+                            <button type="button" onclick="insertVariable('{size}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {size}
+                            </button>
+                            <button type="button" onclick="insertVariable('{abaya_length}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {abaya_length}
+                            </button>
+                            <button type="button" onclick="insertVariable('{bust}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {bust}
+                            </button>
+                            <button type="button" onclick="insertVariable('{sleeves_length}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {sleeves_length}
+                            </button>
+                            <button type="button" onclick="insertVariable('{buttons}')" 
+                                class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
+                                {buttons}
+                            </button>
                             <button type="button" onclick="insertVariable('{special_order_number}')" 
                                 class="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)] transition-colors">
                                 {special_order_number}

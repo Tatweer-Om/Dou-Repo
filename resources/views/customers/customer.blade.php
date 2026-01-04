@@ -40,7 +40,7 @@
         </div>
 
         <!-- Customers table -->
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden border border-[var(--border-color)]">
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden border border-[var(--border-color)] overflow-x-auto">
             <table class="w-full text-sm text-right">
                 <thead class="bg-gray-50 border-b border-[var(--border-color)]">
                     <tr>

@@ -1,3 +1,15 @@
+ html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    max-width: 100vw;
+  }
+
+
     /* .text-text-primary {
     color: #F8BBD9; /* رمادي أفتح قليلاً - مريح للعين  }*/
 

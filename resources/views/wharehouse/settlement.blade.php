@@ -143,7 +143,7 @@
                   <td class="px-3 py-2" x-text="r.pulled"></td>
                   <td class="px-3 py-2" x-text="r.sellable"></td>
                   <td class="px-3 py-2">
-                    <input type="number" min="0" class="h-11 w-24 text-center rounded-lg border border-pink-200"
+                    <input type="number" min="0" :max="r.sellable" class="h-11 w-24 text-center rounded-lg border border-pink-200"
                            x-model.number="r.sold" @input="recalc(idx)">
                   </td>
                   <td class="px-3 py-2 font-semibold"
@@ -565,8 +565,19 @@ function settlementPage(){
 
     recalc(idx){
       const r = this.rows[idx];
-      r.diff = Number(r.sold||0) - Number(r.sellable||0);
-      r.total = Number(r.sold||0) * Number(r.price||0);
+      const sellable = Number(r.sellable||0);
+      let sold = Number(r.sold||0);
+      
+      // Prevent sold from being greater than sellable
+      if (sold > sellable) {
+        sold = sellable;
+        r.sold = sellable;
+        alert('Sold quantity cannot exceed sellable quantity (' + sellable + ')');
+      }
+      
+      // Difference should always be positive: sellable - sold
+      r.diff = sellable - sold;
+      r.total = sold * Number(r.price||0);
     },
 
     sum(field){
@@ -682,12 +693,10 @@ function settlementPage(){
 
         if (result.success) {
           this.toast('{{ trans('messages.settlement_saved_successfully', [], session('locale')) }}');
-          // Reset editable values
-          this.rows.forEach(r=>{ r.sold=0; r.diff=0; r.total=0; });
-          // Clear attachment
-          this.attachment = {name:'', sizeLabel:'', file: null};
-          // Reload history
-          await this.loadHistory();
+          // Reload the page after a short delay to show the toast message
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
         } else {
           alert(result.message || '{{ trans('messages.error_saving_settlement', [], session('locale')) }}');
         }

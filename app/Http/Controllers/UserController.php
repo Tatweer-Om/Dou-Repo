@@ -10,6 +10,16 @@ class UserController extends Controller
 {
      public function index()
     {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+
+        $permissions = Auth::user()->permissions ?? [];
+
+        if (!in_array(1, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+
         return view('users.user');
     }
 
@@ -28,7 +38,9 @@ class UserController extends Controller
         $user->user_email = $request->user_email;
         $user->password = Hash::make($request->user_password);
         $user->notes = $request->notes;
-        $user->permissions = $request->permissions ?? [];
+        // Convert permissions to integers (numeric IDs: 1-12)
+        $permissions = $request->permissions ?? [];
+        $user->permissions = array_map('intval', $permissions);
         $user->added_by = 'system';
         $user->user_id = auth()->id() ?? 1;
         $user->save();
@@ -42,7 +54,9 @@ class UserController extends Controller
     $user->user_phone  = $request->user_phone;
     $user->user_email  = $request->user_email;
     $user->notes       = $request->notes;
-    $user->permissions = $request->permissions ?? [];
+    // Convert permissions to integers (numeric IDs: 1-12)
+    $permissions = $request->permissions ?? [];
+    $user->permissions = array_map('intval', $permissions);
     $user->updated_by  = auth()->user()->user_name ?? 'system_update';
 
     // Update password ONLY if the user enters a new one

@@ -139,25 +139,25 @@
           <table class="w-full text-sm min-w-[1300px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_code', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.transfer_date', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.items_sent', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.total_amount_sent', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.sold_amount', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.profit', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_code', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.transfer_date', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.items_sent', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.total_amount_sent', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.sold_amount', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.profit', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.status', [], session('locale')) }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
               </tr>
             </thead>
             <tbody>
-              <template x-for="row in filteredSales" :key="row.transfer_code">
+              <template x-for="row in paginatedSales" :key="row.transfer_code">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold" x-text="row.transfer_code"></td>
-                  <td class="px-3 py-2" x-text="row.date"></td>
-                  <td class="px-3 py-2" x-text="row.items_sent"></td>
-                  <td class="px-3 py-2" x-text="formatCurrency(row.total_amount_sent)"></td>
-                  <td class="px-3 py-2" x-text="formatCurrency(row.sold_amount)"></td>
-                  <td class="px-3 py-2 font-semibold" :class="row.profit >= 0 ? 'text-green-600' : 'text-red-600'" x-text="formatCurrency(row.profit)"></td>
+                  <td class="px-3 py-2 text-center font-semibold" x-text="row.transfer_code"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.date"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.items_sent"></td>
+                  <td class="px-3 py-2 text-center" x-text="formatCurrency(row.total_amount_sent)"></td>
+                  <td class="px-3 py-2 text-center" x-text="formatCurrency(row.sold_amount)"></td>
+                  <td class="px-3 py-2 text-center font-semibold" :class="row.profit >= 0 ? 'text-green-600' : 'text-red-600'" x-text="formatCurrency(row.profit)"></td>
                   <td class="px-3 py-2 text-center">
                     <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold"
                           :class="row.status === 'fully_paid' ? 'bg-green-100 text-green-700' : row.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
@@ -171,8 +171,58 @@
                   </td>
                 </tr>
               </template>
+              <template x-if="paginatedSales.length === 0">
+                <tr>
+                  <td colspan="8" class="px-3 py-8 text-center text-gray-500">{{ trans('messages.no_data_found', [], session('locale')) }}</td>
+                </tr>
+              </template>
             </tbody>
           </table>
+        </div>
+        
+        <!-- Sales Pagination -->
+        <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">{{ trans('messages.items_per_page', [], session('locale')) }}:</label>
+            <select x-model="salesPerPage" @change="currentSalesPage = 1" class="h-8 px-2 border border-pink-200 rounded-lg text-sm">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-gray-600">
+            <span x-text="`${(currentSalesPage - 1) * salesPerPage + 1} - ${Math.min(currentSalesPage * salesPerPage, filteredSales.length)}`"></span>
+            <span x-text="`{{ trans('messages.of', [], session('locale')) }} ${filteredSales.length}`"></span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button @click="currentSalesPage = 1" :disabled="currentSalesPage === 1" 
+                    :class="currentSalesPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.first', [], session('locale')) }}
+            </button>
+            <button @click="currentSalesPage--" :disabled="currentSalesPage === 1"
+                    :class="currentSalesPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.previous', [], session('locale')) }}
+            </button>
+            <template x-for="page in salesPages" :key="page">
+              <button @click="currentSalesPage = page"
+                      :class="currentSalesPage === page ? 'bg-[var(--primary-color)] text-white' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm min-w-[40px]"
+                      x-text="page"></button>
+            </template>
+            <button @click="currentSalesPage++" :disabled="currentSalesPage >= totalSalesPages"
+                    :class="currentSalesPage >= totalSalesPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.next', [], session('locale')) }}
+            </button>
+            <button @click="currentSalesPage = totalSalesPages" :disabled="currentSalesPage >= totalSalesPages"
+                    :class="currentSalesPage >= totalSalesPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.last', [], session('locale')) }}
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -196,20 +246,22 @@
           <table class="w-full text-sm min-w-[1000px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
               <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.order_number', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.shipment_date', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.total_items', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.total_amount', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.order_number', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.shipment_date', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.total_items', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.total_amount', [], session('locale')) }}</th>
+                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.from_channel', [], session('locale')) ?: 'From Channel' }}</th>
                 <th class="px-3 py-2 text-center font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
               </tr>
             </thead>
             <tbody>
-              <template x-for="row in filteredShipments" :key="row.transfer_code">
+              <template x-for="row in paginatedShipments" :key="row.transfer_code">
                 <tr class="border-t hover:bg-pink-50/60">
-                  <td class="px-3 py-2 font-semibold" x-text="row.transfer_code"></td>
-                  <td class="px-3 py-2" x-text="row.date"></td>
-                  <td class="px-3 py-2" x-text="row.total_items"></td>
-                  <td class="px-3 py-2" x-text="formatCurrency(row.total_amount)"></td>
+                  <td class="px-3 py-2 text-center font-semibold" x-text="row.transfer_code"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.date"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.total_items"></td>
+                  <td class="px-3 py-2 text-center" x-text="formatCurrency(row.total_amount)"></td>
+                  <td class="px-3 py-2 text-center" x-text="row.from_channel || '-'"></td>
                   <td class="px-3 py-2 text-center">
                     <button @click="openShipmentDetails(row)"
                             class="px-3 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-semibold">
@@ -218,8 +270,58 @@
                   </td>
                 </tr>
               </template>
+              <template x-if="paginatedShipments.length === 0">
+                <tr>
+                  <td colspan="6" class="px-3 py-8 text-center text-gray-500">{{ trans('messages.no_data_found', [], session('locale')) }}</td>
+                </tr>
+              </template>
             </tbody>
           </table>
+        </div>
+        
+        <!-- Shipments Pagination -->
+        <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">{{ trans('messages.items_per_page', [], session('locale')) }}:</label>
+            <select x-model="shipmentsPerPage" @change="currentShipmentsPage = 1" class="h-8 px-2 border border-pink-200 rounded-lg text-sm">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-gray-600">
+            <span x-text="`${(currentShipmentsPage - 1) * shipmentsPerPage + 1} - ${Math.min(currentShipmentsPage * shipmentsPerPage, filteredShipments.length)}`"></span>
+            <span x-text="`{{ trans('messages.of', [], session('locale')) }} ${filteredShipments.length}`"></span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button @click="currentShipmentsPage = 1" :disabled="currentShipmentsPage === 1" 
+                    :class="currentShipmentsPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.first', [], session('locale')) }}
+            </button>
+            <button @click="currentShipmentsPage--" :disabled="currentShipmentsPage === 1"
+                    :class="currentShipmentsPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.previous', [], session('locale')) }}
+            </button>
+            <template x-for="page in shipmentsPages" :key="page">
+              <button @click="currentShipmentsPage = page"
+                      :class="currentShipmentsPage === page ? 'bg-[var(--primary-color)] text-white' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm min-w-[40px]"
+                      x-text="page"></button>
+            </template>
+            <button @click="currentShipmentsPage++" :disabled="currentShipmentsPage >= totalShipmentsPages"
+                    :class="currentShipmentsPage >= totalShipmentsPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.next', [], session('locale')) }}
+            </button>
+            <button @click="currentShipmentsPage = totalShipmentsPages" :disabled="currentShipmentsPage >= totalShipmentsPages"
+                    :class="currentShipmentsPage >= totalShipmentsPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                    class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+              {{ trans('messages.last', [], session('locale')) }}
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -227,66 +329,107 @@
     <!-- INVOICES -->
     <section x-show="tab==='invoices'" x-transition>
       <div class="bg-white border border-pink-100 rounded-2xl p-6 mt-4">
-        @if(isset($unpaidInvoices) && $unpaidInvoices->count() > 0)
-        <div class="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg">
+        <div x-show="unpaidInvoicesCount > 0" class="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg">
           <p class="text-sm text-red-700 font-semibold">
             <span class="material-symbols-outlined align-middle text-base">warning</span>
-            {{ trans('messages.unpaid_invoices', [], session('locale')) }}: {{ $unpaidInvoices->count() }}
+            {{ trans('messages.unpaid_invoices', [], session('locale')) }}: <span x-text="unpaidInvoicesCount"></span>
           </p>
         </div>
-        @endif
-        @if(isset($allInvoices) && $allInvoices->count() > 0)
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm min-w-[900px]">
-            <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
-              <tr>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.amount', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-right font-bold">{{ trans('messages.payment_date', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.status', [], session('locale')) }}</th>
-                <th class="px-3 py-2 text-center font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($allInvoices as $invoice)
-              <tr class="border-t hover:bg-pink-50/60">
-                <td class="px-3 py-2 font-semibold">{{ $invoice->month }}</td>
-                <td class="px-3 py-2">{{ $invoice->total_amount ?? $boutique->monthly_rent }} ر.ع</td>
-                <td class="px-3 py-2">{{ $invoice->payment_date ? date('Y-m-d', strtotime($invoice->payment_date)) : '-' }}</td>
-                <td class="px-3 py-2 text-center">
-                  @if($invoice->status == '4')
-                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                    <span class="material-symbols-outlined text-xs">check_circle</span>
-                    {{ trans('messages.paid', [], session('locale')) }}
-                  </span>
-                  @else
-                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                    <span class="material-symbols-outlined text-xs">cancel</span>
-                    {{ trans('messages.unpaid', [], session('locale')) }}
-                  </span>
-                  @endif
-                </td>
-                <td class="px-3 py-2 text-center">
-                  @if($invoice->status == '5')
-                  <button @click="openPaymentModal({{ $invoice->id }}, '{{ $invoice->month }}', {{ $invoice->total_amount ?? $boutique->monthly_rent }})"
-                          class="px-3 py-1 rounded-lg bg-[var(--primary-color)] hover:bg-pink-700 text-white text-xs font-semibold">
-                    {{ trans('messages.pay', [], session('locale')) }}
-                  </button>
-                  @else
-                  <span class="px-3 py-1 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">{{ trans('messages.paid', [], session('locale')) }}</span>
-                  @endif
-                </td>
-              </tr>
-              @endforeach
-            </tbody>
-          </table>
+        <div x-show="invoices.length > 0">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm min-w-[900px]">
+              <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
+                <tr>
+                  <th class="px-3 py-2 text-center font-bold">{{ trans('messages.month', [], session('locale')) }}</th>
+                  <th class="px-3 py-2 text-center font-bold">{{ trans('messages.amount', [], session('locale')) }}</th>
+                  <th class="px-3 py-2 text-center font-bold">{{ trans('messages.payment_date', [], session('locale')) }}</th>
+                  <th class="px-3 py-2 text-center font-bold">{{ trans('messages.status', [], session('locale')) }}</th>
+                  <th class="px-3 py-2 text-center font-bold">{{ trans('messages.action', [], session('locale')) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="invoice in paginatedInvoices" :key="invoice.id">
+                  <tr class="border-t hover:bg-pink-50/60">
+                    <td class="px-3 py-2 text-center font-semibold" x-text="invoice.month"></td>
+                    <td class="px-3 py-2 text-center" x-text="formatCurrency(invoice.total_amount)"></td>
+                    <td class="px-3 py-2 text-center" x-text="invoice.payment_date || '-'"></td>
+                    <td class="px-3 py-2 text-center">
+                      <span x-show="invoice.status === '4'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                        <span class="material-symbols-outlined text-xs">check_circle</span>
+                        {{ trans('messages.paid', [], session('locale')) }}
+                      </span>
+                      <span x-show="invoice.status !== '4'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                        <span class="material-symbols-outlined text-xs">cancel</span>
+                        {{ trans('messages.unpaid', [], session('locale')) }}
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 text-center">
+                      <button x-show="invoice.status === '5'" @click="openPaymentModal(invoice.id, invoice.month, invoice.total_amount)"
+                              class="px-3 py-1 rounded-lg bg-[var(--primary-color)] hover:bg-pink-700 text-white text-xs font-semibold">
+                        {{ trans('messages.pay', [], session('locale')) }}
+                      </button>
+                      <span x-show="invoice.status !== '5'" class="px-3 py-1 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">{{ trans('messages.paid', [], session('locale')) }}</span>
+                    </td>
+                  </tr>
+                </template>
+                <template x-if="paginatedInvoices.length === 0">
+                  <tr>
+                    <td colspan="5" class="px-3 py-8 text-center text-gray-500">{{ trans('messages.no_data_found', [], session('locale')) }}</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Invoices Pagination -->
+          <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-gray-600">{{ trans('messages.items_per_page', [], session('locale')) }}:</label>
+              <select x-model="invoicesPerPage" @change="currentInvoicesPage = 1" class="h-8 px-2 border border-pink-200 rounded-lg text-sm">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-600">
+              <span x-text="`${(currentInvoicesPage - 1) * invoicesPerPage + 1} - ${Math.min(currentInvoicesPage * invoicesPerPage, invoices.length)}`"></span>
+              <span x-text="`{{ trans('messages.of', [], session('locale')) }} ${invoices.length}`"></span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button @click="currentInvoicesPage = 1" :disabled="currentInvoicesPage === 1" 
+                      :class="currentInvoicesPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+                {{ trans('messages.first', [], session('locale')) }}
+              </button>
+              <button @click="currentInvoicesPage--" :disabled="currentInvoicesPage === 1"
+                      :class="currentInvoicesPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+                {{ trans('messages.previous', [], session('locale')) }}
+              </button>
+              <template x-for="page in invoicesPages" :key="page">
+                <button @click="currentInvoicesPage = page"
+                        :class="currentInvoicesPage === page ? 'bg-[var(--primary-color)] text-white' : 'hover:bg-pink-100'"
+                        class="px-3 py-1 rounded-lg border border-pink-200 text-sm min-w-[40px]"
+                        x-text="page"></button>
+              </template>
+              <button @click="currentInvoicesPage++" :disabled="currentInvoicesPage >= totalInvoicesPages"
+                      :class="currentInvoicesPage >= totalInvoicesPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+                {{ trans('messages.next', [], session('locale')) }}
+              </button>
+              <button @click="currentInvoicesPage = totalInvoicesPages" :disabled="currentInvoicesPage >= totalInvoicesPages"
+                      :class="currentInvoicesPage >= totalInvoicesPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-pink-100'"
+                      class="px-3 py-1 rounded-lg border border-pink-200 text-sm">
+                {{ trans('messages.last', [], session('locale')) }}
+              </button>
+            </div>
+          </div>
         </div>
-        @else
-        <div class="text-center py-12">
+        <div x-show="invoices.length === 0" class="text-center py-12">
           <span class="material-symbols-outlined text-6xl text-gray-300 mb-4 block">receipt_long</span>
           <p class="text-gray-500 text-lg font-semibold">{{ trans('messages.no_invoices_found', [], session('locale')) }}</p>
         </div>
-        @endif
       </div>
     </section>
 
@@ -402,21 +545,21 @@
         <table class="w-full text-sm">
           <thead class="bg-pink-50 text-gray-700">
             <tr>
-              <th class="p-2 text-right">{{ trans('messages.code', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.color', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.size', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.quantity', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.price', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.code', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.color', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.size', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.quantity', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.price', [], session('locale')) }}</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="item in filteredDetails" :key="item.code + (item.size || '') + (item.color || '')">
               <tr class="border-t">
-                <td class="p-2" x-text="item.code"></td>
-                <td class="p-2" x-text="item.color || '-'"></td>
-                <td class="p-2" x-text="item.size || '-'"></td>
-                <td class="p-2" x-text="item.quantity"></td>
-                <td class="p-2" x-text="formatCurrency(item.price)"></td>
+                <td class="p-2 text-center" x-text="item.code"></td>
+                <td class="p-2 text-center" x-text="item.color || '-'"></td>
+                <td class="p-2 text-center" x-text="item.size || '-'"></td>
+                <td class="p-2 text-center" x-text="item.quantity"></td>
+                <td class="p-2 text-center" x-text="formatCurrency(item.price)"></td>
               </tr>
             </template>
           </tbody>
@@ -470,21 +613,21 @@
         <table class="w-full text-sm">
           <thead class="bg-pink-50 text-gray-700">
             <tr>
-              <th class="p-2 text-right">{{ trans('messages.code', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.color', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.size', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.quantity', [], session('locale')) }}</th>
-              <th class="p-2 text-right">{{ trans('messages.price', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.code', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.color', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.size', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.quantity', [], session('locale')) }}</th>
+              <th class="p-2 text-center">{{ trans('messages.price', [], session('locale')) }}</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="item in currentShipment.items" :key="item.code + (item.size || '') + (item.color || '')">
               <tr class="border-t">
-                <td class="p-2" x-text="item.code"></td>
-                <td class="p-2" x-text="item.color || '-'"></td>
-                <td class="p-2" x-text="item.size || '-'"></td>
-                <td class="p-2" x-text="item.quantity"></td>
-                <td class="p-2" x-text="formatCurrency(item.price)"></td>
+                <td class="p-2 text-center" x-text="item.code"></td>
+                <td class="p-2 text-center" x-text="item.color || '-'"></td>
+                <td class="p-2 text-center" x-text="item.size || '-'"></td>
+                <td class="p-2 text-center" x-text="item.quantity"></td>
+                <td class="p-2 text-center" x-text="formatCurrency(item.price)"></td>
               </tr>
             </template>
           </tbody>
@@ -530,6 +673,21 @@
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@php
+  // Prepare invoices data for JavaScript
+  $invoicesData = [];
+  if (isset($allInvoices) && $allInvoices) {
+    foreach ($allInvoices as $invoice) {
+      $invoicesData[] = [
+        'id' => $invoice->id,
+        'month' => $invoice->month,
+        'total_amount' => $invoice->total_amount ?? $boutique->monthly_rent,
+        'payment_date' => $invoice->payment_date ? date('Y-m-d', strtotime($invoice->payment_date)) : null,
+        'status' => $invoice->status
+      ];
+    }
+  }
+@endphp
 <script>
 function boutiqueProfile() {
   return {
@@ -582,6 +740,43 @@ function boutiqueProfile() {
     dateToSales: '',
     sales: @json($salesByTransfer ?? []),
     filteredSales: [],
+    currentSalesPage: 1,
+    salesPerPage: 10,
+    get totalSalesPages() {
+      return Math.ceil(this.filteredSales.length / this.salesPerPage) || 1;
+    },
+    get salesPages() {
+      const pages = [];
+      const total = this.totalSalesPages;
+      const current = this.currentSalesPage;
+      const maxVisible = 5;
+      
+      if (total <= maxVisible) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (current <= 3) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+        } else if (current >= total - 2) {
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          for (let i = current - 2; i <= current + 2; i++) {
+            pages.push(i);
+          }
+        }
+      }
+      return pages;
+    },
+    get paginatedSales() {
+      const start = (this.currentSalesPage - 1) * this.salesPerPage;
+      const end = start + this.salesPerPage;
+      return this.filteredSales.slice(start, end);
+    },
     currentSale: {transfer_code:'', date:'', items:[]},
     showSaleModal: false,
     detailSearch: '',
@@ -600,7 +795,7 @@ function boutiqueProfile() {
     },
     formatCurrency(n) {
       const v = Number(n || 0);
-      return v.toLocaleString('ar-EG', {minimumFractionDigits: 3, maximumFractionDigits: 3}) + ' ر.ع';
+      return v.toLocaleString('en-US', {minimumFractionDigits: 3, maximumFractionDigits: 3}) + ' ر.ع';
     },
     getStatusText(status) {
       if (status === 'fully_paid') return '{{ trans('messages.fully_paid', [], session('locale')) }}';
@@ -618,6 +813,7 @@ function boutiqueProfile() {
         const inTo   = !to   || d <= to;
         return matchQ && inFrom && inTo;
       });
+      this.currentSalesPage = 1; // Reset to first page when filtering
     },
     openSaleDetails(row) {
       this.currentSale = {
@@ -637,6 +833,43 @@ function boutiqueProfile() {
     dateToSh: '',
     shipments: @json($shipmentsData ?? []),
     filteredShipments: [],
+    currentShipmentsPage: 1,
+    shipmentsPerPage: 10,
+    get totalShipmentsPages() {
+      return Math.ceil(this.filteredShipments.length / this.shipmentsPerPage) || 1;
+    },
+    get shipmentsPages() {
+      const pages = [];
+      const total = this.totalShipmentsPages;
+      const current = this.currentShipmentsPage;
+      const maxVisible = 5;
+      
+      if (total <= maxVisible) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (current <= 3) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+        } else if (current >= total - 2) {
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          for (let i = current - 2; i <= current + 2; i++) {
+            pages.push(i);
+          }
+        }
+      }
+      return pages;
+    },
+    get paginatedShipments() {
+      const start = (this.currentShipmentsPage - 1) * this.shipmentsPerPage;
+      const end = start + this.shipmentsPerPage;
+      return this.filteredShipments.slice(start, end);
+    },
     currentShipment: {transfer_code:'', date:'', items:[]},
     showShipModal: false,
     filterShipments() {
@@ -650,6 +883,7 @@ function boutiqueProfile() {
         const inTo   = !to   || d <= to;
         return matchQ && inFrom && inTo;
       });
+      this.currentShipmentsPage = 1; // Reset to first page when filtering
     },
     openShipmentDetails(row) {
       this.currentShipment = {
@@ -661,6 +895,45 @@ function boutiqueProfile() {
     },
 
     // INVOICES
+    invoices: @json($invoicesData),
+    unpaidInvoicesCount: {{ $unpaidInvoicesCount ?? 0 }},
+    currentInvoicesPage: 1,
+    invoicesPerPage: 10,
+    get totalInvoicesPages() {
+      return Math.ceil(this.invoices.length / this.invoicesPerPage) || 1;
+    },
+    get invoicesPages() {
+      const pages = [];
+      const total = this.totalInvoicesPages;
+      const current = this.currentInvoicesPage;
+      const maxVisible = 5;
+      
+      if (total <= maxVisible) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (current <= 3) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+        } else if (current >= total - 2) {
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          for (let i = current - 2; i <= current + 2; i++) {
+            pages.push(i);
+          }
+        }
+      }
+      return pages;
+    },
+    get paginatedInvoices() {
+      const start = (this.currentInvoicesPage - 1) * this.invoicesPerPage;
+      const end = start + this.invoicesPerPage;
+      return this.invoices.slice(start, end);
+    },
     showPaymentModal: false,
     currentPaymentInvoice: {id: null, month: '', amount: 0},
     paymentAmount: '',
@@ -760,6 +1033,17 @@ function boutiqueProfile() {
       // default filtered
       this.filterSales();
       this.filterShipments();
+      
+      // Ensure current pages are valid
+      if (this.currentSalesPage > this.totalSalesPages) {
+        this.currentSalesPage = Math.max(1, this.totalSalesPages);
+      }
+      if (this.currentShipmentsPage > this.totalShipmentsPages) {
+        this.currentShipmentsPage = Math.max(1, this.totalShipmentsPages);
+      }
+      if (this.currentInvoicesPage > this.totalInvoicesPages) {
+        this.currentInvoicesPage = Math.max(1, this.totalInvoicesPages);
+      }
 
       const ctx = document.getElementById('salesChart');
       if (!ctx) return;

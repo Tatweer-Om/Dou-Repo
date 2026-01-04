@@ -20,11 +20,6 @@
     <button class="delete-btn icon-btn hover:text-red-500">
         <span class="material-symbols-outlined">{{ trans('messages.delete', [], session('locale')) }}</span>
     </button>
-    <button 
-        title="{{ trans('messages.view_profile', [], session('locale')) }}" 
-        class="p-2 rounded-lg text-white bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] transition shadow-sm">
-        <span class="material-symbols-outlined text-[22px]">person</span>
-    </button>
 
                     </div>
                 </td>
@@ -175,9 +170,12 @@ $(document).on('click', '#pagination a', function(e) {
                 $('input[name="permissions[]"]').prop('checked', false);
 
                 // Set permissions if they exist
+                // Handle both numeric IDs (new format) and string keys (old format for migration compatibility)
                 if (user.permissions && Array.isArray(user.permissions)) {
                     user.permissions.forEach(function(permission) {
-                        $('#permission_' + permission).prop('checked', true);
+                        // Check if permission is a number (new format) or string (old format)
+                        const permissionId = typeof permission === 'number' ? permission : permission;
+                        $('#permission_' + permissionId).prop('checked', true);
                     });
                 }
 
