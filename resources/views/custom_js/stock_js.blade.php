@@ -102,11 +102,25 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
     $submitBtn.prop('disabled', true).css('opacity', '0.6').html('<?= trans("messages.processing", [], session("locale")) ?>...');
 
     let formData = new FormData(this);
+    
+    // Remove the images[] entries that FormData automatically added
+    formData.delete('images[]');
 
-    // Manually append files from Alpine.js
-    let images = document.querySelector('#images').files; // or get from Alpine
-    for (let i = 0; i < images.length; i++) {
-        formData.append('images[]', images[i]);
+    // Only append files from Alpine.js images array (files that haven't been removed)
+    if (window.imageUploaderComponent && window.imageUploaderComponent.images && window.imageUploaderComponent.images.length > 0) {
+        window.imageUploaderComponent.images.forEach(function(image) {
+            if (image.file) {
+                formData.append('images[]', image.file);
+            }
+        });
+    } else {
+        // Fallback: if Alpine component not found, use all files from input
+        let imageInput = document.querySelector('#images');
+        if (imageInput && imageInput.files) {
+            for (let i = 0; i < imageInput.files.length; i++) {
+                formData.append('images[]', imageInput.files[i]);
+            }
+        }
     }
 
     $.ajax({
@@ -122,9 +136,13 @@ let tailor = $('input[name="tailor_id[]"]:checked').map(function() {
             if (response.status === 'success') {
                 show_notification('success', '<?= trans("messages.stock_added_successfully", [], session("locale")) ?: "Stock added successfully!" ?>');
                 $('#abaya_form')[0].reset();
-                // Clear Alpine images array
+                // Clear Alpine images array and file input
                 if (window.imageUploaderComponent) {
                     window.imageUploaderComponent.images = [];
+                }
+                let imageInput = document.querySelector('#images');
+                if (imageInput) {
+                    imageInput.value = '';
                 }
                 // Redirect to stock list
                 if (response.redirect_url) {
@@ -175,6 +193,10 @@ document.getElementById('material_image').addEventListener('change', function(ev
 function imageUploader() {
     return {
         images: [],
+        init() {
+            // Store reference to this component globally for form submission
+            window.imageUploaderComponent = this;
+        },
         handleFiles(event) {
             const files = event.target.files;
             for (let i = 0; i < files.length; i++) {
@@ -187,6 +209,7 @@ function imageUploader() {
             }
         },
         removeImage(index) {
+            // Remove the image from the array
             this.images.splice(index, 1);
         }
     };

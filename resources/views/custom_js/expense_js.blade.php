@@ -207,7 +207,24 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#expense_name').val(expense.expense_name);
                 $('#category_id').val(expense.category_id || '');
                 $('#amount').val(expense.amount);
-                $('#expense_date').val(expense.expense_date);
+                
+                // Format date for HTML date input (YYYY-MM-DD)
+                let expenseDate = expense.expense_date;
+                if (expenseDate) {
+                    // If date includes time, extract only the date part
+                    let dateObj = new Date(expenseDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        let year = dateObj.getFullYear();
+                        let month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        let day = String(dateObj.getDate()).padStart(2, '0');
+                        expenseDate = year + '-' + month + '-' + day;
+                    } else if (expenseDate.includes(' ')) {
+                        // If it's a string with time, take only the date part
+                        expenseDate = expenseDate.split(' ')[0];
+                    }
+                }
+                $('#expense_date').val(expenseDate);
+                
                 $('#account_id').val(expense.payment_method || '');
                 $('#reciept_no').val(expense.reciept_no || '');
                 $('#notes').val(expense.notes || '');

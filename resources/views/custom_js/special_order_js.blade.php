@@ -103,11 +103,13 @@ document.addEventListener('alpine:init', () => {
     },
 
     updateCities(areaId) {
-      this.availableCities = [];
+      // Reset city selection first
       this.customer.city = '';
       this.customer.city_id = '';
-      this.customer.governorate_name = this.areasMap.find(a => a.id == areaId)?.name || '';
-      this.customer.governorate_id = areaId || '';
+      this.availableCities = [];
+      
+      this.customer.governorate_name = this.areasMap.find(a => a.id == areaId || String(a.id) === String(areaId))?.name || '';
+      this.customer.governorate_id = String(areaId || '');
 
       if (areaId) {
         this.fetchCities(areaId);
@@ -138,11 +140,34 @@ document.addEventListener('alpine:init', () => {
     },
     
     selectCity(cityId) {
+      if (!cityId) {
+        this.customer.city_id = '';
+        this.customer.city = '';
+        this.shipping_fee = 0;
+        return;
+      }
+      
       // Compare as strings to handle type mismatches
       const city = this.availableCities.find(c => String(c.id) === String(cityId));
-      this.customer.city_id = cityId || '';
-      this.customer.city = city ? city.name : '';
-      this.shipping_fee = city ? city.charge : 0;
+      if (city) {
+        this.customer.city_id = String(cityId);
+        this.customer.city = city.name;
+        this.shipping_fee = parseFloat(city.charge) || 0;
+      } else {
+        // If city not found, still set the ID (might be loading)
+        this.customer.city_id = String(cityId);
+        this.shipping_fee = 0;
+      }
+    },
+    
+    updateShipping() {
+      // Update shipping fee based on selected city
+      if (this.customer.city_id) {
+        const city = this.availableCities.find(c => String(c.id) === String(this.customer.city_id));
+        this.shipping_fee = city ? (parseFloat(city.charge) || 0) : 0;
+      } else {
+        this.shipping_fee = 0;
+      }
     },
     
     async searchCustomers() {
@@ -165,16 +190,19 @@ document.addEventListener('alpine:init', () => {
     
     async selectCustomer(customerItem) {
       // Fill customer data from selected customer
-      this.customer.name = customerItem.name || '';
       this.customer.phone = customerItem.phone || '';
+      this.customer.name = customerItem.name || '';
       this.customer.address = customerItem.address || '';
+      
+      // Clear suggestions first
+      this.customerSuggestions = [];
       
       // Fill area/governorate if available (area_id in customer = governorate_id in form)
       if (customerItem.area_id) {
         // Try to find matching area in governorates list (compare as strings to handle type mismatches)
         const matchingArea = this.areasMap.find(a => String(a.id) === String(customerItem.area_id));
         if (matchingArea) {
-          this.customer.governorate_id = customerItem.area_id;
+          this.customer.governorate_id = String(customerItem.area_id);
           this.customer.governorate_name = matchingArea.name;
           
           // Update cities for this area (this will fetch cities asynchronously)
@@ -185,48 +213,56 @@ document.addEventListener('alpine:init', () => {
             // Wait for Alpine to update the DOM with new cities
             await this.$nextTick();
             
-            // Try to find the city (compare as strings and also try as numbers)
-            let matchingCity = this.availableCities.find(c => String(c.id) === String(customerItem.city_id));
-            if (!matchingCity) {
-              // Try comparing as numbers
-              matchingCity = this.availableCities.find(c => Number(c.id) === Number(customerItem.city_id));
-            }
-            
+            // Try multiple times to find the city (with retries)
+            let attempts = 0;
+            const maxAttempts = 5;
+            const findAndSelectCity = () => {
+              attempts++;
+              // Try to find the city (compare as strings and also try as numbers)
+              let matchingCity = this.availableCities.find(c => String(c.id) === String(customerItem.city_id));
+              if (!matchingCity) {
+                // Try comparing as numbers
+                matchingCity = this.availableCities.find(c => Number(c.id) === Number(customerItem.city_id));
+              }
+              
               if (matchingCity) {
-              // Set city_id directly (ensure it's the same type as the option value)
-              this.customer.city_id = matchingCity.id;
-              // Call selectCity to update shipping fee
-              this.selectCity(matchingCity.id);
-            } else {
-              // If not found immediately, wait a bit more and try again
-              setTimeout(async () => {
-                await this.$nextTick();
-                let cityMatch = this.availableCities.find(c => String(c.id) === String(customerItem.city_id));
-                if (!cityMatch) {
-                  cityMatch = this.availableCities.find(c => Number(c.id) === Number(customerItem.city_id));
-                }
-                if (cityMatch) {
-                  this.customer.city_id = cityMatch.id;
-                  this.selectCity(cityMatch.id);
-                } else {
-                  console.warn('City not found:', customerItem.city_id, 'Available cities:', this.availableCities.map(c => ({id: c.id, name: c.name})));
-                }
-              }, 500);
-            }
+                // Set city_id directly (ensure it's the same type as the option value)
+                this.customer.city_id = String(matchingCity.id);
+                // Call selectCity to update shipping fee
+                this.selectCity(String(matchingCity.id));
+                return true;
+              } else if (attempts < maxAttempts && this.availableCities.length > 0) {
+                // Retry after a short delay if cities are loaded but city not found yet
+                setTimeout(() => {
+                  this.$nextTick().then(() => findAndSelectCity());
+                }, 100);
+                return false;
+              } else {
+                console.warn('City not found after', attempts, 'attempts:', customerItem.city_id, 'Available cities:', this.availableCities.map(c => ({id: c.id, name: c.name})));
+                return false;
+              }
+            };
+            
+            findAndSelectCity();
           }
+        } else {
+          // If area not found, still try to set governorate_id
+          this.customer.governorate_id = String(customerItem.area_id);
         }
       }
-      
-      // Clear suggestions
-      this.customerSuggestions = [];
     },
 
     async updateCitiesAsync(areaId) {
-      this.availableCities = [];
+      // Reset city selection first
       this.customer.city = '';
       this.customer.city_id = '';
+      this.availableCities = [];
+      
+      // Wait for DOM update
+      await this.$nextTick();
+      
       this.customer.governorate_name = this.areasMap.find(a => a.id == areaId || String(a.id) === String(areaId))?.name || '';
-      this.customer.governorate_id = areaId || '';
+      this.customer.governorate_id = String(areaId || '');
 
       if (areaId) {
         await this.fetchCities(areaId);

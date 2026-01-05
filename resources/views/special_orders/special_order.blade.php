@@ -25,11 +25,6 @@
       <div></div>
 
       <div>
-        <label class="block text-sm font-medium mb-1">{{ trans('messages.customer_name', [], session('locale')) }}</label>
-        <input type="text" x-model="customer.name" class="form-input w-full border-gray-300 rounded-lg">
-      </div>
-
-      <div>
         <label class="block text-sm font-medium mb-1">{{ trans('messages.phone_number', [], session('locale')) }}</label>
         <div class="relative">
           <input type="text" 
@@ -54,11 +49,16 @@
       </div>
 
       <div>
+        <label class="block text-sm font-medium mb-1">{{ trans('messages.customer_name', [], session('locale')) }}</label>
+        <input type="text" x-model="customer.name" class="form-input w-full border-gray-300 rounded-lg">
+      </div>
+
+      <div>
         <label class="block text-sm font-medium mb-1">{{ trans('messages.governorate', [], session('locale')) }}</label>
         <select x-model="customer.governorate_id" class="form-select w-full border-gray-300 rounded-lg" @change="updateCities($event.target.value)">
           <option value="">{{ trans('messages.select_governorate', [], session('locale')) }}</option>
           <template x-for="area in governorates" :key="area.id">
-            <option :value="area.id" x-text="area.name"></option>
+            <option :value="String(area.id)" x-text="area.name"></option>
           </template>
         </select>
       </div>
@@ -68,7 +68,7 @@
         <select x-model="customer.city_id" class="form-select w-full border-gray-300 rounded-lg" @change="selectCity($event.target.value)">
           <option value="">{{ trans('messages.select', [], session('locale')) }}</option>
           <template x-for="city in availableCities" :key="city.id">
-            <option :value="city.id" x-text="city.name + (city.charge ? ' - ' + city.charge + ' ر.ع' : '')"></option>
+            <option :value="String(city.id)" x-text="city.name + (city.charge ? ' - ' + city.charge + ' ر.ع' : '')"></option>
           </template>
         </select>
       </div>

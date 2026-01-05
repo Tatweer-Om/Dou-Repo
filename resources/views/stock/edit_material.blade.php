@@ -81,11 +81,22 @@
 
           </div>
 
-          <!-- Image Upload -->
-          <div class="mt-4">
+          <!-- Description and Image in One Row -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <!-- Description -->
+            <label class="flex flex-col">
+              <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.description', [], session('locale')) }}</span>
+              <textarea placeholder="{{ trans('messages.description_placeholder', [], session('locale')) }}" 
+                        rows="5"
+                        class="rounded-lg px-4 py-2.5 border border-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary transition resize-none" 
+                        name="material_notes" 
+                        id="material_notes">{{ $material->description ?? '' }}</textarea>
+            </label>
+
+            <!-- Image Upload -->
             <div class="flex flex-col">
               <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.raw_material_image', [], session('locale')) }}</span>
-              <label class="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all relative group"
+              <label class="flex flex-col items-center justify-center w-full h-full min-h-[140px] border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all relative group"
                      id="imageBoxLabel">
                 
                 <!-- Image preview -->
@@ -112,9 +123,6 @@
               </label>
             </div>
           </div>
-          
-          <!-- Hidden description field for form submission -->
-          <input type="hidden" name="material_notes" id="material_notes" value="{{ $material->description ?? '' }}" />
         </div>
 
         <!-- Pricing & Quantity Section -->

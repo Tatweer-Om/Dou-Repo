@@ -1118,55 +1118,135 @@ public function getMaintenanceData()
         // Get all tailors for the dropdown
         $tailors = Tailor::select('id', 'tailor_name as name')->get();
 
-        // Get items from special orders that have status 'ready' (received) or 'delivered'
-        // Also include items that are already in maintenance
-        $items = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'maintenanceTailor'])
-            ->whereHas('specialOrder', function($query) {
-                $query->whereIn('status', ['ready', 'delivered']);
+        // Get items that are ready for maintenance
+        // Only show items where tailor_status = 'received' (item is individually ready)
+        // Also include items that are already in maintenance (even from delivered orders)
+        // EXCLUDE items from delivered orders that are NOT in maintenance
+        // EXCLUDE items that are delivered from maintenance (maintenance_status = 'delivered')
+        $rawItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'maintenanceTailor'])
+            ->where(function($query) {
+                // Show items where:
+                // 1. Item's tailor_status is 'received' (item is ready individually) AND order is NOT delivered AND not yet in maintenance
+                // OR
+                // 2. Item is already in maintenance (delivered_to_tailor or received_from_tailor) - even from delivered orders
+                $query->where(function($q) {
+                    // Items that are ready (tailor_status = 'received') from non-delivered orders and not yet in maintenance
+                    $q->where('tailor_status', 'received')
+                      ->whereNull('maintenance_status')
+                      ->whereHas('specialOrder', function($orderQ) {
+                          $orderQ->where('status', '!=', 'delivered');
+                      });
+                })
+                ->orWhere(function($q) {
+                    // Items that are already in maintenance (can be from delivered orders)
+                    $q->whereIn('maintenance_status', ['delivered_to_tailor', 'received_from_tailor']);
+                });
             })
             ->where(function($query) {
-                // Show items that are either:
-                // 1. Not yet in maintenance (maintenance_status is null)
-                // 2. In maintenance but not yet received from tailor
+                // EXCLUDE items that are delivered from maintenance (maintenance_status = 'delivered')
                 $query->whereNull('maintenance_status')
-                      ->orWhere('maintenance_status', '!=', 'received_from_tailor');
+                      ->orWhereIn('maintenance_status', ['delivered_to_tailor', 'received_from_tailor']);
             })
-            ->get()
-            ->map(function($item) {
-                $order = $item->specialOrder;
-                $stock = $item->stock;
-                $customer = $order ? $order->customer : null;
-                
+            ->get();
+
+        // Group items by same type (abaya_code, length, bust, sleeves) and same order
+        $groupedItems = [];
+        foreach ($rawItems as $item) {
+            $order = $item->specialOrder;
+            $stock = $item->stock;
+            $customer = $order ? $order->customer : null;
+            
+            // Create a unique key for grouping: order_id + abaya_code + length + bust + sleeves
+            $groupKey = ($order ? $order->id : 'no_order') . '_' . 
+                       ($item->abaya_code ?? 'no_code') . '_' . 
+                       ($item->abaya_length ?? 'no_length') . '_' . 
+                       ($item->bust ?? 'no_bust') . '_' . 
+                       ($item->sleeves_length ?? 'no_sleeves');
+            
+            if (!isset($groupedItems[$groupKey])) {
                 // Get image
                 $image = '/images/placeholder.png';
                 if ($stock && $stock->images && $stock->images->first()) {
                     $image = $stock->images->first()->image_path;
                 }
 
-                // Generate order number in same format as view_special_order: YYYY-00ID
+                // Generate order number
                 $orderNo = '—';
                 if ($order) {
                     $orderDate = Carbon::parse($order->created_at);
                     $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
                 }
 
-                return [
-                    'id' => $item->id,
+                // Get the first item's maintenance status (if any item in group has maintenance status)
+                $maintenanceStatus = null;
+                $deliveryCharges = 0;
+                $repairCost = 0;
+                $costBearer = null;
+                $transferNumber = null;
+                $maintenanceNotes = null;
+                
+                // Check if any item in this group is already in maintenance
+                $maintenanceItem = $rawItems->first(function($i) use ($item, $order) {
+                    return ($i->specialOrder && $i->specialOrder->id === ($order ? $order->id : null)) &&
+                           ($i->abaya_code === $item->abaya_code) &&
+                           ($i->abaya_length == $item->abaya_length) &&
+                           ($i->bust == $item->bust) &&
+                           ($i->sleeves_length == $item->sleeves_length) &&
+                           $i->maintenance_status;
+                });
+                
+                if ($maintenanceItem) {
+                    $maintenanceStatus = $maintenanceItem->maintenance_status;
+                    $deliveryCharges = $maintenanceItem->maintenance_delivery_charges ?? 0;
+                    $repairCost = $maintenanceItem->maintenance_repair_cost ?? 0;
+                    $costBearer = $maintenanceItem->maintenance_cost_bearer ?? null;
+                    $transferNumber = $maintenanceItem->maintenance_transfer_number ?? null;
+                    $maintenanceNotes = $maintenanceItem->maintenance_notes ?? null;
+                }
+
+                // Calculate available quantity (only items not yet sent to tailor)
+                $availableQty = ($item->maintenance_status === null || $item->maintenance_status !== 'delivered_to_tailor') 
+                    ? ($item->quantity ?? 1) 
+                    : 0;
+
+                $groupedItems[$groupKey] = [
+                    'id' => $item->id, // Use first item's ID as representative
+                    'item_ids' => [$item->id], // Store all item IDs in this group
                     'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'abaya_code' => $item->abaya_code ?? 'N/A',
+                    'abaya_length' => $item->abaya_length ?? null,
+                    'bust' => $item->bust ?? null,
+                    'sleeves_length' => $item->sleeves_length ?? null,
                     'order_no' => $orderNo,
+                    'order_id' => $order ? $order->id : null,
                     'customer_name' => $customer ? $customer->name : 'N/A',
                     'customer_phone' => $customer ? $customer->phone : 'N/A',
-                    'maintenance_status' => $item->maintenance_status,
+                    'maintenance_status' => $maintenanceStatus,
                     'image' => $image,
-                    'delivery_charges' => $item->maintenance_delivery_charges ?? 0,
-                    'repair_cost' => $item->maintenance_repair_cost ?? 0,
-                    'cost_bearer' => $item->maintenance_cost_bearer ?? null,
-                    'transfer_number' => $item->maintenance_transfer_number ?? null,
+                    'delivery_charges' => $deliveryCharges,
+                    'repair_cost' => $repairCost,
+                    'cost_bearer' => $costBearer,
+                    'transfer_number' => $transferNumber,
                     'order_status' => $order ? $order->status : null,
-                    'maintenance_notes' => $item->maintenance_notes ?? null,
+                    'maintenance_notes' => $maintenanceNotes,
+                    'quantity' => $item->quantity ?? 1, // Total quantity in group
+                    'available_quantity' => $availableQty, // Quantity available for maintenance
                 ];
-            });
+            } else {
+                // Add this item's quantity to the group
+                $groupedItems[$groupKey]['quantity'] += ($item->quantity ?? 1);
+                
+                // Only add to available_quantity if item is not yet sent to tailor
+                if ($item->maintenance_status === null || $item->maintenance_status !== 'delivered_to_tailor') {
+                    $groupedItems[$groupKey]['available_quantity'] += ($item->quantity ?? 1);
+                }
+                
+                $groupedItems[$groupKey]['item_ids'][] = $item->id;
+            }
+        }
+
+        // Convert grouped items to array
+        $items = array_values($groupedItems);
 
         // Calculate statistics
         $statistics = [
@@ -1195,9 +1275,10 @@ public function getMaintenanceData()
 public function getRepairHistory()
 {
     try {
-        // Get items that have been received from tailor (completed maintenance)
+        // Get items that have been received from tailor or delivered (completed maintenance)
         $history = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'maintenanceTailor'])
-            ->where('maintenance_status', 'received_from_tailor')
+            ->whereIn('maintenance_status', ['received_from_tailor', 'delivered'])
+            ->orderBy('repaired_delivered_at', 'DESC')
             ->orderBy('repaired_at', 'DESC')
             ->get()
             ->map(function($item) {
@@ -1224,6 +1305,7 @@ public function getRepairHistory()
                     'tailor_name' => $tailor ? $tailor->tailor_name : 'N/A',
                     'sent_date' => $item->sent_for_repair_at ? Carbon::parse($item->sent_for_repair_at)->format('Y-m-d') : '—',
                     'received_date' => $item->repaired_at ? Carbon::parse($item->repaired_at)->format('Y-m-d') : '—',
+                    'delivered_date' => $item->repaired_delivered_at ? Carbon::parse($item->repaired_delivered_at)->format('Y-m-d') : '—',
                     'delivery_charges' => $item->maintenance_delivery_charges ?? 0,
                     'repair_cost' => $item->maintenance_repair_cost ?? 0,
                     'cost_bearer' => $item->maintenance_cost_bearer ?? null,
@@ -1249,7 +1331,11 @@ public function getRepairHistory()
 public function sendForRepair(Request $request)
 {
     try {
+        DB::beginTransaction();
+
         $itemId = $request->input('item_id');
+        $itemIds = $request->input('item_ids', [$itemId]); // Get all item IDs in the group
+        $quantity = $request->input('quantity'); // Quantity to send (if > 1)
         $tailorId = $request->input('tailor_id');
         $maintenanceNotes = $request->input('maintenance_notes');
 
@@ -1260,18 +1346,86 @@ public function sendForRepair(Request $request)
             ], 422);
         }
 
-        $item = SpecialOrderItem::findOrFail($itemId);
-        $item->maintenance_status = 'delivered_to_tailor';
-        $item->maintenance_tailor_id = $tailorId;
-        $item->maintenance_notes = $maintenanceNotes;
-        $item->sent_for_repair_at = now();
-        $item->save();
+        // Get all items in the group
+        $items = SpecialOrderItem::whereIn('id', $itemIds)->get();
+        
+        if ($items->isEmpty()) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'No items found'
+            ], 404);
+        }
+
+        // Calculate total available quantity
+        $totalQuantity = $items->sum('quantity');
+        
+        // If quantity is specified and > 1, we need to handle splitting
+        if ($quantity && $quantity > 1 && $quantity <= $totalQuantity) {
+            $remainingQuantity = $totalQuantity - $quantity;
+            $sentCount = 0;
+            
+            // Send items until we reach the requested quantity
+            foreach ($items as $item) {
+                if ($sentCount >= $quantity) break;
+                
+                if ($item->quantity <= ($quantity - $sentCount)) {
+                    // Send entire item
+                    $item->maintenance_status = 'delivered_to_tailor';
+                    $item->maintenance_tailor_id = $tailorId;
+                    $item->maintenance_notes = $maintenanceNotes;
+                    $item->sent_for_repair_at = now();
+                    $item->save();
+                    $sentCount += $item->quantity;
+                } else {
+                    // Need to split: create new item for remaining quantity
+                    $sendQty = $quantity - $sentCount;
+                    $remainingQty = $item->quantity - $sendQty;
+                    
+                    // Update current item to send quantity
+                    $item->quantity = $sendQty;
+                    $item->maintenance_status = 'delivered_to_tailor';
+                    $item->maintenance_tailor_id = $tailorId;
+                    $item->maintenance_notes = $maintenanceNotes;
+                    $item->sent_for_repair_at = now();
+                    $item->save();
+                    $sentCount += $sendQty;
+                    
+                    // Create new item for remaining quantity
+                    if ($remainingQty > 0) {
+                        $newItem = $item->replicate();
+                        $newItem->quantity = $remainingQty;
+                        $newItem->maintenance_status = null;
+                        $newItem->maintenance_tailor_id = null;
+                        $newItem->maintenance_notes = null;
+                        $newItem->sent_for_repair_at = null;
+                        $newItem->save();
+                    }
+                }
+            }
+            
+            $message = $quantity . ' piece(s) sent to tailor for repair successfully';
+        } else {
+            // Send all items in the group (quantity = 1 or not specified)
+            foreach ($items as $item) {
+                $item->maintenance_status = 'delivered_to_tailor';
+                $item->maintenance_tailor_id = $tailorId;
+                $item->maintenance_notes = $maintenanceNotes;
+                $item->sent_for_repair_at = now();
+                $item->save();
+            }
+            
+            $message = 'Item(s) sent to tailor for repair successfully';
+        }
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'Item sent to tailor for repair successfully'
+            'message' => $message
         ]);
     } catch (\Exception $e) {
+        DB::rollBack();
         \Log::error('Error in sendForRepair: ' . $e->getMessage());
         return response()->json([
             'success' => false,
@@ -1286,9 +1440,6 @@ public function receiveFromTailor(Request $request)
         DB::beginTransaction();
 
         $itemId = $request->input('item_id');
-        $deliveryCharges = floatval($request->input('delivery_charges', 0));
-        $repairCost = floatval($request->input('repair_cost', 0));
-        $costBearer = $request->input('cost_bearer');
 
         if (!$itemId) {
             return response()->json([
@@ -1297,61 +1448,12 @@ public function receiveFromTailor(Request $request)
             ], 422);
         }
 
-        if (!$costBearer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cost bearer is required'
-            ], 422);
-        }
+        $item = SpecialOrderItem::findOrFail($itemId);
 
-        // Ensure charges are 0 if company is the bearer
-        if ($costBearer === 'company') {
-            $deliveryCharges = 0;
-            $repairCost = 0;
-        }
-
-        $item = SpecialOrderItem::with('specialOrder')->findOrFail($itemId);
-        $order = $item->specialOrder;
-
-        if (!$order) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Special order not found for this item'
-            ], 404);
-        }
-
-        // Build maintenance notes with cost details
-        $costDetails = [];
-        if ($deliveryCharges > 0) {
-            $costDetails[] = 'Delivery Charges: ' . number_format($deliveryCharges, 3) . ' ر.ع';
-        }
-        if ($repairCost > 0) {
-            $costDetails[] = 'Repair Cost: ' . number_format($repairCost, 3) . ' ر.ع';
-        }
-        $costDetailsText = !empty($costDetails) ? "\n" . implode("\n", $costDetails) . "\nCost Bearer: " . ($costBearer === 'customer' ? 'Customer' : 'Company') : '';
-
-        // Update item
+        // Just update status to received - no costs at this stage
         $item->maintenance_status = 'received_from_tailor';
-        $item->maintenance_delivery_charges = $deliveryCharges;
-        $item->maintenance_repair_cost = $repairCost;
-        $item->maintenance_cost_bearer = $costBearer;
         $item->repaired_at = now();
-        
-        // Append cost details to maintenance_notes if not empty
-        if (!empty($costDetailsText)) {
-            $existingNotes = $item->maintenance_notes ?? '';
-            $item->maintenance_notes = $existingNotes . $costDetailsText;
-        }
-        
         $item->save();
-
-        // If customer is the cost bearer, add charges to order total
-        if ($costBearer === 'customer' && ($deliveryCharges > 0 || $repairCost > 0)) {
-            $totalAdditionalCharges = $deliveryCharges + $repairCost;
-            $order->total_amount = floatval($order->total_amount) + $totalAdditionalCharges;
-            $order->save();
-        }
 
         DB::commit();
 
@@ -1372,7 +1474,14 @@ public function receiveFromTailor(Request $request)
 public function markRepairedDelivered(Request $request)
 {
     try {
+        DB::beginTransaction();
+
         $itemId = $request->input('item_id');
+        $deliveryCharges = floatval($request->input('delivery_charges', 0));
+        $repairCost = floatval($request->input('repair_cost', 0));
+        $costBearer = $request->input('cost_bearer');
+        $accountId = $request->input('account_id');
+        $paymentAmount = floatval($request->input('payment_amount', 0));
 
         if (!$itemId) {
             return response()->json([
@@ -1381,19 +1490,238 @@ public function markRepairedDelivered(Request $request)
             ], 422);
         }
 
-        $item = SpecialOrderItem::findOrFail($itemId);
+        if (!$costBearer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cost bearer is required'
+            ], 422);
+        }
+
+        // If customer is bearer and there are costs, require account and payment
+        if ($costBearer === 'customer' && ($deliveryCharges > 0 || $repairCost > 0)) {
+            if (!$accountId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Account selection is required when customer bears the cost'
+                ], 422);
+            }
+            if ($paymentAmount <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment amount is required when customer bears the cost'
+                ], 422);
+            }
+        }
+
+        // Ensure charges are 0 if company is the bearer
+        if ($costBearer === 'company') {
+            $deliveryCharges = 0;
+            $repairCost = 0;
+        }
+
+        $item = SpecialOrderItem::with('specialOrder')->findOrFail($itemId);
+        $order = $item->specialOrder;
+
+        if (!$order) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Special order not found for this item'
+            ], 404);
+        }
+
+        // Update item with cost details
+        $item->maintenance_delivery_charges = $deliveryCharges;
+        $item->maintenance_repair_cost = $repairCost;
+        $item->maintenance_cost_bearer = $costBearer;
         $item->repaired_delivered_at = now();
+        // Mark item as delivered from maintenance - this will exclude it from current items
+        $item->maintenance_status = 'delivered';
+        
+        // Build maintenance notes with cost details
+        $costDetails = [];
+        if ($deliveryCharges > 0) {
+            $costDetails[] = 'Delivery Charges: ' . number_format($deliveryCharges, 3) . ' ر.ع';
+        }
+        if ($repairCost > 0) {
+            $costDetails[] = 'Repair Cost: ' . number_format($repairCost, 3) . ' ر.ع';
+        }
+        $costDetailsText = !empty($costDetails) ? "\n" . implode("\n", $costDetails) . "\nCost Bearer: " . ($costBearer === 'customer' ? 'Customer' : 'Company') : '';
+        
+        // Append cost details to maintenance_notes if not empty
+        if (!empty($costDetailsText)) {
+            $existingNotes = $item->maintenance_notes ?? '';
+            $item->maintenance_notes = $existingNotes . $costDetailsText;
+        }
+        
         $item->save();
+
+        // Update order with costs and payment
+        if ($costBearer === 'customer' && ($deliveryCharges > 0 || $repairCost > 0)) {
+            $totalAdditionalCharges = $deliveryCharges + $repairCost;
+            $order->total_amount = floatval($order->total_amount) + $totalAdditionalCharges;
+            
+            // Update paid amount and account
+            $order->paid_amount = floatval($order->paid_amount) + $paymentAmount;
+            $order->account_id = $accountId;
+            $order->status = 'delivered';
+        }
+        
+        // Update shipping_cost and repair_cost in special_orders table
+        $order->shipping_cost = $deliveryCharges;
+        $order->repair_cost = $repairCost;
+        $order->save();
+
+        // Update account balance if payment was made
+        if ($accountId && $paymentAmount > 0) {
+            $account = \App\Models\Account::find($accountId);
+            if ($account) {
+                $account->opening_balance = floatval($account->opening_balance) + $paymentAmount;
+                $account->save();
+            }
+        }
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'Item marked as delivered successfully'
+            'message' => 'Item delivered successfully'
         ]);
     } catch (\Exception $e) {
+        DB::rollBack();
         \Log::error('Error in markRepairedDelivered: ' . $e->getMessage());
         return response()->json([
             'success' => false,
-            'message' => 'Error marking item as delivered: ' . $e->getMessage()
+            'message' => 'Error delivering item: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function searchDeliveredOrders(Request $request)
+{
+    try {
+        $search = $request->input('search', '');
+        
+        if (empty($search)) {
+            return response()->json([
+                'success' => true,
+                'orders' => []
+            ]);
+        }
+
+        // Search delivered orders by customer name, order number, abaya code, or customer phone
+        $orders = SpecialOrder::with(['customer', 'items.stock.images'])
+            ->where('status', 'delivered')
+            ->where(function($query) use ($search) {
+                // Search by customer name
+                $query->whereHas('customer', function($q) use ($search) {
+                    $q->where('name', 'LIKE', '%' . $search . '%');
+                })
+                // Search by customer phone
+                ->orWhereHas('customer', function($q) use ($search) {
+                    $q->where('phone', 'LIKE', '%' . $search . '%');
+                })
+                // Search by order number (format: YYYY-00ID or just ID)
+                ->orWhere('id', 'LIKE', '%' . preg_replace('/[^0-9]/', '', $search) . '%')
+                ->orWhereRaw("CONCAT(YEAR(created_at), '-', LPAD(id, 4, '0')) LIKE ?", ['%' . $search . '%'])
+                // Search by abaya code in items
+                ->orWhereHas('items', function($q) use ($search) {
+                    $q->where('abaya_code', 'LIKE', '%' . $search . '%');
+                });
+            })
+            ->orderBy('created_at', 'DESC')
+            ->limit(20)
+            ->get()
+            ->map(function($order) {
+                $customer = $order->customer;
+                
+                // Generate order number
+                $orderDate = Carbon::parse($order->created_at);
+                $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                
+                return [
+                    'id' => $order->id,
+                    'order_no' => $orderNo,
+                    'customer_name' => $customer ? $customer->name : 'N/A',
+                    'customer_phone' => $customer ? $customer->phone : 'N/A',
+                    'items_count' => $order->items->count(),
+                    'created_at' => $order->created_at->format('Y-m-d'),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'orders' => $orders
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in searchDeliveredOrders: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error searching orders: ' . $e->getMessage(),
+            'orders' => []
+        ], 500);
+    }
+}
+
+public function getDeliveredOrderItems(Request $request)
+{
+    try {
+        $orderId = $request->input('order_id');
+        
+        if (!$orderId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order ID is required'
+            ], 422);
+        }
+
+        // Only get orders with status 'delivered'
+        $order = SpecialOrder::with(['customer', 'items.stock.images'])
+            ->where('status', 'delivered')
+            ->findOrFail($orderId);
+        
+        // Generate order number
+        $orderDate = Carbon::parse($order->created_at);
+        $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+
+        // Only return items from this delivered order
+        $items = $order->items->map(function($item) {
+            $stock = $item->stock;
+            
+            // Get image
+            $image = '/images/placeholder.png';
+            if ($stock && $stock->images && $stock->images->first()) {
+                $image = $stock->images->first()->image_path;
+            }
+
+            return [
+                'id' => $item->id,
+                'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+                'abaya_code' => $item->abaya_code ?? 'N/A',
+                'abaya_length' => $item->abaya_length ?? null,
+                'bust' => $item->bust ?? null,
+                'sleeves_length' => $item->sleeves_length ?? null,
+                'quantity' => $item->quantity ?? 1,
+                'image' => $image,
+                'maintenance_status' => $item->maintenance_status ?? null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'order' => [
+                'id' => $order->id,
+                'order_no' => $orderNo,
+                'customer_name' => $order->customer ? $order->customer->name : 'N/A',
+                'customer_phone' => $order->customer ? $order->customer->phone : 'N/A',
+            ],
+            'items' => $items
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in getDeliveredOrderItems: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error fetching order items: ' . $e->getMessage()
         ], 500);
     }
 }

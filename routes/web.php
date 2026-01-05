@@ -265,6 +265,8 @@ Route::get('tailor-orders-list/export-excel', [SpecialOrderController::class, 'e
 Route::get('maintenance', [SpecialOrderController::class, 'maintenance'])->name('maintenance');
 Route::get('maintenance/data', [SpecialOrderController::class, 'getMaintenanceData'])->name('maintenance.data');
 Route::get('maintenance/history', [SpecialOrderController::class, 'getRepairHistory'])->name('maintenance.history');
+Route::get('maintenance/search-delivered', [SpecialOrderController::class, 'searchDeliveredOrders'])->name('maintenance.search_delivered');
+Route::get('maintenance/order-items', [SpecialOrderController::class, 'getDeliveredOrderItems'])->name('maintenance.order_items');
 Route::post('maintenance/send-repair', [SpecialOrderController::class, 'sendForRepair'])->name('maintenance.send_repair');
 Route::post('maintenance/receive', [SpecialOrderController::class, 'receiveFromTailor'])->name('maintenance.receive');
 Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepairedDelivered'])->name('maintenance.deliver');

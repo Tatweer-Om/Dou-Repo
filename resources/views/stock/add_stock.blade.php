@@ -109,7 +109,7 @@
               </label>
 
               <!-- Images Upload -->
-              <div x-data="imageUploader()" class="flex flex-col">
+              <div x-data="imageUploader()" x-ref="imageUploaderContainer" class="flex flex-col">
                 <span class="text-sm font-semibold text-gray-700 mb-1.5">{{ trans('messages.abaya_images', [], session('locale')) }}</span>
                 <input type="file" 
                        multiple 
@@ -122,12 +122,13 @@
                 <!-- Preview Selected Images -->
                 <div class="flex flex-wrap gap-2 mt-auto">
                   <template x-for="(image, index) in images" :key="index">
-                    <div class="relative w-20 h-20 border-2 border-gray-200 rounded-lg overflow-hidden group">
+                    <div class="relative w-20 h-20 border-2 border-gray-200 rounded-lg overflow-hidden">
                       <img :src="image.url" class="object-cover w-full h-full" />
                       <button type="button" 
                               @click="removeImage(index)"
-                              class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span class="material-symbols-outlined text-xs">close</span>
+                              class="absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700 shadow-lg transition-all z-10"
+                              title="Remove image">
+                        <span class="material-symbols-outlined text-sm">close</span>
                       </button>
                     </div>
                   </template>
