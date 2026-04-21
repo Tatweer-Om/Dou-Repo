@@ -887,7 +887,7 @@
           const phone = (document.getElementById('customerPhone')?.value || '').trim();
           const area = areaSelect?.value || '';
           const wilayah = wilayahSelect?.value || '';
-          if (!area || !wilayah || (!phone && !name)) {
+          if (!area || !wilayah) {
             apiDeliveryFee = 0;
             recalculateTotals();
             return;
@@ -976,6 +976,7 @@
             if (selectedOrderType !== 'delivery' || !cart.length) return;
             const area = document.getElementById('deliveryArea')?.value || '';
             const wilayah = document.getElementById('deliveryWilayah')?.value || '';
+            
             if (!area || !wilayah) return;
             fetchAndSetApiDeliveryFee();
           }, 400);
@@ -1914,7 +1915,9 @@ return;
                 setConfirmButtonLoading(false);
                 return;
               }
-              if (apiDeliveryFee === 0) {
+              const deliveryAreaId = parseInt(customerPayload.area, 10);
+              const isDeliveryFeeArea = [10, 11].includes(deliveryAreaId);
+              if (isDeliveryFeeArea && apiDeliveryFee === 0) {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Delivery fee not loaded. Select area and city, then wait for the fee to update.' });
                 setConfirmButtonLoading(false);
                 return;

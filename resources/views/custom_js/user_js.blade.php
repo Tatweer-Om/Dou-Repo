@@ -1,17 +1,81 @@
 <script>
     $(document).ready(function() {
 
+    var MSG_USER_TYPE_ADMIN = @json(trans('messages.user_type_admin', [], session('locale')));
+    var MSG_USER_TYPE_STAFF = @json(trans('messages.user_type_staff_user', [], session('locale')));
+    var MSG_STAFF_REQUIRED = @json(trans('messages.salon_staff_required_for_user_type', [], session('locale')));
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function syncUserTypeStaffUi() {
+        var isStaffUser = $('input[name="user_type"][value="user"]').is(':checked');
+        var $sel = $('#salon_staff_id');
+        if (isStaffUser) {
+            $sel.prop('disabled', false).removeAttr('disabled');
+        } else {
+            $sel.prop('disabled', true);
+            $sel.val('');
+        }
+        $('#salon_staff_required_mark').toggleClass('hidden', !isStaffUser);
+    }
+
+    $(document).on('change', 'input[name="user_type"]', function() {
+        var prevStaff = $('#salon_staff_id').val();
+        syncUserTypeStaffUi();
+        var editPk = $('#user_id').val();
+        if ($('input[name="user_type"][value="user"]').is(':checked')) {
+            refreshStaffDropdown(editPk || null, prevStaff || null);
+        }
+    });
+
+    var STAFF_PLACEHOLDER = @json(trans('messages.salon_staff_select_placeholder', [], session('locale')));
+
+    function refreshStaffDropdown(editingUserPk, selectedStaffId) {
+        $.get("{{ url('users/staff-options') }}", function(list) {
+            var $sel = $('#salon_staff_id');
+            $sel.empty();
+            $sel.append($('<option></option>').attr('value', '').text(STAFF_PLACEHOLDER));
+            $.each(list, function(_, st) {
+                if (st.id == null) {
+                    return;
+                }
+                var label = (st.name || '—') + (st.team_label ? ' — ' + st.team_label : '');
+                var $o = $('<option></option>')
+                    .attr('value', String(st.id))
+                    .text(label);
+                $sel.append($o);
+            });
+            if (selectedStaffId) {
+                $sel.val(String(selectedStaffId));
+            }
+            syncUserTypeStaffUi();
+        }).fail(function() {
+            syncUserTypeStaffUi();
+        });
+    }
+
     function loadusers(page = 1) {
     $.get("{{ url('users/list') }}?page=" + page, function(res) {
 
         // ---- Table Rows ----
         let rows = '';
         $.each(res.data, function(i, user) {
+            var ut = (user.user_type === 'user') ? MSG_USER_TYPE_STAFF : MSG_USER_TYPE_ADMIN;
+            var st = (user.salon_staff && user.salon_staff.name) ? escapeHtml(user.salon_staff.name) : '—';
             rows += `
             <tr class="hover:bg-pink-50/50 transition-users" data-id="${user.id}">
-              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${user.user_name}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${user.user_phone}</td>
-                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${user.user_email}</td>
+              <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${escapeHtml(user.user_name)}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${escapeHtml(String(user.user_phone))}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)]">${escapeHtml(user.user_email || '')}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-sm whitespace-nowrap">${ut}</td>
+                <td class="px-4 sm:px-6 py-5 text-[var(--text-primary)] text-sm">${st}</td>
                 <td class="px-4 sm:px-6 py-5 text-center">
                     <div class="flex items-center justify-center gap-4 sm:gap-6">
     <button class="edit-btn icon-btn">
@@ -67,18 +131,66 @@ $(document).on('click', '#pagination a', function(e) {
 });
 
 
-        // Initial load
-        loadusers();
+        window.resetUserForm = function() {
+            var f = document.getElementById('user_form');
+            if (f) f.reset();
+            $('#user_id').val('');
+            $('input[name="permissions[]"]').prop('checked', false);
+            $('input[name="user_scope"][value="boutique"]').prop('checked', true);
+            $('input[name="user_type"][value="admin"]').prop('checked', true);
+            refreshStaffDropdown(null, null);
+            syncToggleAllLabel();
+        };
 
-        // Toggle all permissions
-        let allSelected = false;
-        $('#toggleAllPermissions').click(function() {
-            allSelected = !allSelected;
-            $('input[name="permissions[]"]').prop('checked', allSelected);
-            $(this).text(allSelected ? 
-                '<?= trans("messages.deselect_all", [], session("locale")) ?: "Deselect All" ?>' : 
+        // Initial load — staff list from API (assignable only); disable staff select while type is Admin
+        loadusers();
+        syncUserTypeStaffUi();
+        refreshStaffDropdown(null, null);
+        syncToggleAllLabel();
+
+        var PERM_BOUTIQUE_IDS = [1,2,3,4,5,6,7,8,9,10,11,12,13];
+        var PERM_SALON_IDS = [14,15,16,17,18,19,20,21,22,23,24,25,26,27,28];
+        var PERM_ALL_IDS = PERM_BOUTIQUE_IDS.concat(PERM_SALON_IDS);
+
+        function setPermissionsByIds(ids, checked) {
+            ids.forEach(function(id) {
+                $('#permission_' + id).prop('checked', checked);
+            });
+        }
+
+        function syncToggleAllLabel() {
+            var total = $('input[name="permissions[]"]').length;
+            var n = $('input[name="permissions[]"]:checked').length;
+            var allOn = total > 0 && n === total;
+            $('#toggleAllPermissions').text(allOn ?
+                '<?= trans("messages.deselect_all", [], session("locale")) ?: "Deselect All" ?>' :
                 '<?= trans("messages.select_all", [], session("locale")) ?: "Select All" ?>'
             );
+        }
+
+        $(document).on('change', 'input[name="permissions[]"]', syncToggleAllLabel);
+
+        $('#toggleAllPermissions').click(function() {
+            var total = $('input[name="permissions[]"]').length;
+            var n = $('input[name="permissions[]"]:checked').length;
+            var turnOn = !(total > 0 && n === total);
+            $('input[name="permissions[]"]').prop('checked', turnOn);
+            syncToggleAllLabel();
+        });
+
+        $('#btnPermAll').click(function() {
+            setPermissionsByIds(PERM_ALL_IDS, true);
+            syncToggleAllLabel();
+        });
+        $('#btnPermSalonOnly').click(function() {
+            $('input[name="permissions[]"]').prop('checked', false);
+            setPermissionsByIds(PERM_SALON_IDS, true);
+            syncToggleAllLabel();
+        });
+        $('#btnPermBoutiqueOnly').click(function() {
+            $('input[name="permissions[]"]').prop('checked', false);
+            setPermissionsByIds(PERM_BOUTIQUE_IDS, true);
+            syncToggleAllLabel();
         });
 
         $('#search_user').on('keyup', function() {
@@ -108,6 +220,14 @@ $(document).on('click', '#pagination a', function(e) {
                 return;
             }
 
+            if ($('input[name="user_type"][value="user"]').is(':checked')) {
+                var sid = $('#salon_staff_id').val();
+                if (!sid) {
+                    show_notification('error', MSG_STAFF_REQUIRED);
+                    return;
+                }
+            }
+
             let url = id ? `{{ url('users') }}/${id}` : "{{ url('users') }}";
 
             // Serialize form data
@@ -126,6 +246,11 @@ $(document).on('click', '#pagination a', function(e) {
                     $('#user_form')[0].reset();
                     $('#user_id').val('');
                     $('input[name="permissions[]"]').prop('checked', false);
+                    $('input[name="user_scope"][value="boutique"]').prop('checked', true);
+                    $('input[name="user_type"][value="admin"]').prop('checked', true);
+                    $('#salon_staff_id').val('');
+                    refreshStaffDropdown(null, null);
+                    syncToggleAllLabel();
                     loadusers();
                     show_notification(
                         'success',
@@ -166,18 +291,23 @@ $(document).on('click', '#pagination a', function(e) {
                 $('#user_password').val('');
                 $('#notes').val(user.notes);
 
-                // Clear all permission checkboxes first
                 $('input[name="permissions[]"]').prop('checked', false);
 
-                // Set permissions if they exist
-                // Handle both numeric IDs (new format) and string keys (old format for migration compatibility)
                 if (user.permissions && Array.isArray(user.permissions)) {
                     user.permissions.forEach(function(permission) {
-                        // Check if permission is a number (new format) or string (old format)
-                        const permissionId = typeof permission === 'number' ? permission : permission;
+                        var permissionId = typeof permission === 'number' ? permission : permission;
                         $('#permission_' + permissionId).prop('checked', true);
                     });
                 }
+
+                var scope = (user.user_scope === 'saloon' || user.user_scope === 'boutique') ? user.user_scope : 'boutique';
+                $('input[name="user_scope"][value="' + scope + '"]').prop('checked', true);
+
+                var ut = (user.user_type === 'user') ? 'user' : 'admin';
+                $('input[name="user_type"][value="' + ut + '"]').prop('checked', true);
+                refreshStaffDropdown(String(user.id), user.salon_staff_id || null);
+
+                syncToggleAllLabel();
 
                 // Open modal using Alpine event
                 window.dispatchEvent(new CustomEvent('open-modal'));

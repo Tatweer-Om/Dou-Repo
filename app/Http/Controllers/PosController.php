@@ -24,7 +24,128 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 class PosController extends Controller
 {
-    public function index(){
+    // public function index(){
+    //     if (!Auth::check()) {
+    //         return redirect()->route('login_page')->with('error', 'Please login first');
+    //     }
+
+    //     $permissions = Auth::user()->permissions ?? [];
+
+    //     if (!in_array(8, $permissions)) {
+    //         return redirect()->route('login_page')->with('error', 'Permission denied');
+    //     }
+
+    //     // Fetch all categories
+    //     $categories = Category::orderBy('id', 'ASC')->get();
+        
+    //     // Get selected channel from session
+    //     $selectedChannelId = session('pos_selected_channel_id', null);
+        
+    //     // Fetch stocks based on selected channel
+    //     if ($selectedChannelId) {
+    //         // Get stock IDs that exist in this channel with quantity > 0
+    //         $channelStockIds = ChannelStock::where('location_type', 'channel')
+    //             ->where('location_id', $selectedChannelId)
+    //             ->whereNotNull('stock_id')
+    //             ->where('quantity', '>', 0)
+    //             ->distinct()
+    //             ->pluck('stock_id')
+    //             ->toArray();
+            
+    //         // Fetch only stocks that are in the channel (already filtered by quantity > 0 in query above)
+    //         if (!empty($channelStockIds)) {
+    //             $stocks = Stock::with(['images', 'category'])
+    //                 ->whereNotNull('category_id')
+    //                 ->whereIn('id', $channelStockIds)
+    //                 ->orderBy('id', 'DESC')
+    //                 ->get();
+    //         } else {
+    //             // No stocks in this channel
+    //             $stocks = collect([]);
+    //         }
+    //     } else {
+    //         // Fetch all stocks if no channel selected, but filter those with quantity > 0
+    //         $stocks = Stock::with(['images', 'category', 'colorSizes', 'sizes', 'colors'])
+    //             ->whereNotNull('category_id')
+    //             ->orderBy('id', 'DESC')
+    //             ->get()
+    //             ->filter(function($stock) {
+    //                 // Check if stock has at least one item with quantity > 0
+    //                 return $this->hasAvailableQuantity($stock);
+    //             });
+    //     }
+
+    //     // Areas for delivery selects
+    //     $areas = Area::orderBy('area_name_ar', 'ASC')->get(['id','area_name_ar','area_name_en']);
+
+    //     // Cities (with delivery charges) for delivery selects
+    //     $cities = City::orderBy('city_name_ar', 'ASC')
+    //         ->get(['id','city_name_ar','city_name_en','delivery_charges','area_id']);
+        
+    //     // Get selected channel information for header display
+    //     $selectedChannel = null;
+    //     if ($selectedChannelId) {
+    //         $selectedChannel = Channel::find($selectedChannelId);
+    //     }
+        
+    //     return view('pos.pos_page', compact('categories', 'stocks', 'areas', 'cities', 'selectedChannel'));
+    // }
+    //   const POS_CHANNEL_ID = 2;
+
+    // public function index(){
+    //     if (!Auth::check()) {
+    //         return redirect()->route('login_page')->with('error', 'Please login first');
+    //     }
+
+    //     $permissions = Auth::user()->permissions ?? [];
+
+    //     if (!in_array(8, $permissions)) {
+    //         return redirect()->route('login_page')->with('error', 'Permission denied');
+    //     }
+
+    //     // Fetch all categories
+    //     $categories = Category::orderBy('id', 'ASC')->get();
+        
+    //     // POS shows only stock transferred to channel id 2
+    //     $selectedChannelId = self::POS_CHANNEL_ID;
+    //     session(['pos_selected_channel_id' => $selectedChannelId]);
+        
+    //     // Get stock IDs that exist in this channel with quantity > 0
+    //     $channelStockIds = ChannelStock::where('location_type', 'channel')
+    //         ->where('location_id', $selectedChannelId)
+    //         ->whereNotNull('stock_id')
+    //         ->where('quantity', '>', 0)
+    //         ->distinct()
+    //         ->pluck('stock_id')
+    //         ->toArray();
+        
+    //     if (!empty($channelStockIds)) {
+    //         $stocks = Stock::with(['images', 'category'])
+    //             ->whereNotNull('category_id')
+    //             ->whereIn('id', $channelStockIds)
+    //             ->orderBy('id', 'DESC')
+    //             ->get();
+    //     } else {
+    //         $stocks = collect([]);
+    //     }
+
+    //     // Areas for delivery selects
+    //     $areas = Area::orderBy('area_name_ar', 'ASC')->get(['id','area_name_ar','area_name_en']);
+
+    //     // Cities (with delivery charges) for delivery selects
+    //     $cities = City::orderBy('city_name_ar', 'ASC')
+    //         ->get(['id','city_name_ar','city_name_en','delivery_charges','area_id']);
+        
+    //     // Get selected channel information for header display
+    //     $selectedChannel = null;
+    //     if ($selectedChannelId) {
+    //         $selectedChannel = Channel::find($selectedChannelId);
+    //     }
+        
+    //     return view('pos.pos_page', compact('categories', 'stocks', 'areas', 'cities', 'selectedChannel'));
+    // }
+
+      public function index(){
         if (!Auth::check()) {
             return redirect()->route('login_page')->with('error', 'Please login first');
         }
@@ -64,13 +185,21 @@ class PosController extends Controller
                 $stocks = collect([]);
             }
         } else {
-            // Fetch all stocks if no channel selected, but filter those with quantity > 0
+            // All stock: include stocks that have quantity in main stock OR in any channel
+            $stockIdsWithChannelQty = ChannelStock::where('location_type', 'channel')
+                ->where('quantity', '>', 0)
+                ->whereNotNull('stock_id')
+                ->distinct()
+                ->pluck('stock_id')
+                ->toArray();
             $stocks = Stock::with(['images', 'category', 'colorSizes', 'sizes', 'colors'])
                 ->whereNotNull('category_id')
                 ->orderBy('id', 'DESC')
                 ->get()
-                ->filter(function($stock) {
-                    // Check if stock has at least one item with quantity > 0
+                ->filter(function($stock) use ($stockIdsWithChannelQty) {
+                    if (in_array($stock->id, $stockIdsWithChannelQty)) {
+                        return true;
+                    }
                     return $this->hasAvailableQuantity($stock);
                 });
         }
@@ -119,6 +248,7 @@ class PosController extends Controller
             });
             
             // Build color/size combinations from aggregated channel stock
+            $locale = session('locale', 'en');
             foreach ($groupedStocks as $key => $items) {
                 $firstItem = $items->first();
                 $sizeId = $firstItem->size_id;
@@ -127,58 +257,91 @@ class PosController extends Controller
                 // Sum quantities for this color/size combination
                 $totalQuantity = $items->sum('quantity');
                 
-                // Get size name
-                $sizeName = $firstItem->size_name;
-                if (!$sizeName && $sizeId) {
-                    $size = Size::find($sizeId);
-                    $sizeName = session('locale') === 'ar' 
-                        ? ($size?->size_name_ar ?? '-') 
-                        : ($size?->size_name_en ?? '-');
-                }
+                // Size name: use current locale (Arabic only when in Arabic direction)
+                $size = $sizeId ? Size::find($sizeId) : null;
+                $sizeName = $size
+                    ? ($locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en ?? '-') : ($size->size_name_en ?? $size->size_name_ar ?? '-'))
+                    : '-';
                 
-                // Get color name and code
-                $colorName = $firstItem->color_name;
+                // Color name and code: use current locale
+                $colorName = '-';
                 $colorCode = '#000000';
                 if ($colorId) {
                     $color = Color::find($colorId);
                     if ($color) {
-                        if (!$colorName) {
-                            $colorName = session('locale') === 'ar' 
-                                ? ($color->color_name_ar ?? '-') 
-                                : ($color->color_name_en ?? '-');
-                        }
+                        $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en ?? '-') : ($color->color_name_en ?? $color->color_name_ar ?? '-');
                         $colorCode = $color->color_code ?? '#000000';
                     }
                 }
                 
                 $colorSizes[] = [
                     'size_id' => $sizeId,
-                    'size_name' => $sizeName ?? '-',
+                    'size_name' => $sizeName,
                     'color_id' => $colorId,
-                    'color_name' => $colorName ?? '-',
+                    'color_name' => $colorName,
                     'color_code' => $colorCode,
                     'quantity' => $totalQuantity,
                 ];
             }
         } else {
-            // No channel selected - show all color/size combinations from main stock
-            foreach ($stock->colorSizes as $item) {
-                $sizeName = session('locale') === 'ar' 
-                    ? ($item->size?->size_name_ar ?? '-') 
-                    : ($item->size?->size_name_en ?? '-');
-                
-                $colorName = session('locale') === 'ar' 
-                    ? ($item->color?->color_name_ar ?? '-') 
-                    : ($item->color?->color_name_en ?? '-');
-                
-                $colorSizes[] = [
-                    'size_id' => $item->size_id,
-                    'size_name' => $sizeName,
-                    'color_id' => $item->color_id,
-                    'color_name' => $colorName,
-                    'color_code' => $item->color?->color_code ?? '#000000',
-                    'quantity' => $item->qty ?? 0,
-                ];
+            // No channel selected: show main stock; if main has no qty, show aggregated channel stock
+            $hasMainQty = $this->hasAvailableQuantity($stock);
+            if ($hasMainQty) {
+                $locale = session('locale', 'en');
+             
+foreach ($stock->colorSizes ?? [] as $item) {
+    $size = $item->size;
+    $color = $item->color;
+
+    $colorSizes[] = [
+        'size_id' => $item->size_id,
+        'size_name' => $locale === 'ar'
+            ? ($size->size_name_ar ?? '-')
+            : ($size->size_name_en ?? '-'),
+
+        'color_id' => $item->color_id,
+        'color_name' => $locale === 'ar'
+            ? ($color->color_name_ar ?? '-')
+            : ($color->color_name_en ?? '-'),
+
+        'color_code' => $color->color_code ?? '#000000',
+        'quantity' => $item->qty ?? 0,
+    ];
+}
+            } else {
+                // Stock only in channels: aggregate by color/size across all channels, locale-based names
+                $channelStocks = ChannelStock::where('location_type', 'channel')
+                    ->where('stock_id', $id)
+                    ->get();
+                $groupedStocks = $channelStocks->groupBy(function ($item) {
+                    return ($item->color_id ?? 'null') . '_' . ($item->size_id ?? 'null');
+                });
+                $locale = session('locale', 'en');
+                foreach ($groupedStocks as $key => $items) {
+                    $firstItem = $items->first();
+                    $sizeId = $firstItem->size_id;
+                    $colorId = $firstItem->color_id;
+                    $totalQuantity = $items->sum('quantity');
+                    $size = $sizeId ? Size::find($sizeId) : null;
+                    $sizeName = $size ? ($locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en ?? '-') : ($size->size_name_en ?? $size->size_name_ar ?? '-')) : '-';
+                    $colorName = '-';
+                    $colorCode = '#000000';
+                    if ($colorId) {
+                        $color = Color::find($colorId);
+                        if ($color) {
+                            $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en ?? '-') : ($color->color_name_en ?? $color->color_name_ar ?? '-');
+                            $colorCode = $color->color_code ?? '#000000';
+                        }
+                    }
+                    $colorSizes[] = [
+                        'size_id' => $sizeId,
+                        'size_name' => $sizeName,
+                        'color_id' => $colorId,
+                        'color_name' => $colorName,
+                        'color_code' => $colorCode,
+                        'quantity' => $totalQuantity,
+                    ];
+                }
             }
         }
 
@@ -411,12 +574,23 @@ class PosController extends Controller
                 'channel_id' => $selectedChannelId,
             ]);
 
-            // Reduce stock quantity from ColorSize table
+            // Reduce stock quantity from ColorSize table (and ChannelStock when channel selected)
             if ($colorId && $sizeId) {
                 $colorSize = ColorSize::where('stock_id', $item['id'])
                     ->where('color_id', $colorId)
                     ->where('size_id', $sizeId)
                     ->first();
+
+                // When channel is selected, get channel stock first so audit log shows channel quantities
+                $channelStock = null;
+                if ($selectedChannelId) {
+                    $channelStock = ChannelStock::where('location_type', 'channel')
+                        ->where('location_id', $selectedChannelId)
+                        ->where('stock_id', $item['id'])
+                        ->where('color_id', $colorId)
+                        ->where('size_id', $sizeId)
+                        ->first();
+                }
 
                 if ($colorSize) {
                     $currentQty = (int)($colorSize->qty ?? 0);
@@ -429,19 +603,33 @@ class PosController extends Controller
                     $stock->quantity = $stockTotalQty;
                     $stock->save();
 
-                    // Log audit entry for POS sale
+                    // Log audit entry for POS sale: use channel stock quantities when selling from a channel
+                    $logPreviousQty = $currentQty;
+                    $logNewQty = $newQty;
+                    $logChange = -$qty;
+                    if ($selectedChannelId && $channelStock) {
+                        $currentChannelQty = (int)($channelStock->quantity ?? 0);
+                        $logPreviousQty = $currentChannelQty;
+                        $logNewQty = max(0, $currentChannelQty - $qty);
+                        $logChange = -$qty;
+                    }
+
                     StockAuditLog::create([
                         'stock_id' => $stock->id,
                         'abaya_code' => $stock->abaya_code,
                         'barcode' => $stock->barcode,
                         'design_name' => $stock->design_name,
                         'operation_type' => 'sold',
-                        'previous_quantity' => $currentQty,
-                        'new_quantity' => $newQty,
-                        'quantity_change' => -$qty,
+                        'previous_quantity' => $logPreviousQty,
+                        'new_quantity' => $logNewQty,
+                        'quantity_change' => $logChange,
                         'related_id' => $orderNoFormatted,
                         'related_type' => 'pos_order',
-                        'related_info' => ['order_id' => $order->id, 'customer_id' => $customerId],
+                        'related_info' => [
+                            'order_id' => $order->id,
+                            'customer_id' => $customerId,
+                            'channel_id' => $selectedChannelId,
+                        ],
                         'color_id' => $colorId,
                         'size_id' => $sizeId,
                         'user_id' => $userId,
@@ -449,22 +637,13 @@ class PosController extends Controller
                         'notes' => 'Sold via POS',
                     ]);
                 }
-                
-                // If channel is selected, also reduce ChannelStock quantity
-                if ($selectedChannelId) {
-                    $channelStock = ChannelStock::where('location_type', 'channel')
-                        ->where('location_id', $selectedChannelId)
-                        ->where('stock_id', $item['id'])
-                        ->where('color_id', $colorId)
-                        ->where('size_id', $sizeId)
-                        ->first();
-                    
-                    if ($channelStock) {
-                        $currentChannelQty = (int)($channelStock->quantity ?? 0);
-                        $newChannelQty = max(0, $currentChannelQty - $qty);
-                        $channelStock->quantity = $newChannelQty;
-                        $channelStock->save();
-                    }
+
+                // Reduce ChannelStock quantity when channel is selected
+                if ($selectedChannelId && $channelStock) {
+                    $currentChannelQty = (int)($channelStock->quantity ?? 0);
+                    $newChannelQty = max(0, $currentChannelQty - $qty);
+                    $channelStock->quantity = $newChannelQty;
+                    $channelStock->save();
                 }
             }
         }
@@ -599,15 +778,28 @@ class PosController extends Controller
     public function getOrdersList(Request $request)
     {
         try {
-            $orders = PosOrders::with([
+            $search = trim((string) $request->input('search', ''));
+
+            $ordersQuery = PosOrders::with([
                 'customer',
                 'details.stock.images',
                 'details.color',
                 'details.size',
                 'payments.account'
             ])
-            ->orderBy('id', 'DESC')
-            ->paginate(10);
+            ->orderBy('id', 'DESC');
+
+            if ($search !== '') {
+                $ordersQuery->where(function ($query) use ($search) {
+                    $query->where('order_no', 'LIKE', "%{$search}%")
+                        ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                            $customerQuery->where('name', 'LIKE', "%{$search}%")
+                                ->orWhere('phone', 'LIKE', "%{$search}%");
+                        });
+                });
+            }
+
+            $orders = $ordersQuery->paginate(10);
 
             $formattedOrders = $orders->map(function($order) {
                 // Format order number
@@ -615,6 +807,7 @@ class PosController extends Controller
                 
                 // Customer name
                 $customerName = $order->customer ? $order->customer->name : '-';
+                $customerPhone = $order->customer ? ($order->customer->phone ?? '-') : '-';
                 
                 // Format date and time
                 $date = $order->created_at ? $order->created_at->format('Y-m-d') : '-';
@@ -646,6 +839,7 @@ class PosController extends Controller
                     'id' => $order->id,
                     'order_no' => $orderNo,
                     'customer_name' => $customerName,
+                    'customer_phone' => $customerPhone,
                     'order_type' => $orderTypeLabel,
                     'order_type_raw' => $order->order_type,
                     'delivery_status' => $order->delivery_status ?? null,
@@ -907,6 +1101,78 @@ class PosController extends Controller
      * Get shipping_fee from API for POS delivery orders. Called before submit.
      * No order is saved. Uses get_shipping_fee_for_pos_order helper.
      */
+    // public function getShippingFee(Request $request)
+    // {
+    //     $orderType = $request->input('order_type', 'direct');
+    //     if ($orderType !== 'delivery') {
+    //         return response()->json(['success' => true, 'shipping_fee' => 0]);
+    //     }
+
+    //     $items = $request->input('items', []);
+    //     $customerInput = $request->input('customer', []);
+    //     $areaId = !empty($customerInput['area']) ? (int) $customerInput['area'] : null;
+    //     $cityId = !empty($customerInput['wilayah']) ? (int) $customerInput['wilayah'] : null;
+
+    //     if (!$areaId || !$cityId) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Area and city are required for delivery shipping fee',
+    //         ], 422);
+    //     }
+
+    //     if (empty($customerInput['phone']) && empty($customerInput['name'])) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Customer phone or name is required for delivery',
+    //         ], 422);
+    //     }
+
+    //     $addressNotes = $customerInput['address'] ?? null;
+    //     $phone = $customerInput['phone'] ?? '';
+    //     if (!empty($customerInput['phone'])) {
+    //         $customer = Customer::firstOrCreate(
+    //             ['phone' => $customerInput['phone']],
+    //             [
+    //                 'name' => $customerInput['name'] ?? '',
+    //                 'city_id' => $cityId,
+    //                 'area_id' => $areaId,
+    //                 'notes' => $addressNotes,
+    //             ]
+    //         );
+    //     } else {
+    //         $customer = Customer::create([
+    //             'name' => $customerInput['name'] ?? '',
+    //             'city_id' => $cityId,
+    //             'area_id' => $areaId,
+    //             'notes' => $addressNotes,
+    //         ]);
+    //     }
+    //     if (!$customer->wasRecentlyCreated) {
+    //         $customer->update([
+    //             'name' => $customerInput['name'] ?? $customer->name,
+    //             'city_id' => $cityId,
+    //             'area_id' => $areaId,
+    //             'notes' => $addressNotes ?? $customer->notes,
+    //         ]);
+    //     }
+    //     $customerId = $customer->id;
+
+    //     $totalQuantity = (int) collect($items)->sum('qty');
+    //     $apiFee = get_shipping_fee_for_pos_order($areaId, $cityId, $customerId, $totalQuantity, $phone);
+
+    //     if ($apiFee === null) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Could not fetch shipping fee from API',
+    //         ], 422);
+    //     }
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'shipping_fee' => (float) $apiFee,
+    //     ]);
+    // }
+    
     public function getShippingFee(Request $request)
     {
         $orderType = $request->input('order_type', 'direct');
@@ -926,42 +1192,48 @@ class PosController extends Controller
             ], 422);
         }
 
-        if (empty($customerInput['phone']) && empty($customerInput['name'])) {
+        // Delivery fee only for area id 10 or 11 (same as special order)
+        $deliveryFeeAreas = [10, 11];
+        if (!in_array($areaId, $deliveryFeeAreas, true)) {
             return response()->json([
-                'success' => false,
-                'message' => 'Customer phone or name is required for delivery',
-            ], 422);
+                'success' => true,
+                'shipping_fee' => 0,
+            ]);
         }
 
         $addressNotes = $customerInput['address'] ?? null;
-        $phone = $customerInput['phone'] ?? '';
-        if (!empty($customerInput['phone'])) {
-            $customer = Customer::firstOrCreate(
-                ['phone' => $customerInput['phone']],
-                [
+        $phone = trim((string) ($customerInput['phone'] ?? ''));
+        $name = trim((string) ($customerInput['name'] ?? ''));
+        $customerId = 0;
+        if ($phone !== '' || $name !== '') {
+            if (!empty($customerInput['phone'])) {
+                $customer = Customer::firstOrCreate(
+                    ['phone' => $customerInput['phone']],
+                    [
+                        'name' => $customerInput['name'] ?? '',
+                        'city_id' => $cityId,
+                        'area_id' => $areaId,
+                        'notes' => $addressNotes,
+                    ]
+                );
+            } else {
+                $customer = Customer::create([
                     'name' => $customerInput['name'] ?? '',
                     'city_id' => $cityId,
                     'area_id' => $areaId,
                     'notes' => $addressNotes,
-                ]
-            );
-        } else {
-            $customer = Customer::create([
-                'name' => $customerInput['name'] ?? '',
-                'city_id' => $cityId,
-                'area_id' => $areaId,
-                'notes' => $addressNotes,
-            ]);
+                ]);
+            }
+            if (!$customer->wasRecentlyCreated) {
+                $customer->update([
+                    'name' => $customerInput['name'] ?? $customer->name,
+                    'city_id' => $cityId,
+                    'area_id' => $areaId,
+                    'notes' => $addressNotes ?? $customer->notes,
+                ]);
+            }
+            $customerId = $customer->id;
         }
-        if (!$customer->wasRecentlyCreated) {
-            $customer->update([
-                'name' => $customerInput['name'] ?? $customer->name,
-                'city_id' => $cityId,
-                'area_id' => $areaId,
-                'notes' => $addressNotes ?? $customer->notes,
-            ]);
-        }
-        $customerId = $customer->id;
 
         $totalQuantity = (int) collect($items)->sum('qty');
         $apiFee = get_shipping_fee_for_pos_order($areaId, $cityId, $customerId, $totalQuantity, $phone);
@@ -978,4 +1250,41 @@ class PosController extends Controller
             'shipping_fee' => (float) $apiFee,
         ]);
     }
+    public function deleteOrder(Request $request, $id)
+    {
+        $permissions = Auth::user()->permissions ?? [];
+        if (!in_array(13, $permissions)) {
+            return response()->json([
+                'success' => false,
+                'message' => trans('messages.permission_denied', [], session('locale')),
+            ], 403);
+        }
+
+        try {
+            $order = PosOrders::findOrFail($id);
+
+            \DB::beginTransaction();
+            $order->payments()->delete();
+            $order->details()->delete();
+            $order->delete();
+            \DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('messages.order_deleted_successfully', [], session('locale')),
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => trans('messages.order_not_found', [], session('locale')),
+            ], 404);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
 }

@@ -23,6 +23,8 @@ use App\Models\MaterialAuditLog;
 use App\Models\MaterialQuantityAudit;
 use App\Models\TailorPaymentItem;
 use App\Models\Customer;
+use App\Models\Channel;
+use App\Models\ChannelStock;
 use App\Services\StockWebsiteSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -52,7 +54,19 @@ class StockController extends Controller
         return view('stock.add_stock', compact('tailors', 'colors', 'sizes', 'categories', 'materials'));
     }
 
-public function edit_stock($id)
+    /**
+     * Show a single stock (redirects to edit page).
+     */
+    public function show($id)
+    {
+        $stock = Stock::find($id);
+        if (!$stock) {
+            abort(404);
+        }
+        return redirect()->route('edit_stock', ['id' => $id]);
+    }
+
+    public function edit_stock($id)
 {
     $tailors = Tailor::all();
     $colors  = Color::all();
@@ -73,23 +87,26 @@ public function edit_stock($id)
     // Get the first tailor ID if array, or the value itself if it's a single ID
     $selectedTailorId = is_array($selectedTailors) && !empty($selectedTailors) ? $selectedTailors[0] : (is_numeric($selectedTailors) ? $selectedTailors : null);
 
-    // Get existing abaya materials for this stock
+    // Build list of ALL materials with quantity: existing assigned qty or 0 (same structure as add_stock, so edit can add new materials)
     $abayaMaterial = AbayaMaterial::where('abaya_id', $stock->id)->first();
-    $existingMaterials = [];
-    if ($abayaMaterial && $abayaMaterial->materials) {
+    $quantityByMaterialId = [];
+    if ($abayaMaterial && $abayaMaterial->materials && is_array($abayaMaterial->materials)) {
         foreach ($abayaMaterial->materials as $materialData) {
-            $material = Material::find($materialData['material_id'] ?? null);
-            if ($material) {
-                $existingMaterials[] = [
-                    'id' => $material->id,
-                    'material_id' => $materialData['material_id'],
-                    'material_name' => $material->material_name,
-                    'material_image' => $material->material_image,
-                    'quantity' => $materialData['quantity'] ?? 0,
-                    'unit' => $materialData['unit'] ?? $material->unit ?? 'meters',
-                ];
+            $mid = $materialData['material_id'] ?? null;
+            if ($mid !== null) {
+                $quantityByMaterialId[$mid] = (float) ($materialData['quantity'] ?? 0);
             }
         }
+    }
+    $materialsWithQuantity = [];
+    foreach ($materials as $material) {
+        $materialsWithQuantity[] = [
+            'id' => $material->id,
+            'material_name' => $material->material_name,
+            'material_image' => $material->material_image,
+            'unit' => $material->unit ?: 'meters',
+            'quantity' => $quantityByMaterialId[$material->id] ?? 0,
+        ];
     }
 
     $returnPage = (int) request()->get('page', 1);
@@ -97,7 +114,7 @@ public function edit_stock($id)
         $returnPage = 1;
     }
 
-    return view('stock.edit_stock', compact('tailors', 'colors', 'sizes', 'categories', 'materials', 'id', 'stock', 'selectedTailors', 'selectedTailorId', 'existingMaterials', 'returnPage'));
+    return view('stock.edit_stock', compact('tailors', 'colors', 'sizes', 'categories', 'materials', 'id', 'stock', 'selectedTailors', 'selectedTailorId', 'materialsWithQuantity', 'returnPage'));
 }
 
 
@@ -1209,6 +1226,21 @@ public function add_quantity(Request $request)
     }
 
     /**
+     * Channel-only audit: transfers TO channels + POS sales FROM channels (no boutiques)
+     */
+    public function channelAudit()
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+        $permissions = Auth::user()->permissions ?? [];
+        if (!in_array(9, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+        return view('stock.channel_audit');
+    }
+
+    /**
      * Get comprehensive audit logs with search and date filtering
      * Grouped by barcode to aggregate quantities
      */
@@ -1223,12 +1255,43 @@ public function add_quantity(Request $request)
 
             $query = StockAuditLog::with(['stock', 'user', 'size']);
 
-            // Apply search filter
+            // Apply search filter (barcode, code, design name, or channel name for sold/POS)
             if (!empty($search)) {
-                $query->where(function($q) use ($search) {
+                $channelIdsMatchingSearch = Channel::where('channel_name_en', 'like', '%' . $search . '%')
+                    ->orWhere('channel_name_ar', 'like', '%' . $search . '%')
+                    ->pluck('id')
+                    ->toArray();
+
+                // Order IDs that belong to these channels (for sold logs that have order_id but no channel_id in related_info)
+                $orderIdsForChannels = [];
+                if (!empty($channelIdsMatchingSearch)) {
+                    $orderIdsForChannels = \App\Models\PosOrders::whereIn('channel_id', $channelIdsMatchingSearch)
+                        ->pluck('id')
+                        ->toArray();
+                }
+
+                $query->where(function($q) use ($search, $channelIdsMatchingSearch, $orderIdsForChannels) {
                     $q->where('abaya_code', 'like', '%' . $search . '%')
                       ->orWhere('barcode', 'like', '%' . $search . '%')
                       ->orWhere('design_name', 'like', '%' . $search . '%');
+                    if (!empty($channelIdsMatchingSearch) || !empty($orderIdsForChannels)) {
+                        $q->orWhere(function($q2) use ($channelIdsMatchingSearch, $orderIdsForChannels) {
+                            $q2->where('operation_type', 'sold');
+                            $conditions = [];
+                            $bindings = [];
+                            if (!empty($channelIdsMatchingSearch)) {
+                                $chPlaceholders = implode(',', array_map('intval', $channelIdsMatchingSearch));
+                                $conditions[] = 'JSON_UNQUOTE(JSON_EXTRACT(related_info, \'$.channel_id\')) IN (' . $chPlaceholders . ')';
+                            }
+                            if (!empty($orderIdsForChannels)) {
+                                $orderPlaceholders = implode(',', array_map('intval', $orderIdsForChannels));
+                                $conditions[] = 'JSON_UNQUOTE(JSON_EXTRACT(related_info, \'$.order_id\')) IN (' . $orderPlaceholders . ')';
+                            }
+                            if (!empty($conditions)) {
+                                $q2->whereRaw('(' . implode(' OR ', $conditions) . ')');
+                            }
+                        });
+                    }
                 });
             }
 
@@ -1243,38 +1306,60 @@ public function add_quantity(Request $request)
             // Get all logs first
             $allLogs = $query->orderBy('created_at', 'DESC')->get();
 
-            // Group by: barcode + size + operation_type + related_id + date+time (same minute)
+            // Show only POS "All Stock" sales: exclude sold logs that have a channel (specific channel sale)
+            $orderIdsFromSold = $allLogs->filter(function ($l) {
+                return $l->operation_type === 'sold' && !empty($l->related_info['order_id'] ?? null);
+            })->map(function ($l) {
+                return $l->related_info['order_id'];
+            })->unique()->values()->toArray();
+            $orderIdsWithChannel = [];
+            if (!empty($orderIdsFromSold)) {
+                $orderIdsWithChannel = \App\Models\PosOrders::whereIn('id', $orderIdsFromSold)
+                    ->whereNotNull('channel_id')
+                    ->where('channel_id', '!=', '')
+                    ->pluck('id')
+                    ->toArray();
+            }
+            $allLogs = $allLogs->filter(function ($log) use ($orderIdsWithChannel) {
+                if ($log->operation_type !== 'sold') {
+                    return true;
+                }
+                $cid = $log->related_info['channel_id'] ?? null;
+                if ($cid !== null && $cid !== '') {
+                    return false;
+                }
+                if (!empty($log->related_info['order_id']) && in_array($log->related_info['order_id'], $orderIdsWithChannel)) {
+                    return false;
+                }
+                return true;
+            })->values();
+
+            // Group by barcode (not size): barcode + operation_type + related_id + date+time (same minute) — quantity per barcode
             $grouped = [];
             foreach ($allLogs as $log) {
-                // Create grouping key: barcode + operation_type + related_id + datetime (rounded to minute)
                 $dateTime = \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i');
-                $groupKey = ($log->barcode ?? $log->abaya_code ?? '') . '|' . 
-                           ($log->size_id ?? '') . '|' .
-                           ($log->operation_type ?? '') . '|' . 
-                           ($log->related_id ?? '') . '|' . 
+                $groupKey = ($log->barcode ?? $log->abaya_code ?? '') . '|' .
+                           ($log->operation_type ?? '') . '|' .
+                           ($log->related_id ?? '') . '|' .
                            $dateTime;
 
                 if (!isset($grouped[$groupKey])) {
                     $grouped[$groupKey] = [
                         'logs' => [],
                         'total_quantity_change' => 0,
-                        'min_previous_quantity' => PHP_INT_MAX,
+                        'sum_previous_quantity' => 0,
                         'first_log' => $log,
                     ];
                 }
 
                 $grouped[$groupKey]['logs'][] = $log;
                 $grouped[$groupKey]['total_quantity_change'] += $log->quantity_change;
-                
-                // Track previous quantity (minimum from all logs in group - this is the starting point before this operation)
-                if ($log->previous_quantity < $grouped[$groupKey]['min_previous_quantity']) {
-                    $grouped[$groupKey]['min_previous_quantity'] = $log->previous_quantity;
-                }
+                $grouped[$groupKey]['sum_previous_quantity'] += $log->previous_quantity;
             }
 
-            // Calculate new quantity after grouping
+            // New quantity per barcode = sum(previous) + total change
             foreach ($grouped as $key => $group) {
-                $grouped[$key]['new_quantity'] = ($group['min_previous_quantity'] === PHP_INT_MAX ? 0 : $group['min_previous_quantity']) + $group['total_quantity_change'];
+                $grouped[$key]['new_quantity'] = $group['sum_previous_quantity'] + $group['total_quantity_change'];
             }
 
             // Convert grouped data to array and sort by date
@@ -1297,7 +1382,7 @@ public function add_quantity(Request $request)
                 'special_order' => trans('messages.special_order', [], $locale) ?: 'Special Order',
             ];
 
-            // Resolve special_order_no for special_order logs (existing rows may have order_id in related_info)
+            // Resolve special_order_no + customer for special_order logs
             $orderIdsForSpecialOrder = [];
             foreach ($paginated as $group) {
                 $log = $group['first_log'];
@@ -1306,9 +1391,20 @@ public function add_quantity(Request $request)
                 }
             }
             $specialOrderNos = [];
+            $specialOrderCustomers = [];   // keyed by order id
             if (!empty($orderIdsForSpecialOrder)) {
-                $specialOrderNos = SpecialOrder::whereIn('id', array_unique($orderIdsForSpecialOrder))
-                    ->pluck('special_order_no', 'id')->toArray();
+                $specialOrders = SpecialOrder::with('customer')
+                    ->whereIn('id', array_unique($orderIdsForSpecialOrder))
+                    ->get(['id', 'special_order_no', 'customer_id']);
+                foreach ($specialOrders as $so) {
+                    $specialOrderNos[$so->id] = $so->special_order_no;
+                    if ($so->customer) {
+                        $specialOrderCustomers[$so->id] = [
+                            'name'  => $so->customer->name  ?? '',
+                            'phone' => $so->customer->phone ?? '',
+                        ];
+                    }
+                }
             }
 
             // Resolve customer information for sold operations
@@ -1327,9 +1423,40 @@ public function add_quantity(Request $request)
                     ->toArray();
             }
 
-            $formattedData = array_map(function($group) use ($operationTypeLabels, $locale, $specialOrderNos, $customers) {
+            // Resolve channel names for sold (POS) operations
+            $channelIdsForSold = [];
+            $orderIdsForChannel = [];
+            foreach ($paginated as $group) {
                 $log = $group['first_log'];
-                $previousQty = $group['min_previous_quantity'] === PHP_INT_MAX ? 0 : $group['min_previous_quantity'];
+                if ($log->operation_type === 'sold' && !empty($log->related_info)) {
+                    if (!empty($log->related_info['channel_id'])) {
+                        $channelIdsForSold[] = $log->related_info['channel_id'];
+                    } elseif (!empty($log->related_info['order_id'])) {
+                        $orderIdsForChannel[] = $log->related_info['order_id'];
+                    }
+                }
+            }
+            $orderIdToChannelId = [];
+            if (!empty($orderIdsForChannel)) {
+                $ordersWithChannel = \App\Models\PosOrders::whereIn('id', array_unique($orderIdsForChannel))
+                    ->get(['id', 'channel_id']);
+                foreach ($ordersWithChannel as $o) {
+                    $orderIdToChannelId[$o->id] = $o->channel_id;
+                    if (!empty($o->channel_id)) {
+                        $channelIdsForSold[] = $o->channel_id;
+                    }
+                }
+            }
+            $channelsById = [];
+            if (!empty($channelIdsForSold)) {
+                $channelsById = Channel::whereIn('id', array_unique($channelIdsForSold))
+                    ->get(['id', 'channel_name_en', 'channel_name_ar'])
+                    ->keyBy('id');
+            }
+
+            $formattedData = array_map(function($group) use ($operationTypeLabels, $locale, $specialOrderNos, $specialOrderCustomers, $customers, $channelsById, $orderIdToChannelId) {
+                $log = $group['first_log'];
+                $previousQty = $group['sum_previous_quantity'];
                 $newQty = $group['new_quantity'];
                 $totalChange = $group['total_quantity_change'];
 
@@ -1347,7 +1474,9 @@ public function add_quantity(Request $request)
                 $relatedInfo = $log->related_info;
                 $relatedDetails = '';
                 if ($log->operation_type === 'transferred' && $relatedInfo) {
-                    $relatedDetails = ($relatedInfo['from'] ?? '') . ' → ' . ($relatedInfo['to'] ?? '');
+                    $fromLoc = $relatedInfo['from'] ?? '';
+                    $toLoc = $relatedInfo['to'] ?? '';
+                    $relatedDetails = $this->getLocationDisplayName($fromLoc, $locale) . ' → ' . $this->getLocationDisplayName($toLoc, $locale);
                 } elseif ($log->operation_type === 'sold' && $relatedInfo) {
                     $customerId = $relatedInfo['customer_id'] ?? null;
                     if ($customerId && isset($customers[$customerId])) {
@@ -1357,6 +1486,12 @@ public function add_quantity(Request $request)
                         $relatedDetails = $customerName . ' (' . $customerPhone . ')';
                     } else {
                         $relatedDetails = 'Customer ID: ' . ($customerId ?? 'N/A');
+                    }
+                } elseif ($log->operation_type === 'special_order' && $relatedInfo) {
+                    $oid = $relatedInfo['order_id'] ?? null;
+                    if ($oid && isset($specialOrderCustomers[$oid])) {
+                        $c = $specialOrderCustomers[$oid];
+                        $relatedDetails = trim(($c['name'] ?? '') . ($c['phone'] ? ' (' . $c['phone'] . ')' : ''));
                     }
                 }
 
@@ -1369,18 +1504,27 @@ public function add_quantity(Request $request)
                     }
                 }
 
-                $sizeName = '—';
-                if (!empty($log->size)) {
-                    $sizeName = $locale === 'ar'
-                        ? ($log->size->size_name_ar ?? $log->size->size_name_en ?? '—')
-                        : ($log->size->size_name_en ?? $log->size->size_name_ar ?? '—');
+                // Channel name for POS sold: from which channel the product was sold
+                $channelName = '—';
+                if ($log->operation_type === 'sold' && !empty($log->related_info)) {
+                    $cid = $log->related_info['channel_id'] ?? null;
+                    if (empty($cid) && !empty($log->related_info['order_id'])) {
+                        $cid = $orderIdToChannelId[$log->related_info['order_id']] ?? null;
+                    }
+                    if (!empty($cid) && isset($channelsById[$cid])) {
+                        $ch = $channelsById[$cid];
+                        $channelName = $locale === 'ar'
+                            ? ($ch->channel_name_ar ?? $ch->channel_name_en ?? '—')
+                            : ($ch->channel_name_en ?? $ch->channel_name_ar ?? '—');
+                    } elseif ($log->operation_type === 'sold') {
+                        $channelName = trans('messages.all_stock', [], $locale) ?: 'All Stock';
+                    }
                 }
 
                 return [
                     'id' => $log->id,
                     'abaya_code' => $log->abaya_code ?? '—',
                     'barcode' => $log->barcode ?? '—',
-                    'size' => $sizeName,
                     'design_name' => $log->design_name ?? '—',
                     'operation_type' => $log->operation_type,
                     'operation_label' => $operationTypeLabels[$log->operation_type] ?? $log->operation_type,
@@ -1389,6 +1533,7 @@ public function add_quantity(Request $request)
                     'quantity_change' => $totalChange,
                     'related_id' => $relatedId,
                     'related_details' => $relatedDetails,
+                    'channel_name' => $channelName,
                     'added_by' => $addedBy,
                     'created_at' => $log->created_at->format('Y-m-d H:i:s'),
                     'date' => $log->created_at->format('Y-m-d'),
@@ -1396,37 +1541,55 @@ public function add_quantity(Request $request)
                 ];
             }, $paginated);
 
-            // Calculate remaining quantity for searched abaya (total + per size)
+            // Calculate remaining quantity for searched barcode from actual stock (main + channels), not audit replay
             $remainingQty = null;
             $remainingBySize = null;
             if (!empty($search)) {
-                // Get all logs for this barcode and calculate final quantity (by size)
-                $barcodeLogs = StockAuditLog::where(function($q) use ($search) {
-                    $q->where('abaya_code', 'like', '%' . $search . '%')
-                      ->orWhere('barcode', 'like', '%' . $search . '%')
-                      ->orWhere('design_name', 'like', '%' . $search . '%');
-                })->with('size')->orderBy('created_at', 'ASC')->get();
-                
-                if ($barcodeLogs->count() > 0) {
+                $matchingStocks = Stock::where('abaya_code', 'like', '%' . $search . '%')
+                    ->orWhere('barcode', 'like', '%' . $search . '%')
+                    ->orWhere('design_name', 'like', '%' . $search . '%')
+                    ->pluck('id')
+                    ->toArray();
+
+                if (!empty($matchingStocks)) {
+                    // Main stock: sum qty per size from ColorSize
+                    $mainBySize = ColorSize::whereIn('stock_id', $matchingStocks)
+                        ->selectRaw('size_id, COALESCE(SUM(qty), 0) as total')
+                        ->groupBy('size_id')
+                        ->pluck('total', 'size_id')
+                        ->toArray();
+
+                    // Channel stock: sum quantity per size from ChannelStock (all channels)
+                    $channelBySize = ChannelStock::whereIn('stock_id', $matchingStocks)
+                        ->where('location_type', 'channel')
+                        ->selectRaw('size_id, COALESCE(SUM(quantity), 0) as total')
+                        ->groupBy('size_id')
+                        ->get()
+                        ->keyBy('size_id');
+
+                    $allSizeIds = array_unique(array_merge(
+                        array_keys($mainBySize),
+                        $channelBySize->keys()->toArray()
+                    ));
                     $finalBySize = [];
-                    foreach ($barcodeLogs as $l) {
-                        $sid = $l->size_id ?? 0;
-                        $finalBySize[$sid] = (int)($l->new_quantity ?? 0);
+                    foreach ($allSizeIds as $sid) {
+                        $mainQty = (int)($mainBySize[$sid] ?? 0);
+                        $channelQty = (int)($channelBySize->get($sid)?->total ?? 0);
+                        $finalBySize[$sid] = $mainQty + $channelQty;
                     }
 
                     $remainingQty = array_sum($finalBySize);
 
-                    // Build readable breakdown
+                    $sizeIds = array_keys($finalBySize);
+                    $sizes = $sizeIds ? Size::whereIn('id', $sizeIds)->get()->keyBy('id') : collect();
                     $remainingBySize = [];
                     foreach ($finalBySize as $sid => $qty) {
                         $sizeName = '—';
-                        if (!empty($sid)) {
-                            $size = $barcodeLogs->firstWhere('size_id', $sid)?->size;
-                            if ($size) {
-                                $sizeName = $locale === 'ar'
-                                    ? ($size->size_name_ar ?? $size->size_name_en ?? '—')
-                                    : ($size->size_name_en ?? $size->size_name_ar ?? '—');
-                            }
+                        if (!empty($sid) && $sizes->has($sid)) {
+                            $size = $sizes->get($sid);
+                            $sizeName = $locale === 'ar'
+                                ? ($size->size_name_ar ?? $size->size_name_en ?? '—')
+                                : ($size->size_name_en ?? $size->size_name_ar ?? '—');
                         }
                         $remainingBySize[] = [
                             'size_id' => (int)$sid,
@@ -1451,6 +1614,247 @@ public function add_quantity(Request $request)
             return response()->json([
                 'success' => false,
                 'message' => 'Error fetching audit data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get channel-only audit: transfers TO channels (not boutiques) + POS sales FROM channels.
+     * Same table as comprehensive audit; quantities shown are per channel.
+     */
+    public function getChannelAudit(Request $request)
+    {
+        try {
+            $search = $request->input('search', '');
+            $fromDate = $request->input('from_date');
+            $toDate = $request->input('to_date');
+            $page = $request->input('page', 1);
+            $perPage = $request->input('per_page', 10);
+            $locale = session('locale', 'en');
+
+            $query = StockAuditLog::with(['stock', 'user', 'size'])
+                ->whereIn('operation_type', ['transferred', 'sold']);
+
+            if (!empty($search)) {
+                $channelIdsMatchingSearch = Channel::where('channel_name_en', 'like', '%' . $search . '%')
+                    ->orWhere('channel_name_ar', 'like', '%' . $search . '%')
+                    ->pluck('id')
+                    ->toArray();
+                $orderIdsForChannels = [];
+                if (!empty($channelIdsMatchingSearch)) {
+                    $orderIdsForChannels = \App\Models\PosOrders::whereIn('channel_id', $channelIdsMatchingSearch)->pluck('id')->toArray();
+                }
+                $query->where(function($q) use ($search, $channelIdsMatchingSearch, $orderIdsForChannels) {
+                    $q->where('abaya_code', 'like', '%' . $search . '%')
+                      ->orWhere('barcode', 'like', '%' . $search . '%')
+                      ->orWhere('design_name', 'like', '%' . $search . '%');
+                    if (!empty($channelIdsMatchingSearch) || !empty($orderIdsForChannels)) {
+                        $q->orWhere(function($q2) use ($channelIdsMatchingSearch, $orderIdsForChannels) {
+                            $q2->where('operation_type', 'sold');
+                            $c = [];
+                            if (!empty($channelIdsMatchingSearch)) {
+                                $c[] = 'JSON_UNQUOTE(JSON_EXTRACT(related_info, \'$.channel_id\')) IN (' . implode(',', array_map('intval', $channelIdsMatchingSearch)) . ')';
+                            }
+                            if (!empty($orderIdsForChannels)) {
+                                $c[] = 'JSON_UNQUOTE(JSON_EXTRACT(related_info, \'$.order_id\')) IN (' . implode(',', array_map('intval', $orderIdsForChannels)) . ')';
+                            }
+                            if (!empty($c)) $q2->whereRaw('(' . implode(' OR ', $c) . ')');
+                        });
+                    }
+                });
+            }
+            if (!empty($fromDate)) $query->whereDate('created_at', '>=', $fromDate);
+            if (!empty($toDate)) $query->whereDate('created_at', '<=', $toDate);
+
+            $allLogs = $query->orderBy('created_at', 'DESC')->get();
+
+            // Keep only: transferred TO a channel (not boutique), or sold FROM a channel
+            $orderIdsFromSold = $allLogs->filter(fn($l) => $l->operation_type === 'sold' && !empty($l->related_info['order_id'] ?? null))
+                ->map(fn($l) => $l->related_info['order_id'])->unique()->values()->toArray();
+            $orderIdToChannelId = [];
+            if (!empty($orderIdsFromSold)) {
+                foreach (\App\Models\PosOrders::whereIn('id', $orderIdsFromSold)->get(['id', 'channel_id']) as $o) {
+                    $orderIdToChannelId[$o->id] = $o->channel_id;
+                }
+            }
+            $allLogs = $allLogs->filter(function ($log) use ($orderIdToChannelId) {
+                if ($log->operation_type === 'transferred') {
+                    $to = $log->related_info['to'] ?? '';
+                    return strpos($to, 'channel-') === 0; // only channel, not boutique
+                }
+                if ($log->operation_type === 'sold') {
+                    $cid = $log->related_info['channel_id'] ?? null;
+                    if ($cid !== null && $cid !== '') return true;
+                    if (!empty($log->related_info['order_id']) && !empty($orderIdToChannelId[$log->related_info['order_id']] ?? null)) return true;
+                    return false;
+                }
+                return false;
+            })->values();
+
+            // Group by barcode + operation_type + related_id + datetime
+            $grouped = [];
+            foreach ($allLogs as $log) {
+                $dateTime = \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i');
+                $groupKey = ($log->barcode ?? $log->abaya_code ?? '') . '|' . ($log->operation_type ?? '') . '|' . ($log->related_id ?? '') . '|' . $dateTime;
+                if (!isset($grouped[$groupKey])) {
+                    $grouped[$groupKey] = ['logs' => [], 'total_quantity_change' => 0, 'sum_previous_quantity' => 0, 'first_log' => $log];
+                }
+                $grouped[$groupKey]['logs'][] = $log;
+                $grouped[$groupKey]['total_quantity_change'] += $log->quantity_change;
+                $grouped[$groupKey]['sum_previous_quantity'] += $log->previous_quantity;
+            }
+            foreach ($grouped as $key => $group) {
+                $grouped[$key]['new_quantity'] = $group['sum_previous_quantity'] + $group['total_quantity_change'];
+            }
+            $groupedArray = array_values($grouped);
+            usort($groupedArray, fn($a, $b) => strcmp($b['first_log']->created_at, $a['first_log']->created_at));
+            $total = count($groupedArray);
+            $offset = ($page - 1) * $perPage;
+            $paginated = array_slice($groupedArray, $offset, $perPage);
+
+            $operationTypeLabels = [
+                'transferred' => trans('messages.quantity_transferred_out', [], $locale) ?: 'Transferred',
+                'sold' => trans('messages.quantity_sold_pos', [], $locale) ?: 'Sold',
+            ];
+
+            $customerIdsForSold = [];
+            foreach ($paginated as $group) {
+                $log = $group['first_log'];
+                if ($log->operation_type === 'sold' && !empty($log->related_info['customer_id'])) $customerIdsForSold[] = $log->related_info['customer_id'];
+            }
+            $customers = [];
+            if (!empty($customerIdsForSold)) {
+                $customers = Customer::whereIn('id', array_unique($customerIdsForSold))->get(['id', 'name', 'phone'])->keyBy('id')->toArray();
+            }
+
+            $channelIdsForSold = [];
+            $orderIdsForChannel = [];
+            foreach ($paginated as $group) {
+                $log = $group['first_log'];
+                if ($log->operation_type === 'sold' && !empty($log->related_info)) {
+                    if (!empty($log->related_info['channel_id'])) $channelIdsForSold[] = $log->related_info['channel_id'];
+                    elseif (!empty($log->related_info['order_id'])) $orderIdsForChannel[] = $log->related_info['order_id'];
+                }
+            }
+            $orderIdToChannelIdPaginated = [];
+            if (!empty($orderIdsForChannel)) {
+                foreach (\App\Models\PosOrders::whereIn('id', array_unique($orderIdsForChannel))->get(['id', 'channel_id']) as $o) {
+                    $orderIdToChannelIdPaginated[$o->id] = $o->channel_id;
+                    if (!empty($o->channel_id)) $channelIdsForSold[] = $o->channel_id;
+                }
+            }
+            $channelIdsForTransferred = [];
+            foreach ($paginated as $group) {
+                $log = $group['first_log'];
+                if ($log->operation_type === 'transferred' && !empty($log->related_info['to']) && strpos($log->related_info['to'], 'channel-') === 0) {
+                    $channelIdsForTransferred[] = (int) str_replace('channel-', '', $log->related_info['to']);
+                }
+            }
+            $channelsById = Channel::whereIn('id', array_unique(array_merge($channelIdsForSold, $channelIdsForTransferred)))
+                ->get(['id', 'channel_name_en', 'channel_name_ar'])->keyBy('id');
+
+            $formattedData = array_map(function($group) use ($operationTypeLabels, $locale, $customers, $channelsById, $orderIdToChannelIdPaginated) {
+                $log = $group['first_log'];
+                $previousQty = $group['sum_previous_quantity'];
+                $newQty = $group['new_quantity'];
+                $totalChange = $group['total_quantity_change'];
+                $addedBy = $log->added_by ?? 'System';
+                if (count($group['logs']) > 1) {
+                    $users = array_unique(array_filter(array_map(fn($l) => $l->added_by ?? null, $group['logs'])));
+                    if (count($users) > 1) $addedBy = implode(', ', $users);
+                }
+                $relatedInfo = $log->related_info;
+                $relatedDetails = '';
+                if ($log->operation_type === 'transferred' && $relatedInfo) {
+                    $relatedDetails = $this->getLocationDisplayName($relatedInfo['from'] ?? '', $locale) . ' → ' . $this->getLocationDisplayName($relatedInfo['to'] ?? '', $locale);
+                } elseif ($log->operation_type === 'sold' && $relatedInfo) {
+                    $customerId = $relatedInfo['customer_id'] ?? null;
+                    if ($customerId && isset($customers[$customerId])) {
+                        $c = $customers[$customerId];
+                        $relatedDetails = ($c['name'] ?? 'N/A') . ' (' . ($c['phone'] ?? 'N/A') . ')';
+                    } else {
+                        $relatedDetails = 'Customer ID: ' . ($customerId ?? 'N/A');
+                    }
+                }
+                $relatedId = $log->related_id ?? '—';
+
+                $channelName = '—';
+                if ($log->operation_type === 'transferred' && !empty($relatedInfo['to']) && strpos($relatedInfo['to'], 'channel-') === 0) {
+                    $channelName = $this->getLocationDisplayName($relatedInfo['to'], $locale);
+                } elseif ($log->operation_type === 'sold' && !empty($relatedInfo)) {
+                    $cid = $relatedInfo['channel_id'] ?? null;
+                    if (empty($cid) && !empty($relatedInfo['order_id'])) $cid = $orderIdToChannelIdPaginated[$relatedInfo['order_id']] ?? null;
+                    if (!empty($cid) && isset($channelsById[$cid])) {
+                        $ch = $channelsById[$cid];
+                        $channelName = $locale === 'ar' ? ($ch->channel_name_ar ?? $ch->channel_name_en ?? '—') : ($ch->channel_name_en ?? $ch->channel_name_ar ?? '—');
+                        $channelName .= ' (ID: ' . $cid . ')';
+                    }
+                }
+
+                return [
+                    'id' => $log->id,
+                    'abaya_code' => $log->abaya_code ?? '—',
+                    'barcode' => $log->barcode ?? '—',
+                    'design_name' => $log->design_name ?? '—',
+                    'operation_type' => $log->operation_type,
+                    'operation_label' => $operationTypeLabels[$log->operation_type] ?? $log->operation_type,
+                    'previous_quantity' => $previousQty,
+                    'new_quantity' => $newQty,
+                    'quantity_change' => $totalChange,
+                    'related_id' => $relatedId,
+                    'related_details' => $relatedDetails,
+                    'channel_name' => $channelName,
+                    'added_by' => $addedBy,
+                    'created_at' => $log->created_at->format('Y-m-d H:i:s'),
+                    'date' => $log->created_at->format('Y-m-d'),
+                    'time' => $log->created_at->format('H:i:s'),
+                ];
+            }, $paginated);
+
+            $remainingQty = null;
+            $remainingBySize = null;
+            if (!empty($search)) {
+                $matchingStocks = Stock::where('abaya_code', 'like', '%' . $search . '%')
+                    ->orWhere('barcode', 'like', '%' . $search . '%')
+                    ->orWhere('design_name', 'like', '%' . $search . '%')
+                    ->pluck('id')->toArray();
+                if (!empty($matchingStocks)) {
+                    $mainBySize = ColorSize::whereIn('stock_id', $matchingStocks)->selectRaw('size_id, COALESCE(SUM(qty), 0) as total')->groupBy('size_id')->pluck('total', 'size_id')->toArray();
+                    $channelBySize = ChannelStock::whereIn('stock_id', $matchingStocks)->where('location_type', 'channel')
+                        ->selectRaw('size_id, COALESCE(SUM(quantity), 0) as total')->groupBy('size_id')->get()->keyBy('size_id');
+                    $allSizeIds = array_unique(array_merge(array_keys($mainBySize), $channelBySize->keys()->toArray()));
+                    $finalBySize = [];
+                    foreach ($allSizeIds as $sid) {
+                        $finalBySize[$sid] = (int)($mainBySize[$sid] ?? 0) + (int)($channelBySize->get($sid)?->total ?? 0);
+                    }
+                    $remainingQty = array_sum($finalBySize);
+                    $sizes = $allSizeIds ? Size::whereIn('id', $allSizeIds)->get()->keyBy('id') : collect();
+                    $remainingBySize = [];
+                    foreach ($finalBySize as $sid => $qty) {
+                        $sizeName = '—';
+                        if (!empty($sid) && $sizes->has($sid)) {
+                            $s = $sizes->get($sid);
+                            $sizeName = $locale === 'ar' ? ($s->size_name_ar ?? $s->size_name_en ?? '—') : ($s->size_name_en ?? $s->size_name_ar ?? '—');
+                        }
+                        $remainingBySize[] = ['size_id' => (int)$sid, 'size' => $sizeName, 'quantity' => (int)$qty];
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedData,
+                'remaining_quantity' => $remainingQty,
+                'remaining_by_size' => $remainingBySize,
+                'current_page' => (int)$page,
+                'last_page' => (int)ceil($total / $perPage),
+                'total' => $total,
+                'per_page' => $perPage,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching channel audit data: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1655,32 +2059,50 @@ public function add_quantity(Request $request)
                 // But for now, we'll show transfers OUT when type is 'transferred'
                 // The "received" column can use the same type but we'll differentiate if needed
             } elseif ($type === 'pos') {
-                // Get all POS sales with color and size
+                // Get all POS sales with color, size, order and channel
                 $posSales = \App\Models\PosOrdersDetail::where('item_id', $stockId)
-                    ->with(['color', 'size', 'order'])
+                    ->with(['color', 'size', 'order.channel'])
                     ->get();
 
-                // Group by order_no to show order_no and quantity
+                // Group by order_no + channel to show order_no, channel name and quantity
                 foreach ($posSales as $posSale) {
                     $orderNo = $posSale->order ? ($posSale->order->order_no ?? '-') : '-';
-                    
+                    $channelName = '—';
+                    $channelId = $posSale->channel_id ?? ($posSale->order->channel_id ?? null);
+                    if (!empty($channelId) && $posSale->order && $posSale->order->relationLoaded('channel') && $posSale->order->channel) {
+                        $ch = $posSale->order->channel;
+                        $channelName = $locale === 'ar'
+                            ? ($ch->channel_name_ar ?? $ch->channel_name_en ?? '—')
+                            : ($ch->channel_name_en ?? $ch->channel_name_ar ?? '—');
+                    } elseif (empty($channelId)) {
+                        $channelName = trans('messages.all_stock', [], $locale) ?: 'All Stock';
+                    } else {
+                        $ch = \App\Models\Channel::find($channelId);
+                        if ($ch) {
+                            $channelName = $locale === 'ar'
+                                ? ($ch->channel_name_ar ?? $ch->channel_name_en ?? '—')
+                                : ($ch->channel_name_en ?? $ch->channel_name_ar ?? '—');
+                        }
+                    }
                     $details[] = [
                         'name' => $orderNo,
                         'order_no' => $orderNo,
+                        'channel_name' => $channelName,
                         'quantity' => (int)$posSale->item_quantity,
                         'date' => $posSale->order && $posSale->order->created_at ? $posSale->order->created_at->format('Y-m-d') : '',
                         'type' => 'pos'
                     ];
                 }
                 
-                // Aggregate by order_no if there are duplicates
+                // Aggregate by order_no + channel_name if there are duplicates
                 $aggregated = [];
                 foreach ($details as $detail) {
-                    $key = $detail['order_no'];
+                    $key = $detail['order_no'] . '|' . ($detail['channel_name'] ?? '');
                     if (!isset($aggregated[$key])) {
                         $aggregated[$key] = [
-                            'name' => $detail['name'],
+                            'name' => $detail['channel_name'] ? $detail['order_no'] . ' (' . $detail['channel_name'] . ')' : $detail['order_no'],
                             'order_no' => $detail['order_no'],
+                            'channel_name' => $detail['channel_name'],
                             'quantity' => 0,
                             'date' => $detail['date'],
                             'type' => 'pos'
@@ -1808,6 +2230,30 @@ public function add_quantity(Request $request)
             }
         }
 
+        return $locationId;
+    }
+
+    /**
+     * Get location display name for audit (channel name + ID for channels, e.g. "Store A (ID: 2)")
+     */
+    private function getLocationDisplayName($locationId, $locale = 'en')
+    {
+        if (empty($locationId) || $locationId === 'main') {
+            return 'Main Warehouse';
+        }
+        if (strpos($locationId, 'boutique-') === 0) {
+            $boutiqueId = str_replace('boutique-', '', $locationId);
+            $boutique = \App\Models\Boutique::find($boutiqueId);
+            return $boutique ? $boutique->boutique_name : $locationId;
+        }
+        if (strpos($locationId, 'channel-') === 0) {
+            $channelId = str_replace('channel-', '', $locationId);
+            $channel = \App\Models\Channel::find($channelId);
+            if ($channel) {
+                $name = $locale == 'ar' ? ($channel->channel_name_ar ?? $channel->channel_name_en) : ($channel->channel_name_en ?? $channel->channel_name_ar);
+                return $name . ' (ID: ' . $channelId . ')';
+            }
+        }
         return $locationId;
     }
 

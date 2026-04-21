@@ -77,8 +77,9 @@
                   <td class="px-3 py-2">{{ $transfer['to'] }}</td>
                   <td class="px-3 py-2">{{ $transfer['total'] }}</td>
                   <td class="px-3 py-2 text-center">
-                    <button onclick="openDetails({{ json_encode($transfer) }})"
-                            class="px-3 py-1 rounded-lg bg-pink-100 hover:bg-pink-200 text-[var(--primary-color)] text-xs font-semibold">
+                    <button type="button"
+                            class="px-3 py-1 rounded-lg bg-pink-100 hover:bg-pink-200 text-[var(--primary-color)] text-xs font-semibold movement-detail-btn"
+                            data-transfer="{{ e(json_encode($transfer)) }}">
                       {{ trans('messages.view_details', [], session('locale')) }}
                     </button>
                   </td>
@@ -190,7 +191,6 @@
   </div>
 </div>
 
-
-
+@include('layouts.footer')
 @endsection
 

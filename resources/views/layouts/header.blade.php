@@ -158,7 +158,7 @@
     @if(in_array(7, $permissions) || in_array(12, $permissions))
     <div>
         @php
-            $tailorMenuActive = in_array($currentPath, ['send_request', 'tailor', 'tailor_payments', 'tailor-orders-list']) || strpos($currentPath, 'tailor') === 0 || strpos($currentPath, 'tailor_payments') === 0;
+            $tailorMenuActive = in_array($currentPath, ['send_request', 'orders_Sent_to_tailor', 'tailor', 'tailor_payments', 'tailor-orders-list']) || strpos($currentPath, 'tailor') === 0 || strpos($currentPath, 'tailor_payments') === 0;
         @endphp
         <button onclick="toggleSubmenu('tailorMenu')" 
             class="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-secondary hover:text-accent transition-colors {{ $tailorMenuActive ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
@@ -179,6 +179,11 @@
             <a href="{{url('tailor-orders-list')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'tailor-orders-list') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.tailor_orders_list', [], session('locale')) }}
+            </a>
+
+            <a href="{{ route('orders_sent_to_tailor') }}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'orders_Sent_to_tailor') ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span>
+                {{ trans('messages.orders_sent_to_tailor', [], session('locale')) ?: 'Orders Sent to Tailor' }}
             </a>
             @endif
 
@@ -240,6 +245,10 @@
             <a href="{{route('stock.comprehensive_audit')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock/comprehensive-audit' || strpos(request()->path(), 'stock/comprehensive-audit') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
                 <span class="material-symbols-outlined text-sm">chevron_right</span> 
                 {{ trans('messages.stock_audit', [], session('locale')) }}
+            </a>
+            <a href="{{route('stock.channel_audit')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock/channel-audit' || strpos(request()->path(), 'stock/channel-audit') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">
+                <span class="material-symbols-outlined text-sm">chevron_right</span> 
+                {{ trans('messages.channel_stock_audit', [], session('locale')) }}
             </a>
 
             <!-- <a href="{{route('material.audit')}}" class="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-secondary hover:text-accent {{ (trim(request()->path(), '/') === 'stock/material-audit' || strpos(request()->path(), 'stock/material-audit') === 0) ? 'bg-cyan-100 text-cyan-600 font-semibold' : '' }}">

@@ -1,4 +1,7 @@
 <script>
+
+
+
     function get_date_only(dateString) {
     // Convert the date string to a Date object
     const date = new Date(dateString);

@@ -20,7 +20,7 @@
                 <!-- Search -->
                 <div>
                     <label class="block text-sm font-medium mb-2 text-gray-700">
-                        {{ trans('messages.search', [], session('locale')) ?: 'Search' }} ({{ trans('messages.barcode', [], session('locale')) }}, {{ trans('messages.code', [], session('locale')) }}, {{ trans('messages.design_name', [], session('locale')) }})
+                        {{ trans('messages.search', [], session('locale')) ?: 'Search' }} ({{ trans('messages.barcode', [], session('locale')) }}, {{ trans('messages.code', [], session('locale')) }}, {{ trans('messages.design_name', [], session('locale')) }}, {{ trans('messages.channel_name', [], session('locale')) }})
                     </label>
                     <div class="relative">
                         <input
@@ -91,9 +91,9 @@
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.time', [], session('locale')) }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.abaya_code', [], session('locale')) ?: 'Abaya Code' }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.barcode', [], session('locale')) }}</th>
-                            <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.size', [], session('locale')) ?: 'Size' }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.design_name', [], session('locale')) }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.operation_type', [], session('locale')) ?: 'Operation' }}</th>
+                            <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.channel_name', [], session('locale')) ?: 'Channel' }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.previous_quantity', [], session('locale')) ?: 'Previous Qty' }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.quantity_change', [], session('locale')) ?: 'Change' }}</th>
                             <th class="px-4 py-3 border text-right font-semibold text-xs">{{ trans('messages.new_quantity', [], session('locale')) ?: 'New Qty' }}</th>

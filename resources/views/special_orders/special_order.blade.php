@@ -2,10 +2,16 @@
 
 @section('main')
 @push('title')
-<title>{{ trans('messages.special_order', [], session('locale')) }}</title>
+<title>{{ isset($editOrderId) ? (trans('messages.edit', [], session('locale')) ?: 'Edit') . ' ' : '' }}{{ trans('messages.special_order', [], session('locale')) }}</title>
 @endpush
+<script>window.__specialOrderEditId = @json($editOrderId ?? null);</script>
 
 <main class="flex-1 p-4 md:p-6" x-data="tailorApp">
+
+  <div x-show="editOrderId" class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
+    <span class="material-symbols-outlined text-amber-600">edit</span>
+    <span class="font-semibold text-amber-800">{{ trans('messages.editing_order', [], session('locale')) ?: 'Editing order' }}: <span x-text="editOrderNo || ('#' + editOrderId)"></span></span>
+  </div>
 
   <!-- Tabs -->
   <div class="bg-white rounded-2xl shadow-md p-4 mb-6">
@@ -37,6 +43,7 @@
           <option value="">{{ trans('messages.select_source', [], session('locale')) }}</option>
           <option value="whatsapp">{{ trans('messages.whatsapp', [], session('locale')) }}</option>
           <option value="walkin">{{ trans('messages.walk_in', [], session('locale')) }}</option>
+          <option value="website">{{ trans('messages.website', [], session('locale')) ?: 'Website' }}</option>
         </select>
       </div>
 
@@ -47,12 +54,12 @@
         <div class="relative">
           <input type="text" 
                  x-model="customer.phone" 
-                 @input.debounce.300ms="searchCustomers()"
+                 @input.debounce.300ms="!editOrderId && searchCustomers()"
                  class="form-input w-full border-gray-300 rounded-lg" 
                  placeholder="9xxxxxxxx">
           
-          <!-- Customer Suggestions Dropdown -->
-          <div x-show="customerSuggestions.length > 0 && customer.phone.length >= 2"
+          <!-- Customer Suggestions Dropdown (only when creating new order) -->
+          <div x-show="!editOrderId && customerSuggestions.length > 0 && customer.phone.length >= 2"
                @click.outside="customerSuggestions = []"
                class="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
             <template x-for="customerItem in customerSuggestions" :key="customerItem.id">
@@ -131,9 +138,12 @@
   <!-- 👗 الطلبات (Shared between both tabs) -->
   <template x-for="(order, index) in orders" :key="order.id">
     <section :id="'order-' + order.id" class="bg-white shadow-md rounded-2xl p-5 border border-gray-100 mb-6" x-data="abayaSelector(order)">
-      <div class="flex justify-between items-center mb-4">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
         <h2 class="text-lg font-semibold">{{ trans('messages.order_number', [], session('locale')) }} <span x-text="index + 1"></span></h2>
-        <button @click="removeOrder(index)" class="text-red-500 hover:text-red-700 transition">
+        <span x-show="(order.design_name || order.abaya_code || (selectedAbaya && (selectedAbaya.name || selectedAbaya.code)))" 
+              class="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm border border-gray-200 cursor-default"
+              x-text="(order.design_name || (selectedAbaya && selectedAbaya.name)) && (order.abaya_code || (selectedAbaya && selectedAbaya.code)) ? (order.design_name || (selectedAbaya && selectedAbaya.name)) + ' — ' + (order.abaya_code || (selectedAbaya && selectedAbaya.code)) : (order.design_name || (selectedAbaya && selectedAbaya.name) || order.abaya_code || (selectedAbaya && selectedAbaya.code) || '')"></span>
+        <button x-show="!editOrderId" @click="removeOrder(index)" class="ml-auto text-red-500 hover:text-red-700 transition">
           <span class="material-symbols-outlined">delete</span>
         </button>
       </div>
@@ -146,13 +156,26 @@
         {{ trans('messages.select_abaya_from_stock', [], session('locale')) }}
     </label>
 
+    <!-- When abaya selected: show selected name/code and Change button -->
+    <div x-show="selectedAbaya" class="flex items-center gap-2">
+      <input type="text"
+             :value="selectedAbaya ? (selectedAbaya.name + ' - ' + selectedAbaya.code + ' (' + (selectedAbaya.price || 0) + ' ر.ع)') : ''"
+             readonly
+             class="form-input flex-1 border-gray-300 rounded-lg bg-gray-50 text-gray-800 cursor-default">
+      <button type="button" @click="clearAbaya()"
+              class="shrink-0 px-3 py-2 rounded-lg border border-amber-400 text-amber-700 hover:bg-amber-50 text-sm font-medium whitespace-nowrap">
+        {{ trans('messages.change', [], session('locale')) ?: 'Change' }}
+      </button>
+    </div>
+    <!-- When no selection: search input -->
     <input type="text"
+           x-show="!selectedAbaya"
            x-model="search"
            @input.debounce.300ms="searchAbayas()"
            placeholder="{{ trans('messages.search_abaya_placeholder', [], session('locale')) }}"
            class="form-input w-full border-gray-300 rounded-lg focus:ring-primary/50 focus:ring-2">
 
-    <ul x-show="search.length > 0"
+    <ul x-show="!selectedAbaya && search.length > 0"
         @click.outside="search=''; abayas=[]"
         class="absolute bg-white shadow rounded-lg mt-1 border border-gray-100 w-full max-h-60 overflow-y-auto z-20">
 
@@ -356,9 +379,16 @@
     </button>
   </div>
 
-  <!-- زر الحفظ -->
+  <!-- زر الحفظ / Update -->
   <div class="text-center">
-    <button @click="openPaymentModal"
+    <button x-show="editOrderId"
+            @click="submitUpdate()"
+            :disabled="loading"
+            class="text-white px-8 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-70 disabled:cursor-not-allowed">
+      {{ trans('messages.update', [], session('locale')) ?: 'Update' }}
+    </button>
+    <button x-show="!editOrderId"
+            @click="openPaymentModal"
             :disabled="loading"
             class="text-white px-8 py-3 rounded-xl"
             :class="loading ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'">
@@ -389,7 +419,7 @@
           </div>
           <div>
             <span class="text-gray-600">{{ trans('messages.governorate', [], session('locale')) }}:</span>
-            <strong class="ml-2" x-text="getGovernorateName(customer.governorate_id) || '—'"></strong>
+            <strong class="ml-2" x-text="getGovernorateName(customer.governorate) || '—'"></strong>
           </div>
           <div>
             <span class="text-gray-600">{{ trans('messages.state_area', [], session('locale')) }}:</span>
@@ -515,7 +545,17 @@
             <span class="text-gray-600">{{ trans('messages.shipping', [], session('locale')) }}:</span>
             <strong x-text="shipping_fee.toFixed(3) + ' ر.ع'"></strong>
           </div>
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-600">{{ trans('messages.discount', [], session('locale')) ?: 'Discount' }} (ر.ع):</span>
+            <input type="number"
+                   step="0.001"
+                   min="0"
+                   x-model="discount"
+                   @change="discount = Math.max(0, parseFloat($event.target.value) || 0)"
+                   class="form-input w-36 rounded-lg border-gray-300 text-right text-sm py-1"
+                   placeholder="0.000">
+          </div>
+          <div class="flex justify-between border-t pt-2 mt-1">
             <span class="text-gray-600">{{ trans('messages.total', [], session('locale')) }}:</span>
             <strong class="text-lg text-indigo-600" x-text="calculateTotal().toFixed(3) + ' ر.ع'"></strong>
           </div>
@@ -541,7 +581,7 @@
             </span>
           </template>
           <template x-if="!loading">
-            <span>{{ trans('messages.confirm_and_save', [], session('locale')) }}</span>
+            <span x-text="editOrderId ? '{{ trans('messages.update_order', [], session('locale')) ?: 'Update order' }}' : '{{ trans('messages.confirm_and_save', [], session('locale')) }}'"></span>
           </template>
         </button>
       </div>
@@ -568,6 +608,13 @@
             <span class="font-semibold text-blue-700"
                   x-text="calculateTotal().toFixed(3) + ' ر.ع'"></span>
           </div>
+
+          <template x-if="parseFloat(discount) > 0">
+            <div class="flex justify-between text-green-700">
+              <span>{{ trans('messages.discount', [], session('locale')) ?: 'Discount' }}:</span>
+              <span class="font-semibold" x-text="'- ' + parseFloat(discount).toFixed(3) + ' ر.ع'"></span>
+            </div>
+          </template>
 
           <div class="flex justify-between">
             <span class="text-gray-600">{{ trans('messages.previously_paid', [], session('locale')) }}:</span>

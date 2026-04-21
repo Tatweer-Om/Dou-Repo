@@ -27,7 +27,11 @@
     });
 
     function loadCustomers(page = 1) {
-    $.get("{{ url('customers/list') }}?page=" + page, function(res) {
+        var search = ($('#search_customer').val() || '').trim();
+        var params = { page: page };
+        if (search) params.search = search;
+        var query = $.param(params);
+    $.get("{{ url('customers/list') }}?" + query, function(res) {
 
         // ---- Table Rows ----
         let rows = '';
@@ -88,14 +92,21 @@
         const lastPage = res.last_page;
         const maxVisiblePages = 7; // Show max 7 page numbers
 
+        // Build pagination URLs with search param (search is over all customers)
+        const searchForUrl = ($('#search_customer').val() || '').trim();
+        const searchQ = searchForUrl ? '&search=' + encodeURIComponent(searchForUrl) : '';
+        const pageUrl = function(p) { return "{{ url('customers/list') }}?page=" + p + searchQ; };
+
         // Previous button
         const isRTL = '{{ session('locale', 'en') }}' === 'ar';
         const prevIcon = isRTL ? 'chevron_right' : 'chevron_left';
         const nextIcon = isRTL ? 'chevron_left' : 'chevron_right';
-        
+        const prevUrl = currentPage > 1 ? pageUrl(currentPage - 1) : null;
+        const nextUrl = currentPage < lastPage ? pageUrl(currentPage + 1) : null;
+
         pagination += `
-        <li class="px-3 py-2 rounded-lg transition-all ${!res.prev_page_url ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
-            <a href="${res.prev_page_url ? res.prev_page_url : '#'}" class="flex items-center gap-1 text-sm font-medium">
+        <li class="px-3 py-2 rounded-lg transition-all ${!prevUrl ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
+            <a href="${prevUrl || '#'}" class="flex items-center gap-1 text-sm font-medium">
                 <span class="material-symbols-outlined text-base">${prevIcon}</span>
                 <span class="hidden sm:inline">{{ trans('messages.previous', [], session('locale')) ?: 'Previous' }}</span>
             </a>
@@ -114,7 +125,7 @@
         if (startPage > 1) {
             pagination += `
             <li class="px-3 py-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-all">
-                <a href="{{ url('customers/list') }}?page=1" class="text-sm font-medium">1</a>
+                <a href="${pageUrl(1)}" class="text-sm font-medium">1</a>
             </li>`;
             if (startPage > 2) {
                 pagination += `<li class="px-2 py-2 text-gray-400">...</li>`;
@@ -128,7 +139,7 @@
             <li class="px-3 py-2 rounded-lg transition-all ${isActive 
                 ? 'bg-[var(--primary-color)] text-white shadow-md' 
                 : 'bg-white border border-gray-300 hover:bg-gray-50'}">
-                <a href="{{ url('customers/list') }}?page=${i}" class="text-sm font-medium">${i}</a>
+                <a href="${pageUrl(i)}" class="text-sm font-medium">${i}</a>
             </li>`;
         }
 
@@ -139,14 +150,14 @@
             }
             pagination += `
             <li class="px-3 py-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-all">
-                <a href="{{ url('customers/list') }}?page=${lastPage}" class="text-sm font-medium">${lastPage}</a>
+                <a href="${pageUrl(lastPage)}" class="text-sm font-medium">${lastPage}</a>
             </li>`;
         }
 
         // Next button
         pagination += `
-        <li class="px-3 py-2 rounded-lg transition-all ${!res.next_page_url ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
-            <a href="${res.next_page_url ? res.next_page_url : '#'}" class="flex items-center gap-1 text-sm font-medium">
+        <li class="px-3 py-2 rounded-lg transition-all ${!nextUrl ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'bg-white border border-gray-300 hover:bg-[var(--primary-color)] hover:text-white hover:border-[var(--primary-color)]'}">
+            <a href="${nextUrl || '#'}" class="flex items-center gap-1 text-sm font-medium">
                 <span class="hidden sm:inline">{{ trans('messages.next', [], session('locale')) ?: 'Next' }}</span>
                 <span class="material-symbols-outlined text-base">${nextIcon}</span>
             </a>
@@ -166,23 +177,21 @@ $(document).on('click', '#pagination a', function(e) {
     e.preventDefault();
     let href = $(this).attr('href');
     if (href && href !== '#') {
-        let page = new URL(href).searchParams.get('page');
-        if (page) loadCustomers(page);
+        let page = new URL(href, window.location.origin).searchParams.get('page');
+        if (page) loadCustomers(parseInt(page, 10));
     }
 });
-
 
         // Initial load
         loadCustomers();
 
+        // Search over all customers (server-side); debounce to avoid too many requests
+        var customerSearchTimeout = null;
         $('#search_customer').on('keyup', function() {
-            let value = $(this).val().toLowerCase();
-
-            $('tbody tr').filter(function() {
-                $(this).toggle(
-                    $(this).text().toLowerCase().indexOf(value) > -1
-                );
-            });
+            if (customerSearchTimeout) clearTimeout(customerSearchTimeout);
+            customerSearchTimeout = setTimeout(function() {
+                loadCustomers(1);
+            }, 350);
         });
         
         // Add / Update customer

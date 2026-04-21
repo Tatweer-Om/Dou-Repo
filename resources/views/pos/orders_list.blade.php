@@ -38,6 +38,7 @@
                         <tr>
                             <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.order_number', [], session('locale')) }}</th>
                             <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.customer_name', [], session('locale')) }}</th>
+                            <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.phone_number', [], session('locale')) }}</th>
                             <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.order_type', [], session('locale')) }}</th>
                             <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.date', [], session('locale')) }}</th>
                             <th class="px-3 sm:px-4 md:px-6 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">{{ trans('messages.time', [], session('locale')) }}</th>
@@ -52,7 +53,7 @@
                     </thead>
                     <tbody id="ordersTableBody">
                         <tr>
-                            <td colspan="12" class="px-4 sm:px-6 py-8 text-center text-gray-500">
+                            <td colspan="13" class="px-4 sm:px-6 py-8 text-center text-gray-500">
                                 {{ trans('messages.loading', [], session('locale')) }}...
                             </td>
                         </tr>

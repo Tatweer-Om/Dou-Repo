@@ -508,7 +508,7 @@
           if (isAllSelected) {
             allStockItem.className = 'bg-primary rounded-xl p-4 border-2 border-primary cursor-pointer transition-all hover:border-primary-dark';
             allStockItem.innerHTML = `
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between d-none">
                 <div class="flex items-center gap-3">
                   <span class="material-symbols-outlined text-white">inventory_2</span>
                   <h3 class="text-base font-bold text-white">${getTranslation('all_stock', 'All Stock')}</h3>

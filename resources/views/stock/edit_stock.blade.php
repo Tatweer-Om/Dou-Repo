@@ -203,8 +203,7 @@
             <h2 class="text-lg font-bold text-gray-800">{{ trans('messages.materials_assignment', [], session('locale')) ?: 'Materials Assignment' }}</h2>
           </div>
 
-          <!-- Materials Table - Full Width -->
-          <!-- When materials are already assigned: show those. When none assigned: show all materials like add_stock -->
+          <!-- Materials Table - Full Width: all materials like add_stock; existing show their quantity, others show 0 and can be added -->
           <div class="row">
             <div class="col-12 col-lg-12">
               <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
@@ -216,80 +215,44 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @if(count($existingMaterials) > 0)
-                      {{-- Already assigned: show existing materials --}}
-                      @foreach($existingMaterials as $index => $material)
-                        <tr class="hover:bg-gray-50 border-b">
-                          <td class="px-2 py-1.5 border text-center">
-                            <div class="flex items-center gap-1.5 justify-center">
-                              @if($material['material_image'])
-                                <img src="{{ asset('images/materials/' . $material['material_image']) }}" 
-                                     alt="{{ $material['material_name'] }}" 
-                                     class="w-6 h-6 object-cover rounded">
-                              @endif
-                              <span class="font-medium text-xs">{{ $material['material_name'] }}</span>
-                              <span class="text-xs text-gray-400">({{ $material['unit'] ?? 'meters' }})</span>
-                            </div>
-                            <input type="hidden" name="abaya_materials[{{ $index }}][material_id]" value="{{ $material['material_id'] ?? $material['id'] ?? '' }}">
-                            <input type="hidden" name="abaya_materials[{{ $index }}][unit]" value="{{ $material['unit'] ?? 'meters' }}">
-                          </td>
-                          <td class="px-2 py-1.5 border text-center">
-                            <div class="flex items-center gap-1 justify-center">
-                              <input 
-                                type="number" 
-                                step="0.01"
-                                min="0"
-                                name="abaya_materials[{{ $index }}][quantity]"
-                                value="{{ $material['quantity'] ?? 0 }}"
-                                placeholder="0"
-                                oninput="if(this.value < 0) this.value = 0;"
-                                onkeydown="if(event.key === '-' || event.key === 'e' || event.key === 'E') event.preventDefault();"
-                                class="h-8 w-20 text-center rounded border border-gray-300 focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs transition" />
-                              <span class="text-xs text-gray-400">{{ $material['unit'] ?? 'meters' }}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      @endforeach
-                    @else
-                      {{-- No materials assigned: show all materials like add_stock --}}
-                      @forelse($materials as $index => $material)
-                        <tr class="hover:bg-gray-50 border-b">
-                          <td class="px-2 py-1.5 border text-center">
-                            <div class="flex items-center gap-1.5 justify-center">
-                              @if($material->material_image)
-                                <img src="{{ asset('images/materials/' . $material->material_image) }}" 
-                                     alt="{{ $material->material_name }}" 
-                                     class="w-6 h-6 object-cover rounded">
-                              @endif
-                              <span class="font-medium text-xs">{{ $material->material_name }}</span>
-                              <span class="text-xs text-gray-400">({{ $material->unit ?: 'meters' }})</span>
-                            </div>
-                            <input type="hidden" name="abaya_materials[{{ $index }}][material_id]" value="{{ $material->id }}">
-                            <input type="hidden" name="abaya_materials[{{ $index }}][unit]" value="{{ $material->unit ?: 'meters' }}">
-                          </td>
-                          <td class="px-2 py-1.5 border text-center">
-                            <div class="flex items-center gap-1 justify-center">
-                              <input 
-                                type="number" 
-                                step="0.01"
-                                min="0"
-                                name="abaya_materials[{{ $index }}][quantity]"
-                                placeholder="0"
-                                oninput="if(this.value < 0) this.value = 0;"
-                                onkeydown="if(event.key === '-' || event.key === 'e' || event.key === 'E') event.preventDefault();"
-                                class="h-8 w-20 text-center rounded border border-gray-300 focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs transition" />
-                              <span class="text-xs text-gray-400">{{ $material->unit ?: 'meters' }}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      @empty
-                        <tr>
-                          <td colspan="2" class="px-3 py-4 text-center text-gray-400 text-xs">
-                            {{ trans('messages.no_materials_found', [], session('locale')) ?: 'No materials found in database' }}
-                          </td>
-                        </tr>
-                      @endforelse
-                    @endif
+                    @forelse($materialsWithQuantity as $index => $material)
+                      <tr class="hover:bg-gray-50 border-b">
+                        <td class="px-2 py-1.5 border text-center">
+                          <div class="flex items-center gap-1.5 justify-center">
+                            @if(!empty($material['material_image']))
+                              <img src="{{ asset('images/materials/' . $material['material_image']) }}"
+                                   alt="{{ $material['material_name'] }}"
+                                   class="w-6 h-6 object-cover rounded">
+                            @endif
+                            <span class="font-medium text-xs">{{ $material['material_name'] }}</span>
+                            <span class="text-xs text-gray-400">({{ $material['unit'] ?? 'meters' }})</span>
+                          </div>
+                          <input type="hidden" name="abaya_materials[{{ $index }}][material_id]" value="{{ $material['id'] }}">
+                          <input type="hidden" name="abaya_materials[{{ $index }}][unit]" value="{{ $material['unit'] ?? 'meters' }}">
+                        </td>
+                        <td class="px-2 py-1.5 border text-center">
+                          <div class="flex items-center gap-1 justify-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              name="abaya_materials[{{ $index }}][quantity]"
+                              value="{{ $material['quantity'] ?? 0 }}"
+                              placeholder="0"
+                              oninput="if(this.value < 0) this.value = 0;"
+                              onkeydown="if(event.key === '-' || event.key === 'e' || event.key === 'E') event.preventDefault();"
+                              class="h-8 w-20 text-center rounded border border-gray-300 focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs transition" />
+                            <span class="text-xs text-gray-400">{{ $material['unit'] ?? 'meters' }}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="2" class="px-3 py-4 text-center text-gray-400 text-xs">
+                          {{ trans('messages.no_materials_found', [], session('locale')) ?: 'No materials found in database' }}
+                        </td>
+                      </tr>
+                    @endforelse
                   </tbody>
                 </table>
               </div>
@@ -453,33 +416,32 @@
                  ],
                  colorSizes: [
                    @foreach($stock->colorSizes as $cs)
-                     { color_id: {{ $cs->color_id }}, size_id: {{ $cs->size_id }}, qty: {{ $cs->qty }} },
+                     { color_id: {{ $cs->color_id }}, size_id: {{ $cs->size_id }}, qty: {{ $cs->qty }}, isExisting: true },
                    @endforeach
                  ],
-                 checkAndMergeDuplicate(currentIndex) {
-                   if (!this.colorSizes || !this.colorSizes[currentIndex]) return;
+                 checkDuplicateNewRow(currentIndex) {
+                   if (!this.colorSizes || !this.colorSizes[currentIndex]) return false;
                    const currentItem = this.colorSizes[currentIndex];
-                   if (!currentItem.color_id || !currentItem.size_id) return;
+                   if (!currentItem.color_id || !currentItem.size_id) return false;
                    for (let i = 0; i < this.colorSizes.length; i++) {
                      if (i === currentIndex) continue;
                      const otherItem = this.colorSizes[i];
                      if (otherItem && otherItem.color_id == currentItem.color_id && otherItem.size_id == currentItem.size_id) {
-                       const currentQty = parseInt(currentItem.qty) || 0;
-                       const otherQty = parseInt(otherItem.qty) || 0;
-                       otherItem.qty = currentQty + otherQty;
-                       this.colorSizes.splice(currentIndex, 1);
                        if (typeof show_notification !== 'undefined') {
-                         show_notification('success', '{{ trans('messages.quantity_merged', [], session('locale')) ?: 'Quantity merged with existing color/size combination' }}');
+                         show_notification('error', '{{ trans('messages.color_size_combination_exists', [], session('locale')) ?: 'This color and size combination already exists.' }}');
                        }
-                       return;
+                       currentItem.color_id = '';
+                       currentItem.size_id = '';
+                       return true;
                      }
                    }
+                   return false;
                  },
                  addColorSizeRow() {
-                   const hasEmptyRow = this.colorSizes && this.colorSizes.some(item => !item.color_id && !item.size_id);
+                   const hasEmptyRow = this.colorSizes && this.colorSizes.some(item => !item.isExisting && !item.color_id && !item.size_id);
                    if (!hasEmptyRow) {
                      if (!this.colorSizes) this.colorSizes = [];
-                     this.colorSizes.push({ color_id: '', size_id: '', qty: 1 });
+                     this.colorSizes.push({ color_id: '', size_id: '', qty: 1, isExisting: false });
                    }
                  }
                }">
@@ -496,44 +458,86 @@
                         {{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}
                       </p>
                     </div>
+                    <template x-if="!item.isExisting">
+                      <button type="button"
+                              @click="colorSizes.splice(index, 1)"
+                              class="text-red-600 hover:text-red-800 p-1 rounded-lg hover:bg-red-50 transition flex-shrink-0"
+                              title="{{ trans('messages.delete', [], session('locale')) }}">
+                        <span class="material-symbols-outlined text-xl">delete</span>
+                      </button>
+                    </template>
                   </div>
 
                   <div class="grid grid-cols-1 gap-3 mt-3">
                     <div>
                       <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.color', [], session('locale')) }}</label>
-                      <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
-                              :value="item.color_id"
-                              @change.prevent
-                              @mousedown.prevent
-                              style="pointer-events: none;">
-                        <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
-                        <template x-for="c in availableColors" :key="c.id">
-                          <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
-                        </template>
-                      </select>
+                      <template x-if="item.isExisting">
+                        <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                :value="item.color_id"
+                                @change.prevent
+                                @mousedown.prevent
+                                style="pointer-events: none;">
+                          <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                          <template x-for="c in availableColors" :key="c.id">
+                            <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
+                          </template>
+                        </select>
+                      </template>
+                      <template x-if="!item.isExisting">
+                        <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                                x-model="item.color_id"
+                                @change="item.color_id = Number($event.target.value); $nextTick(() => checkDuplicateNewRow(index))">
+                          <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                          <template x-for="c in availableColors" :key="c.id">
+                            <option :value="c.id" x-text="c.name"></option>
+                          </template>
+                        </select>
+                      </template>
                     </div>
                     <div>
                       <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.size', [], session('locale')) }}</label>
-                      <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
-                              :value="item.size_id"
-                              @change.prevent
-                              @mousedown.prevent
-                              style="pointer-events: none;">
-                        <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
-                        <template x-for="s in availableSizes" :key="s.id">
-                          <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
-                        </template>
-                      </select>
+                      <template x-if="item.isExisting">
+                        <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                :value="item.size_id"
+                                @change.prevent
+                                @mousedown.prevent
+                                style="pointer-events: none;">
+                          <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                          <template x-for="s in availableSizes" :key="s.id">
+                            <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
+                          </template>
+                        </select>
+                      </template>
+                      <template x-if="!item.isExisting">
+                        <select class="h-11 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                                x-model="item.size_id"
+                                @change="item.size_id = Number($event.target.value); $nextTick(() => checkDuplicateNewRow(index))">
+                          <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                          <template x-for="s in availableSizes" :key="s.id">
+                            <option :value="s.id" x-text="s.name"></option>
+                          </template>
+                        </select>
+                      </template>
                     </div>
                     <div>
                       <label class="block text-xs font-semibold text-gray-600 mb-1">{{ trans('messages.quantity', [], session('locale')) ?: 'Quantity' }}</label>
-                      <input type="number"
-                             data-validate="quantity"
-                             class="w-full h-11 text-center border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
-                             x-model="item.qty"
-                             readonly
-                             placeholder="0"
-                             min="1">
+                      <template x-if="item.isExisting">
+                        <input type="number"
+                               data-validate="quantity"
+                               class="w-full h-11 text-center border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                               x-model="item.qty"
+                               readonly
+                               placeholder="0"
+                               min="1">
+                      </template>
+                      <template x-if="!item.isExisting">
+                        <input type="number"
+                               data-validate="quantity"
+                               class="w-full h-11 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50"
+                               x-model="item.qty"
+                               placeholder="0"
+                               min="1">
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -555,40 +559,83 @@
                   <template x-for="(item, index) in colorSizes" :key="index">
                     <tr>
                       <td class="px-4 py-2 border">
-                        <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
-                                :value="item.color_id"
-                                @change.prevent
-                                @mousedown.prevent
-                                style="pointer-events: none;">
-                          <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
-                          <template x-for="c in availableColors" :key="c.id">
-                            <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
-                          </template>
-                        </select>
+                        <template x-if="item.isExisting">
+                          <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                  :value="item.color_id"
+                                  @change.prevent
+                                  @mousedown.prevent
+                                  style="pointer-events: none;">
+                            <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                            <template x-for="c in availableColors" :key="c.id">
+                              <option :value="c.id" x-text="c.name" :selected="c.id == item.color_id"></option>
+                            </template>
+                          </select>
+                        </template>
+                        <template x-if="!item.isExisting">
+                          <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                                  x-model="item.color_id"
+                                  @change="item.color_id = Number($event.target.value); $nextTick(() => checkDuplicateNewRow(index))">
+                            <option value="">{{ trans('messages.select_color', [], session('locale')) ?: 'Select Color' }}</option>
+                            <template x-for="c in availableColors" :key="c.id">
+                              <option :value="c.id" x-text="c.name"></option>
+                            </template>
+                          </select>
+                        </template>
                       </td>
                       <td class="border px-4 py-2">
-                        <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
-                                :value="item.size_id"
-                                @change.prevent
-                                @mousedown.prevent
-                                style="pointer-events: none;">
-                          <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
-                          <template x-for="s in availableSizes" :key="s.id">
-                            <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
-                          </template>
-                        </select>
+                        <template x-if="item.isExisting">
+                          <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm bg-gray-50 cursor-not-allowed"
+                                  :value="item.size_id"
+                                  @change.prevent
+                                  @mousedown.prevent
+                                  style="pointer-events: none;">
+                            <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                            <template x-for="s in availableSizes" :key="s.id">
+                              <option :value="s.id" x-text="s.name" :selected="s.id == item.size_id"></option>
+                            </template>
+                          </select>
+                        </template>
+                        <template x-if="!item.isExisting">
+                          <select class="h-10 w-full rounded-lg px-3 border border-gray-300 text-sm focus:ring-2 focus:ring-primary/50"
+                                  x-model="item.size_id"
+                                  @change="item.size_id = Number($event.target.value); $nextTick(() => checkDuplicateNewRow(index))">
+                            <option value="">{{ trans('messages.select_size', [], session('locale')) ?: 'Select Size' }}</option>
+                            <template x-for="s in availableSizes" :key="s.id">
+                              <option :value="s.id" x-text="s.name"></option>
+                            </template>
+                          </select>
+                        </template>
                       </td>
                       <td class="border px-4 py-2">
-                        <input type="number"
-                               data-validate="quantity"
-                               class="w-24 h-10 text-center border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
-                               x-model="item.qty"
-                               readonly
-                               placeholder="0"
-                               min="1">
+                        <template x-if="item.isExisting">
+                          <input type="number"
+                                 data-validate="quantity"
+                                 class="w-24 h-10 text-center border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
+                                 x-model="item.qty"
+                                 readonly
+                                 placeholder="0"
+                                 min="1">
+                        </template>
+                        <template x-if="!item.isExisting">
+                          <input type="number"
+                                 data-validate="quantity"
+                                 class="w-24 h-10 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/50"
+                                 x-model="item.qty"
+                                 placeholder="0"
+                                 min="1">
+                        </template>
                       </td>
                       <td class="border px-4 py-2 text-center">
-                        <!-- Delete button removed in edit mode -->
+                        <template x-if="item.isExisting">
+                          <span class="text-gray-400">—</span>
+                        </template>
+                        <template x-if="!item.isExisting">
+                          <button type="button"
+                                  @click="colorSizes.splice(index, 1)"
+                                  class="text-red-500 hover:text-red-700 transition">
+                            <span class="material-symbols-outlined text-lg">delete</span>
+                          </button>
+                        </template>
                       </td>
                     </tr>
                   </template>
@@ -608,7 +655,14 @@
               </template>
             </div>
 
-            <!-- Add button removed in edit mode - colors and sizes are readonly -->
+            <div class="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+              <button type="button"
+                      @click="addColorSizeRow()"
+                      class="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-1 text-sm transition">
+                <span class="material-symbols-outlined text-sm">add</span>
+                {{ trans('messages.add_color_size', [], session('locale')) ?: 'Add Color & Size' }}
+              </button>
+            </div>
           </div>
         </div>
 

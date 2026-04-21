@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -24,6 +25,9 @@ class User extends Authenticatable
         'password',
         'notes',
         'permissions',
+        'user_scope',
+        'user_type',
+        'salon_staff_id',
         'added_by',
         'user_id',
         'updated_by',
@@ -51,5 +55,10 @@ class User extends Authenticatable
             'password' => 'hashed',
             'permissions' => 'array',
         ];
+    }
+
+    public function salonStaff(): BelongsTo
+    {
+        return $this->belongsTo(SalonStaff::class, 'salon_staff_id');
     }
 }

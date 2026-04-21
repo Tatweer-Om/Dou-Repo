@@ -145,6 +145,33 @@
   ========================== -->
     <main class="flex-1 p-6 space-y-6">
 
+        <!-- Total sales: POS + special orders + settlements (all time, small) -->
+        <section class="print-card rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2 shadow-soft">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span class="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        {{ trans('messages.dashboard_total_sales_channels', [], session('locale')) }}
+                    </span>
+                    <span class="text-sm font-bold text-[var(--text)]">
+                        {{ number_format($channelSalesTotals['combined'] ?? 0, 3) }}
+                        {{ trans('messages.currency', [], session('locale')) }}
+                    </span>
+                </div>
+                <p class="text-[10px] leading-tight text-gray-400 max-w-xl">
+                    {{ trans('messages.pos', [], session('locale')) }}:
+                    {{ number_format($channelSalesTotals['pos'] ?? 0, 3) }}
+                    <span class="mx-1">·</span>
+                    {{ trans('messages.special_order', [], session('locale')) }}:
+                    {{ number_format($channelSalesTotals['special_orders'] ?? 0, 3) }}
+                    <span class="mx-1">·</span>
+                    {{ trans('messages.settlement_lang', [], session('locale')) }}:
+                    {{ number_format($channelSalesTotals['settlements'] ?? 0, 3) }}
+                    <span class="mx-1">·</span>
+                    {{ trans('messages.all_time', [], session('locale')) }}
+                </p>
+            </div>
+        </section>
+
         <!-- Top row: KPI boxes -->
         <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <!-- Net Profit Today -->

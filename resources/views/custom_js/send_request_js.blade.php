@@ -14,6 +14,10 @@ document.addEventListener('alpine:init', () => {
     search: '',
     searchView: '',
     tailorViewFilter: '',
+    phoneRegionViewFilter: 'all',
+
+    tailorAssignFilter: '',
+    phoneRegionAssignFilter: 'all',
 
     filter: {
       from: '',
@@ -21,6 +25,14 @@ document.addEventListener('alpine:init', () => {
     },
 
     statusFilter: '',
+
+    /* Pagination (like view_stock) */
+    perPage: 10,
+    currentPageView: 1,
+    currentPageAssign: 1,
+
+    /* Sending summary number (required for Send Now / Print) */
+    sendingSummaryNumber: '',
 
     /* Lists */
     selectedItems: [],
@@ -48,53 +60,129 @@ document.addEventListener('alpine:init', () => {
       this.$watch('mode', (newMode) => {
         if (newMode === 'assign') {
           this.selectedItems = [];
+          this.sendingSummaryNumber = '';
         }
       });
+      // Reset to page 1 when view filters change
+      this.$watch('searchView', () => { this.currentPageView = 1; });
+      this.$watch('tailorViewFilter', () => { this.currentPageView = 1; });
+      this.$watch('phoneRegionViewFilter', () => { this.currentPageView = 1; });
+      // Reset to page 1 when assign filters change
+      this.$watch('search', () => { this.currentPageAssign = 1; });
+      this.$watch('filter.from', () => { this.currentPageAssign = 1; });
+      this.$watch('filter.to', () => { this.currentPageAssign = 1; });
+      this.$watch('statusFilter', () => { this.currentPageAssign = 1; });
+      this.$watch('tailorAssignFilter', () => { this.currentPageAssign = 1; });
+      this.$watch('phoneRegionAssignFilter', () => { this.currentPageAssign = 1; });
     },
 
     async loadData() {
-      this.loading = true;
-      try {
-        const response = await fetch('{{ route('send_request.data') }}');
-        const data = await response.json();
-        
-        if (data.success) {
-          this.tailors = data.tailors || [];
-          this.newItems = data.new || [];
-          this.processingItems = data.processing || [];
-          this.selectedItems = [];
-          this.receivedList = [];
-          
-          // Auto-assign original tailor to new items if not already assigned
-          this.newItems.forEach(item => {
-            if (!item.tailor_id && item.originalTailorId) {
-              item.tailor_id = item.originalTailorId;
-              item.tailor_name = this.tailorNameById(item.originalTailorId);
+    this.loading = true;
+    try {
+        const response = await fetch('{{ route("send_request.data") }}', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',        // ← Very Important
+                'X-Requested-With': 'XMLHttpRequest'
             }
-          });
-        } else {
-          throw new Error(data.message || 'Failed to load data');
+        });
+
+        // First check if the response is OK
+        if (!response.ok) {
+            const errorText = await response.text();   // Read as text first
+            console.error('Server Error Response:', errorText.substring(0, 500)); // Log part of it
+            throw new Error(`Server error (${response.status})`);
         }
-      } catch (error) {
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.tailors = data.tailors || [];
+            this.newItems = data.new || [];
+            this.processingItems = data.processing || [];
+            this.selectedItems = [];
+            this.receivedList = [];
+            this.currentPageView = 1;
+            this.currentPageAssign = 1;
+
+            // Auto-assign logic
+            this.newItems.forEach(item => {
+                if (!item.tailor_id && item.originalTailorId) {
+                    item.tailor_id = item.originalTailorId;
+                    item.tailor_name = this.tailorNameById(item.originalTailorId);
+                }
+            });
+        } else {
+            throw new Error(data.message || 'Failed to load data');
+        }
+    } catch (error) {
         console.error('Error loading data:', error);
+        
         if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            icon: 'error',
-            title: '{{ trans('messages.error', [], session('locale')) }}',
-            text: error.message
-          });
+            Swal.fire({
+                icon: 'error',
+                title: '{{ trans("messages.error", [], session("locale")) }}',
+                text: error.message || 'Something went wrong while loading data'
+            });
         } else {
-          alert('Error: ' + error.message);
+            alert('Error: ' + (error.message || 'Failed to load data'));
         }
-      } finally {
+    } finally {
         this.loading = false;
-      }
-    },
+    }
+},
 
     tailorNameById(id) {
       if (!id) return '';
       const tailor = this.tailors.find(t => String(t.id) === String(id));
       return tailor ? tailor.name : '';
+    },
+
+    /* Digits only; Oman = number starts with 968 (after stripping non-digits) */
+    normalizePhoneDigits(raw) {
+      if (raw == null || raw === '') return '';
+      return String(raw).replace(/\D/g, '');
+    },
+
+    isOmanPhoneNumber(raw) {
+      const d = this.normalizePhoneDigits(raw);
+      return d.startsWith('968');
+    },
+
+    matchesPhoneRegionFilter(phone, region) {
+      if (!region || region === 'all') return true;
+      const oman = this.isOmanPhoneNumber(phone);
+      if (region === 'oman') return oman;
+      if (region === 'outside') return !oman;
+      return true;
+    },
+
+    viewTailorTabClass(id) {
+      const sel = String(this.tailorViewFilter ?? '');
+      const cur = String(id);
+      return sel === cur
+        ? 'px-4 py-2 rounded-full bg-indigo-600 text-white font-medium shadow text-xs md:text-sm shrink-0'
+        : 'px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs md:text-sm shrink-0';
+    },
+
+    viewPhoneTabClass(type) {
+      return this.phoneRegionViewFilter === type
+        ? 'px-4 py-2 rounded-full bg-purple-600 text-white font-medium shadow text-xs md:text-sm shrink-0'
+        : 'px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs md:text-sm shrink-0';
+    },
+
+    assignTailorTabClass(id) {
+      const sel = String(this.tailorAssignFilter ?? '');
+      const cur = String(id);
+      return sel === cur
+        ? 'px-4 py-2 rounded-full bg-indigo-600 text-white font-medium shadow text-xs md:text-sm shrink-0'
+        : 'px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs md:text-sm shrink-0';
+    },
+
+    assignPhoneTabClass(type) {
+      return this.phoneRegionAssignFilter === type
+        ? 'px-4 py-2 rounded-full bg-purple-600 text-white font-medium shadow text-xs md:text-sm shrink-0'
+        : 'px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs md:text-sm shrink-0';
     },
 
     updateTailorSelection(item) {
@@ -390,6 +478,7 @@ document.addEventListener('alpine:init', () => {
           if (!term) return true;
           return (
             (i.customer || '').toLowerCase().includes(term) ||
+            (i.customer_phone || '').toString().toLowerCase().includes(term) ||
             String(i.orderId || '').includes(term) ||
             (i.code || '').toLowerCase().includes(term)
           );
@@ -406,7 +495,13 @@ document.addEventListener('alpine:init', () => {
           if (to && d > to) return false;
 
           return true;
-        });
+        })
+        .filter(i => {
+          if (!this.tailorAssignFilter) return true;
+          const tid = i.tailor_id || i.originalTailorId || '';
+          return String(tid) === String(this.tailorAssignFilter);
+        })
+        .filter(i => this.matchesPhoneRegionFilter(i.customer_phone, this.phoneRegionAssignFilter));
     },
 
 
@@ -420,6 +515,7 @@ document.addEventListener('alpine:init', () => {
           if (!term) return true;
           return (
             (i.customer || '').toLowerCase().includes(term) ||
+            (i.customer_phone || '').toString().toLowerCase().includes(term) ||
             String(i.orderId || '').includes(term) ||
             (i.tailor_name || i.tailor || '').toLowerCase().includes(term) ||
             (i.code || '').toLowerCase().includes(term)
@@ -429,11 +525,100 @@ document.addEventListener('alpine:init', () => {
           if (!this.tailorViewFilter) return true;
           return String(i.tailor_id) === String(this.tailorViewFilter);
         })
+        .filter(i => this.matchesPhoneRegionFilter(i.customer_phone, this.phoneRegionViewFilter))
         .sort((a, b) => {
           const lateA = this.isLate(a.date) ? 1 : 0;
           const lateB = this.isLate(b.date) ? 1 : 0;
           return lateB - lateA;
         });
+    },
+
+
+    /* ======================================================================= */
+    /* PAGINATION (VIEW MODE) */
+    /* ======================================================================= */
+    totalPagesView() {
+      const total = this.sortedProcessing().length;
+      return Math.max(1, Math.ceil(total / this.perPage));
+    },
+    paginatedProcessing() {
+      const list = this.sortedProcessing();
+      const page = Math.min(this.currentPageView, this.totalPagesView());
+      const start = (page - 1) * this.perPage;
+      return list.slice(start, start + this.perPage);
+    },
+    goToPageView(page) {
+      const total = this.totalPagesView();
+      if (page >= 1 && page <= total) this.currentPageView = page;
+    },
+    paginationPagesView() {
+      const cur = this.currentPageView;
+      const last = this.totalPagesView();
+      const windowSize = 2;
+      if (last <= 7) {
+        return Array.from({ length: last }, (_, i) => ({ type: 'num', page: i + 1, label: String(i + 1) }));
+      }
+      const result = [];
+      const showFirst = cur > windowSize + 2;
+      const showLast = cur < last - windowSize - 1;
+      const startP = Math.max(1, cur - windowSize);
+      const endP = Math.min(last, cur + windowSize);
+      if (showFirst) {
+        result.push({ type: 'num', page: 1, label: '1' });
+        result.push({ type: 'dots', page: null, label: '...' });
+      }
+      for (let j = startP; j <= endP; j++) {
+        result.push({ type: 'num', page: j, label: String(j) });
+      }
+      if (showLast) {
+        result.push({ type: 'dots', page: null, label: '...' });
+        result.push({ type: 'num', page: last, label: String(last) });
+      }
+      return result;
+    },
+
+
+    /* ======================================================================= */
+    /* PAGINATION (ASSIGN MODE) */
+    /* ======================================================================= */
+    totalPagesAssign() {
+      const total = this.filteredAbayas().length;
+      return Math.max(1, Math.ceil(total / this.perPage));
+    },
+    paginatedAbayas() {
+      const list = this.filteredAbayas();
+      const page = Math.min(this.currentPageAssign, this.totalPagesAssign());
+      const start = (page - 1) * this.perPage;
+      return list.slice(start, start + this.perPage);
+    },
+    goToPageAssign(page) {
+      const total = this.totalPagesAssign();
+      if (page >= 1 && page <= total) this.currentPageAssign = page;
+    },
+    paginationPagesAssign() {
+      const cur = this.currentPageAssign;
+      const last = this.totalPagesAssign();
+      const windowSize = 2;
+      if (last <= 7) {
+        return Array.from({ length: last }, (_, i) => ({ type: 'num', page: i + 1, label: String(i + 1) }));
+      }
+      const result = [];
+      const showFirst = cur > windowSize + 2;
+      const showLast = cur < last - windowSize - 1;
+      const startP = Math.max(1, cur - windowSize);
+      const endP = Math.min(last, cur + windowSize);
+      if (showFirst) {
+        result.push({ type: 'num', page: 1, label: '1' });
+        result.push({ type: 'dots', page: null, label: '...' });
+      }
+      for (let j = startP; j <= endP; j++) {
+        result.push({ type: 'num', page: j, label: String(j) });
+      }
+      if (showLast) {
+        result.push({ type: 'dots', page: null, label: '...' });
+        result.push({ type: 'num', page: last, label: String(last) });
+      }
+      return result;
     },
 
 
@@ -462,6 +647,21 @@ document.addEventListener('alpine:init', () => {
       return result;
     },
 
+    /* Can enable Send Now / Print only when sending summary number is entered */
+    canSendOrPrint() {
+      return (this.sendingSummaryNumber || '').trim() !== '';
+    },
+
+    /* Check if selected items are for a single tailor only */
+    selectedItemsSingleTailor() {
+      const ids = new Set();
+      this.selectedItems.forEach(i => {
+        const tid = i.tailor_id || i.originalTailorId;
+        if (tid) ids.add(String(tid));
+      });
+      return ids.size <= 1;
+    },
+
 
     /* ======================================================================= */
     /* PRINT SELECTED ITEMS (FOR SENDING TO TAILOR) */
@@ -476,6 +676,18 @@ document.addEventListener('alpine:init', () => {
           });
         } else {
           alert('{{ trans('messages.no_items_selected', [], session('locale')) }}');
+        }
+        return;
+      }
+      if (!this.selectedItemsSingleTailor()) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.one_tailor_at_a_time', [], session('locale')) ?: 'One tailor at a time' }}',
+            text: '{{ trans('messages.one_tailor_at_a_time_text', [], session('locale')) ?: 'At a time you can send order to only one tailor.' }}'
+          });
+        } else {
+          alert('{{ trans('messages.one_tailor_at_a_time_text', [], session('locale')) ?: 'At a time you can send order to only one tailor.' }}');
         }
         return;
       }
@@ -646,6 +858,30 @@ document.addEventListener('alpine:init', () => {
     /* ======================================================================= */
     async submitToTailor() {
       if (this.selectedItems.length === 0) return;
+      if (!this.canSendOrPrint()) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.please_enter_sending_summary_number', [], session('locale')) ?: 'Sending Summary Number required' }}',
+            text: '{{ trans('messages.enter_sending_summary_number', [], session('locale')) ?: 'Please enter the Sending Summary Number.' }}'
+          });
+        } else {
+          alert('{{ trans('messages.please_enter_sending_summary_number', [], session('locale')) ?: 'Please enter Sending Summary Number.' }}');
+        }
+        return;
+      }
+      if (!this.selectedItemsSingleTailor()) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '{{ trans('messages.one_tailor_at_a_time', [], session('locale')) ?: 'One tailor at a time' }}',
+            text: '{{ trans('messages.one_tailor_at_a_time_text', [], session('locale')) ?: 'At a time you can send order to only one tailor.' }}'
+          });
+        } else {
+          alert('{{ trans('messages.one_tailor_at_a_time_text', [], session('locale')) ?: 'At a time you can send order to only one tailor.' }}');
+        }
+        return;
+      }
 
       // Auto-assign original tailor if not set
       this.selectedItems.forEach(item => {
@@ -682,7 +918,10 @@ document.addEventListener('alpine:init', () => {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ assignments })
+          body: JSON.stringify({
+            assignments,
+            sending_summary_number: (this.sendingSummaryNumber || '').trim()
+          })
         });
 
         const data = await response.json();
@@ -719,6 +958,7 @@ document.addEventListener('alpine:init', () => {
           await this.loadData();
           this.mode = 'view';
           this.selectedItems = [];
+          this.sendingSummaryNumber = '';
         } else {
           throw new Error(data.message || 'Failed to assign items to tailor');
         }

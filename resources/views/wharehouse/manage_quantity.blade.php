@@ -331,7 +331,8 @@
 
         <div class="flex flex-wrap items-center gap-3 mb-4 flex-shrink-0">
           <input type="search" class="h-10 px-3 border border-pink-200 rounded-lg flex-1 min-w-[200px]"
-                 placeholder="{{ trans('messages.search_by_code_name', [], session('locale')) }}" x-model="picker.q">
+                 placeholder="{{ trans('messages.search_by_code_name', [], session('locale')) }}" x-model="picker.q"
+                 @input="onPickerSearchInput()">
           <select class="h-10 px-3 border border-pink-200 rounded-lg" x-model="picker.type">
             <option value="">{{ trans('messages.all_types', [], session('locale')) }}</option>
             <option value="size">{{ trans('messages.by_size', [], session('locale')) }}</option>
@@ -340,7 +341,20 @@
           </select>
         </div>
 
-        <div class="flex-1 overflow-auto border border-gray-200 rounded-lg min-h-0">
+        <div class="flex-1 overflow-auto border border-gray-200 rounded-lg min-h-0 relative">
+          <!-- Professional overlay loader: shown until inventory and quantities are ready -->
+          <div x-show="inventoryLoading"
+               x-transition:enter="transition ease-out duration-200"
+               x-transition:enter-start="opacity-0"
+               x-transition:enter-end="opacity-100"
+               class="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center rounded-lg"
+               style="display: none;">
+            <div class="flex flex-col items-center gap-4 p-6">
+              <span class="material-symbols-outlined text-5xl text-[var(--primary-color)] animate-spin">progress_activity</span>
+              <p class="text-gray-700 font-semibold">{{ trans('messages.loading', [], session('locale')) }}...</p>
+              <p class="text-sm text-gray-500">{{ trans('messages.quantities_displayed_info', [], session('locale')) }}</p>
+            </div>
+          </div>
           <div class="overflow-x-auto h-full">
             <table class="w-full text-sm min-w-[1100px]">
             <thead class="bg-gradient-to-l from-pink-50 to-purple-50 text-gray-800">
@@ -450,7 +464,7 @@
   </div>
 
   <!-- History Details Modal -->
-  <div x-show="showHistory" 
+  <!-- <div x-show="showHistory" 
        x-transition:enter="transition ease-out duration-300"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
@@ -505,7 +519,110 @@
         </div>
       </div>
     </div>
+  </div> -->
+
+  <div x-show="showHistory" 
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     x-cloak
+     class="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 sm:p-6">
+
+  <div @click.away="showHistory = false" 
+       class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center p-5 sm:p-6 border-b shrink-0">
+      <h3 class="text-xl font-bold text-[var(--primary-color)]">
+        {{ trans('messages.operation_details', [], session('locale')) }}
+        <span x-text="currentHistory.no"></span>
+      </h3>
+      <button @click="showHistory = false" 
+              class="text-gray-500 hover:text-gray-700 text-2xl font-bold leading-none">✖</button>
+    </div>
+
+    <!-- Main content -->
+    <div class="p-5 sm:p-6">
+
+      <!-- Summary line -->
+      <p class="text-sm text-gray-600 mb-4">
+        <span class="font-semibold">{{ trans('messages.from', [], session('locale')) }}:</span> 
+        <span x-text="channelName(currentHistory.from)"></span> •
+        <span class="font-semibold">{{ trans('messages.to', [], session('locale')) }}:</span> 
+        <span x-text="channelName(currentHistory.to)"></span> •
+        <span class="font-semibold">{{ trans('messages.date', [], session('locale')) }}:</span> 
+        <span x-text="currentHistory.date"></span>
+      </p>
+
+      <!-- Note -->
+      <template x-if="currentHistory.note">
+        <div class="mb-5 p-4 bg-gray-50 rounded-xl">
+          <p class="text-sm">
+            <span class="font-semibold text-gray-700 block mb-1">
+              {{ trans('messages.operation_notes', [], session('locale')) }}:
+            </span>
+            <span class="text-gray-600" x-text="currentHistory.note"></span>
+          </p>
+        </div>
+      </template>
+
+      <!-- Scrollable table -->
+      <div class="overflow-x-auto max-h-[55vh] overflow-y-auto border border-gray-200 rounded-xl shadow-sm">
+        <table class="w-full text-sm min-w-[680px]">
+          <thead class="bg-pink-50 text-gray-700 sticky top-0 z-10">
+            <tr>
+              <th class="px-5 py-3.5 text-center font-semibold border-b border-gray-200">
+                {{ trans('messages.code', [], session('locale')) }}
+              </th>
+              <th class="px-5 py-3.5 text-center font-semibold border-b border-gray-200">
+                {{ trans('messages.color', [], session('locale')) }}
+              </th>
+              <th class="px-5 py-3.5 text-center font-semibold border-b border-gray-200">
+                {{ trans('messages.size', [], session('locale')) }}
+              </th>
+              <th class="px-5 py-3.5 text-center font-semibold border-b border-gray-200">
+                {{ trans('messages.quantity', [], session('locale')) }}
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <template x-for="it in currentHistory.items" 
+                      :key="it.code + (it.size || '') + (it.color || '')">
+              <tr class="hover:bg-gray-50/70 transition-colors">
+                <td class="px-5 py-3.5 text-center" x-text="it.code"></td>
+                <td class="px-5 py-3.5 text-center" x-text="it.color || '—'"></td>
+                <td class="px-5 py-3.5 text-center" x-text="it.size || '—'"></td>
+                <td class="px-5 py-3.5 text-center font-medium" x-text="it.qty"></td>
+              </tr>
+            </template>
+
+            <template x-if="!currentHistory.items?.length">
+              <tr>
+                <td colspan="4" class="py-10 text-center text-gray-500 italic">
+                  No items in this operation
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="p-5 sm:p-6 border-t bg-gray-50/70 text-right shrink-0">
+      <button @click="showHistory = false" 
+              class="px-7 py-2.5 rounded-xl bg-gray-200 hover:bg-gray-300 
+                     text-gray-800 font-medium transition shadow-sm">
+        {{ trans('messages.close', [], session('locale')) }}
+      </button>
+    </div>
+
   </div>
+</div>
 
 </main>
 
@@ -570,18 +687,21 @@ function transferPage() {
     inventoryPagination: { total: 0, current_page: 1, last_page: 1, per_page: 70 },
     warehouseInventory: [], // Main warehouse inventory (for showing available warehouse qty when transferring from channel)
     inventoryLoading: false,
+    _pickerSearchTimeout: null,
     get pickerFiltered() {
       if (!Array.isArray(this.inventory)) {
         return [];
       }
       const q = (this.picker.q || '').toLowerCase();
+      // For main warehouse, search is done on the server; only filter by type here
+      const searchOnClient = this.pickerSource !== 'main';
       const filtered = this.inventory.filter(r => {
         if (!r) return false;
         // Ensure uid exists
         if (!r.uid) {
           r.uid = `${r.code || ''}|${r.size || ''}|${r.color || ''}`;
         }
-        const matchQ = !q || (r.code && r.code.toLowerCase().includes(q)) || (r.name && r.name.toLowerCase().includes(q));
+        const matchQ = searchOnClient ? (!q || (r.code && r.code.toLowerCase().includes(q)) || (r.name && r.name.toLowerCase().includes(q))) : true;
         const matchType = !this.picker.type || r.type===this.picker.type;
         return matchQ && matchType;
       });
@@ -598,7 +718,11 @@ function transferPage() {
     async loadInventory(page = 1) {
       this.inventoryLoading = true;
       try {
-        const response = await fetch(`/get_inventory?page=${page}&per_page=70`);
+        const params = new URLSearchParams({ page: String(page), per_page: '70', skip_website_qty: '1' });
+        if (this.picker && (this.picker.q || '').trim()) {
+          params.set('search', (this.picker.q || '').trim());
+        }
+        const response = await fetch(`/get_inventory?${params.toString()}`);
         const json = await response.json();
         // Paginated response: { data, total, current_page, last_page, per_page }
         if (json && Array.isArray(json.data)) {
@@ -631,10 +755,15 @@ function transferPage() {
       if (page < 1 || page > this.inventoryPagination.last_page) return;
       this.loadInventory(page);
     },
-    // Load warehouse inventory separately (for showing available warehouse qty) - full list
+    onPickerSearchInput() {
+      if (this.pickerSource !== 'main') return;
+      if (this._pickerSearchTimeout) clearTimeout(this._pickerSearchTimeout);
+      this._pickerSearchTimeout = setTimeout(() => this.loadInventory(1), 350);
+    },
+    // Load warehouse inventory separately (for showing available warehouse qty) - full list, light form (no website API calls)
     async loadWarehouseInventory() {
       try {
-        const response = await fetch('/get_inventory?full=1');
+        const response = await fetch('/get_inventory?full=1&skip_website_qty=1');
         const json = await response.json();
         this.warehouseInventory = Array.isArray(json) ? json : (json && Array.isArray(json.data) ? json.data : []);
       } catch (error) {
@@ -660,10 +789,10 @@ function transferPage() {
     // Channel stocks (source/destination) - loaded from backend
     channelStocks: {},
 
-    // Load channel stocks
-    async loadChannelStocks(channelId) {
+    // Load channel stocks (pass forceReload = true to skip cache)
+    async loadChannelStocks(channelId, forceReload = false) {
       if (!channelId || channelId === 'main') return;
-      if (this.channelStocks[channelId]) return; // Already loaded
+      if (!forceReload && this.channelStocks[channelId]) return; // Already loaded
       
       try {
         const response = await fetch(`/get_channel_stocks?channel_id=${channelId}`);
@@ -743,8 +872,8 @@ function transferPage() {
       const uid = row.uid;
       const exists = this.basket.find(b => b.uid === uid);
       if (!exists){
-        // When transferring from channel to warehouse, use warehouse available quantity
-        const availableQty = this.mode === 'channel_to_main' ? this.getWarehouseAvailable(row) : (row.available || 0);
+        // Available = source quantity (how many we can take from From channel/warehouse)
+        const availableQty = Number(row.available) || 0;
         this.basket.push({...row, uid, qty: 1, available: availableQty});
         if (!this.selectedUids.includes(uid)) this.selectedUids.push(uid);
       }
@@ -806,12 +935,16 @@ function transferPage() {
         }
       }
       
-      // Load channel stocks when picker opens (for displaying quantities)
+      // Load channel stocks when picker opens (for source/destination columns and basket)
       if (this.fromChannel && this.fromChannel !== 'main') {
-        await this.loadChannelStocks(this.fromChannel);
+        await this.loadChannelStocks(this.fromChannel, true);
       }
       if (this.toChannel && this.toChannel !== 'main') {
-        await this.loadChannelStocks(this.toChannel);
+        await this.loadChannelStocks(this.toChannel, true);
+      }
+      // For channel_to_main, destination is main warehouse - ensure we have warehouseInventory for basket "In destination"
+      if (this.mode === 'channel_to_main' && this.warehouseInventory.length === 0) {
+        await this.loadWarehouseInventory();
       }
     },
     
@@ -929,9 +1062,12 @@ function transferPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
           },
           body: JSON.stringify({
+            _token: '{{ csrf_token() }}',
             mode: this.mode,
             from: this.fromChannel,
             to: this.toChannel,

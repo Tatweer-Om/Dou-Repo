@@ -104,18 +104,22 @@ window.specialOrdersIncomeReport = function() {
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" x-show="Object.keys(totals).length > 0" x-transition>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" x-show="Object.keys(totals).length > 0" x-transition>
             <div class="bg-white rounded-2xl shadow-lg p-6 border border-[var(--border-color)]">
-                <p class="text-sm text-gray-600 mb-1">@if(session('locale') == 'ar') إجمالي المبلغ @else Total Amount @endif</p>
-                <p class="text-2xl font-bold text-[var(--text-primary)]" x-text="formatNum(totals.total_amount)">0.000</p>
+                <p class="text-sm text-gray-500 mb-1">@if(session('locale') == 'ar') إجمالي المبلغ @else Total Amount @endif</p>
+                <p class="text-2xl font-bold text-[var(--text-primary)]" x-text="formatNum(totals.total_amount) + ' ر.ع'">0.000</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-red-200">
+                <p class="text-sm text-red-500 mb-1">@if(session('locale') == 'ar') إجمالي الخصم @else Total Discount @endif</p>
+                <p class="text-2xl font-bold text-red-600" x-text="formatNum(totals.total_discount) + ' ر.ع'">0.000</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-green-200">
+                <p class="text-sm text-green-600 mb-1">@if(session('locale') == 'ar') المبلغ المدفوع @else Paid Amount @endif</p>
+                <p class="text-2xl font-bold text-green-700" x-text="formatNum(totals.paid_amount) + ' ر.ع'">0.000</p>
             </div>
             <div class="bg-white rounded-2xl shadow-lg p-6 border border-[var(--border-color)]">
-                <p class="text-sm text-gray-600 mb-1">@if(session('locale') == 'ar') المبلغ المدفوع @else Paid Amount @endif</p>
-                <p class="text-2xl font-bold text-[var(--text-primary)]" x-text="formatNum(totals.paid_amount)">0.000</p>
-            </div>
-            <div class="bg-white rounded-2xl shadow-lg p-6 border border-[var(--border-color)]">
-                <p class="text-sm text-gray-600 mb-1">@if(session('locale') == 'ar') الربح @else Profit @endif</p>
-                <p class="text-2xl font-bold text-[var(--text-primary)]" x-text="formatNum(totals.profit)">0.000</p>
+                <p class="text-sm text-gray-500 mb-1">@if(session('locale') == 'ar') الربح @else Profit @endif</p>
+                <p class="text-2xl font-bold text-[var(--text-primary)]" x-text="formatNum(totals.profit) + ' ر.ع'">0.000</p>
             </div>
         </div>
 
@@ -129,6 +133,7 @@ window.specialOrdersIncomeReport = function() {
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap">@if(session('locale') == 'ar') رقم العميل @else Customer Phone @endif</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') المصدر @else Source @endif</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') المبلغ الإجمالي @else Total Amount @endif</th>
+                            <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') الخصم @else Discount @endif</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') المبلغ المدفوع @else Paid Amount @endif</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') رسوم التوصيل @else Delivery Charges @endif</th>
                             <th class="px-4 py-4 font-semibold text-[var(--text-secondary)] whitespace-nowrap text-center">@if(session('locale') == 'ar') الربح @else Profit @endif</th>
@@ -137,13 +142,13 @@ window.specialOrdersIncomeReport = function() {
                     </thead>
                     <tbody>
                         <template x-if="loading">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-500"><span class="material-symbols-outlined animate-spin align-middle">refresh</span> @if(session('locale') == 'ar') جاري التحميل... @else Loading... @endif</td></tr>
+                            <tr><td colspan="10" class="px-4 py-8 text-center text-gray-500"><span class="material-symbols-outlined animate-spin align-middle">refresh</span> @if(session('locale') == 'ar') جاري التحميل... @else Loading... @endif</td></tr>
                         </template>
                         <template x-if="!loading && error">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-red-500" x-text="error"></td></tr>
+                            <tr><td colspan="10" class="px-4 py-8 text-center text-red-500" x-text="error"></td></tr>
                         </template>
                         <template x-if="!loading && !error && (!items || items.length === 0) && loaded">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">@if(session('locale') == 'ar') لا توجد بيانات @else No data found @endif</td></tr>
+                            <tr><td colspan="10" class="px-4 py-8 text-center text-gray-500">@if(session('locale') == 'ar') لا توجد بيانات @else No data found @endif</td></tr>
                         </template>
                         <template x-if="!loading && !error && items && items.length > 0">
                             <template x-for="order in items" :key="order.id">
@@ -155,6 +160,9 @@ window.specialOrdersIncomeReport = function() {
                                         <span class="px-3 py-1 rounded-full text-xs font-semibold" :class="order.source === 'whatsapp' ? 'bg-green-100 text-green-800' : (order.source === 'walkin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800')" x-text="order.source_label || (order.source === 'whatsapp' ? 'WhatsApp' : 'Direct')"></span>
                                     </td>
                                     <td class="px-4 py-4 text-center whitespace-nowrap" x-text="formatNum(order.total_amount)"></td>
+                                    <td class="px-4 py-4 text-center whitespace-nowrap font-semibold"
+                                        :class="parseFloat(order.discount) > 0 ? 'text-red-600' : 'text-gray-400'"
+                                        x-text="parseFloat(order.discount) > 0 ? '– ' + formatNum(order.discount) : '—'"></td>
                                     <td class="px-4 py-4 text-center whitespace-nowrap" x-text="formatNum(order.paid_amount)"></td>
                                     <td class="px-4 py-4 text-center whitespace-nowrap" x-text="formatNum(order.delivery_charges || 0)"></td>
                                     <td class="px-4 py-4 text-center whitespace-nowrap" x-text="formatNum(order.profit)"></td>
@@ -163,7 +171,7 @@ window.specialOrdersIncomeReport = function() {
                             </template>
                         </template>
                         <template x-if="!loading && !loaded && !error">
-                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">@if(session('locale') == 'ar') اختر التواريخ واضغط بحث لعرض التقرير @else Select dates and click Filter to view report @endif</td></tr>
+                            <tr><td colspan="10" class="px-4 py-8 text-center text-gray-500">@if(session('locale') == 'ar') اختر التواريخ واضغط بحث لعرض التقرير @else Select dates and click Filter to view report @endif</td></tr>
                         </template>
                     </tbody>
                 </table>

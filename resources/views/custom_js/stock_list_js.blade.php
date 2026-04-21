@@ -1,6 +1,9 @@
 <script>
-    // Store current page globally
+    // Store current page and full stock data (view_stock only: search/filter on overall stock in frontend)
     var currentStockPage = 1;
+    var allStockData = [];
+    var allStockLoaded = false;
+    var perPage = 10;
 
     // Translations
     const trans = {
@@ -23,295 +26,193 @@
         pieces: "{{ trans('messages.pieces', [], session('locale')) }}"
     };
 
-    // Make loadStock globally accessible
-    function loadStock(page = 1) {
-        currentStockPage = page || currentStockPage || 1;
-            $.get("/stock/list", {
-                page: page
-            })
-            .done(function(res) {
-
-                // --- Desktop Table ---
-                let tableRows = "";
-                $.each(res.data, function(index, stock) {
-                    let image = stock.images.length ? stock.images[0].image_path : '';
-
-                  // Get first color_size combination if available
-                    let size = '-';
-                    let color = '-';
-                    let quantity = 0;
-                    
-                    if (stock.color_sizes && stock.color_sizes.length > 0) {
-                        const first = stock.color_sizes[0];
-                        size = first.size ? (first.size.size_name_ar || first.size.size_name_en || '-') : '-';
-                        color = first.color ? (first.color.color_name_ar || first.color.color_name_en || '-') : '-';
-                        // Calculate total quantity from all color_sizes
-                        quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
-                    }
-
-                    const categoryName = stock.category ? stock.category.category_name : '-';
-                    
-                    // Determine quantity status
-                    let quantityStatus = 'out_of_stock';
-                    if (quantity === 0) {
-                        quantityStatus = 'out_of_stock';
-                    } else if (quantity <= 5) {
-                        quantityStatus = 'low';
-                    } else {
-                        quantityStatus = 'available';
-                    }
-                    
-                    // Format sales price
-                    const salesPrice = stock.sales_price ? parseFloat(stock.sales_price).toFixed(2) : '-';
-                    const formattedSalesPrice = salesPrice !== '-' ? `${salesPrice} OMR` : '-';
-                    
-                    tableRows += `
-                <tr class="border-t hover:bg-pink-50/60 transition" data-id="${stock.id}" data-quantity-status="${quantityStatus}">
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center">
-                        <div class="flex items-start justify-center gap-3">
-                            <img src="${image}" class="w-12 h-16 object-cover rounded-md flex-shrink-0" />
-                            <div class="flex flex-col items-start text-left min-w-0 flex-1">
-                                <span class="font-bold break-words">${stock.design_name ?? '-'}</span>
-                                ${categoryName !== '-' ? `<span class="text-sm text-gray-600">(${categoryName})</span>` : ''}
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap font-medium">${stock.abaya_code || '-'}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">${color}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center font-bold whitespace-nowrap">${quantity}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap font-semibold text-[var(--primary-color)]">${formattedSalesPrice}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">${stock.tailor_names_display || '-'}</td>
-                    <td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">
-                        <div class="flex justify-center gap-2 text-[12px] font-semibold text-gray-700">
-                           <button class="flex flex-col items-center gap-1 hover:text-purple-600 transition"
-                                    onclick="openFullStockDetails(${stock.id})">
-                            <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-                                ${trans.details}
-                            </button>
-                        <button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition d-none"
-                                x-on:click="$dispatch('open-stock-details', ${stock.id})">
-                            <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-                            ${trans.details}
-                        </button>
-                                <button class="openQuantityBtn flex flex-col items-center gap-1 hover:text-green-600 transition"
-                                onclick="openStockQuantity(${stock.id})">
-                            <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
-                            ${trans.enter_quantity}
-                        </button>
-
-
-                            <button class="flex flex-col items-center gap-1 hover:text-blue-600 transition"
-                                    onclick="window.location.href='/edit_stock/${stock.id}?page=' + (currentStockPage || 1)">
-                                <span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full text-base">edit</span>
-                                ${trans.edit}
-                            </button>
-
-                            <button class="flex flex-col items-center gap-1 hover:text-red-600 transition delete-stock-btn">
-                            <span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>
-                            ${trans.delete}
-                        </button>
-                        </div>
-                    </td>
-                </tr>`;
-                });
-                $("#desktop_stock_body").html(tableRows);
-
-                // --- Mobile Cards ---
-                let mobileCards = '';
-                $.each(res.data, function(index, stock) {
-                    let image = stock.images.length ? stock.images[0].image_path : '';
-                    // Get first color_size combination if available
-                    let size = '-';
-                    let color = '-';
-                    let quantity = 0;
-                    
-                    if (stock.color_sizes && stock.color_sizes.length > 0) {
-                        const first = stock.color_sizes[0];
-                        size = first.size ? (first.size.size_name_ar || first.size.size_name_en || '-') : '-';
-                        color = first.color ? (first.color.color_name_ar || first.color.color_name_en || '-') : '-';
-                        // Calculate total quantity from all color_sizes
-                        quantity = stock.color_sizes.reduce((sum, item) => sum + (parseInt(item.qty) || 0), 0);
-                    }
-
-                    const categoryName = stock.category ? stock.category.category_name : '-';
-                    
-                    // Determine quantity status for mobile cards
-                    let quantityStatusMobile = 'out_of_stock';
-                    if (quantity === 0) {
-                        quantityStatusMobile = 'out_of_stock';
-                    } else if (quantity <= 5) {
-                        quantityStatusMobile = 'low';
-                    } else {
-                        quantityStatusMobile = 'available';
-                    }
-                    
-                    // Format sales price for mobile
-                    const salesPriceMobile = stock.sales_price ? parseFloat(stock.sales_price).toFixed(2) : '-';
-                    const formattedSalesPriceMobile = salesPriceMobile !== '-' ? `${salesPriceMobile} OMR` : '-';
-                    
-                    mobileCards += `
-                <div class="bg-white rounded-xl shadow-sm border border-pink-100 p-4 flex flex-col gap-3" data-id="${stock.id}" data-quantity-status="${quantityStatusMobile}">
-                    <div class="flex gap-4">
-                        <div class="w-20 h-24 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                            <img src="${image}" alt="${stock.abaya_code || trans.design}" class="w-full h-full object-cover" onerror="this.src='/images/placeholder.png'" />
-                        </div>
-                        <div class="flex-1 text-sm">
-                            <div class="flex justify-between items-center mb-2">
-                                <h3 class="font-bold text-gray-900">${stock.abaya_code || '-'}</h3>
-                                <span class="text-[var(--primary-color)] font-semibold text-xs">${formattedSalesPriceMobile}</span>
-                            </div>
-                            <p class="text-gray-600 text-xs">${trans.design}: ${stock.design_name ?? '-'}</p>
-                            ${categoryName !== '-' ? `<p class="text-gray-600 text-xs">${trans.category}: ${categoryName}</p>` : ''}
-                            <p class="text-gray-600 text-xs">${trans.color}: ${color}</p>
-                            <p class="text-gray-600 text-xs font-semibold">${trans.quantity}: ${quantity}</p>
-                        </div>
-                    </div>
-                    <div class="mt-4 border-t pt-3">
-                        <div class="flex justify-around text-xs font-semibold text-gray-600">
-                            <button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition"
-                                    onclick="openFullStockDetails(${stock.id})">
-                                <span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>
-                                ${trans.details}
-                            </button>
-                            <button class="flex flex-col items-center gap-1 hover:text-green-600 transition openQuantityBtn"
-                                    onclick="openStockQuantity(${stock.id})">
-                                <span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>
-                                ${trans.enter_quantity}
-                            </button>
-                            <button class="flex flex-col items-center gap-1 hover:text-blue-500 transition"
-                                    onclick="window.location.href='/edit_stock/${stock.id}?page=' + (currentStockPage || 1)">
-                                <span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full text-base">edit</span>
-                                ${trans.edit}
-                            </button>
-                            <button class="flex flex-col items-center gap-1 hover:text-red-500 transition delete-stock-btn-mobile"
-                                    data-stock-id="${stock.id}">
-                                <span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>
-                                ${trans.delete}
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
-                });
-                $("#mobile_stock_cards").html(mobileCards);
-
-                // --- Pagination (windowed: first, ... window ..., last) ---
-                let pagination = "";
-                const cur = res.current_page;
-                const last = res.last_page;
-                const windowSize = 2; // pages to show on each side of current
-
-                const btn = (href, label, active, disabled) => {
-                    const base = "inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg transition shrink-0 ";
-                    const activeCls = active ? "bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md" : "bg-white hover:bg-gray-100 border-gray-200";
-                    const disCls = disabled ? "opacity-40 pointer-events-none bg-gray-200 border-gray-200" : "";
-                    const url = disabled ? "#" : (href || "#");
-                    return `<li class="shrink-0"><a href="${url}" class="${base} ${disabled ? disCls : activeCls}">${label}</a></li>`;
-                };
-
-                // Previous
-                pagination += btn(res.prev_page_url, "&laquo; Prev", false, !res.prev_page_url);
-
-                if (last <= 7) {
-                    for (let i = 1; i <= last; i++) {
-                        pagination += btn("/stock/list?page=" + i, i, cur === i, false);
-                    }
+    function getStockQuantity(stock) {
+        if (!stock.color_sizes || !stock.color_sizes.length) return 0;
+        return stock.color_sizes.reduce(function(sum, item) { return sum + (parseInt(item.qty, 10) || 0); }, 0);
+    }
+    function getQuantityStatus(stock) {
+        var q = getStockQuantity(stock);
+        if (q === 0) return 'out_of_stock';
+        if (q <= 5) return 'low';
+        return 'available';
+    }
+    function getFilteredStock() {
+        var search = ($("#stock_search").val() || '').toLowerCase().trim();
+        var filterVal = $("#stock_filter").val() || 'all';
+        return allStockData.filter(function(stock) {
+            var quantityStatus = getQuantityStatus(stock);
+            if (filterVal !== 'all' && quantityStatus !== filterVal) return false;
+            if (search === '') return true;
+            var code = (stock.abaya_code || '').toLowerCase();
+            var name = (stock.design_name || '').toLowerCase();
+            var barcode = (stock.barcode || '').toLowerCase();
+            var cat = (stock.category && stock.category.category_name) ? stock.category.category_name.toLowerCase() : '';
+            return code.indexOf(search) > -1 || name.indexOf(search) > -1 || barcode.indexOf(search) > -1 || cat.indexOf(search) > -1;
+        });
+    }
+    function buildRowFromStock(stock) {
+        var image = stock.images && stock.images.length ? stock.images[0].image_path : '';
+        var size = '-', color = '-', quantity = getStockQuantity(stock);
+        if (stock.color_sizes && stock.color_sizes.length > 0) {
+            var first = stock.color_sizes[0];
+            size = first.size ? (first.size.size_name_ar || first.size.size_name_en || '-') : '-';
+            color = first.color ? (first.color.color_name_ar || first.color.color_name_en || '-') : '-';
+        }
+        var categoryName = stock.category ? stock.category.category_name : '-';
+        var quantityStatus = getQuantityStatus(stock);
+        var salesPrice = stock.sales_price ? parseFloat(stock.sales_price).toFixed(2) : '-';
+        var formattedSalesPrice = salesPrice !== '-' ? salesPrice + ' OMR' : '-';
+        return {
+            quantityStatus: quantityStatus,
+            tableRow: '<tr class="border-t hover:bg-pink-50/60 transition" data-id="' + stock.id + '" data-quantity-status="' + quantityStatus + '">' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center"><div class="flex items-start justify-center gap-3">' +
+                '<img src="' + image + '" class="w-12 h-16 object-cover rounded-md flex-shrink-0" />' +
+                '<div class="flex flex-col items-start text-left min-w-0 flex-1">' +
+                '<span class="font-bold break-words">' + (stock.design_name || '-') + '</span>' +
+                (categoryName !== '-' ? '<span class="text-sm text-gray-600">(' + categoryName + ')</span>' : '') + '</div></div></td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap font-medium">' + (stock.abaya_code || '-') + '</td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">' + color + '</td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center font-bold whitespace-nowrap">' + quantity + '</td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap font-semibold text-[var(--primary-color)]">' + formattedSalesPrice + '</td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap">' + (stock.tailor_names_display || '-') + '</td>' +
+                '<td class="px-3 sm:px-4 md:px-6 py-3 text-center whitespace-nowrap"><div class="flex justify-center gap-2 text-[12px] font-semibold text-gray-700">' +
+                '<button class="flex flex-col items-center gap-1 hover:text-purple-600 transition" onclick="openFullStockDetails(' + stock.id + ')">' +
+                '<span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>' + trans.details + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition d-none" x-on:click="$dispatch(\'open-stock-details\', ' + stock.id + ')">' +
+                '<span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>' + trans.details + '</button>' +
+                '<button class="openQuantityBtn flex flex-col items-center gap-1 hover:text-green-600 transition" onclick="openStockQuantity(' + stock.id + ')">' +
+                '<span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>' + trans.enter_quantity + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-blue-600 transition" onclick="window.location.href=\'/edit_stock/' + stock.id + '?page=' + (currentStockPage || 1) + '\'">' +
+                '<span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full text-base">edit</span>' + trans.edit + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-red-600 transition delete-stock-btn">' +
+                '<span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>' + trans.delete + '</button></div></td></tr>',
+            mobileCard: '<div class="bg-white rounded-xl shadow-sm border border-pink-100 p-4 flex flex-col gap-3" data-id="' + stock.id + '" data-quantity-status="' + quantityStatus + '">' +
+                '<div class="flex gap-4"><div class="w-20 h-24 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">' +
+                '<img src="' + image + '" alt="' + (stock.abaya_code || trans.design) + '" class="w-full h-full object-cover" onerror="this.src=\'/images/placeholder.png\'" />' +
+                '</div><div class="flex-1 text-sm"><div class="flex justify-between items-center mb-2">' +
+                '<h3 class="font-bold text-gray-900">' + (stock.abaya_code || '-') + '</h3>' +
+                '<span class="text-[var(--primary-color)] font-semibold text-xs">' + formattedSalesPrice + '</span></div>' +
+                '<p class="text-gray-600 text-xs">' + trans.design + ': ' + (stock.design_name || '-') + '</p>' +
+                (categoryName !== '-' ? '<p class="text-gray-600 text-xs">' + trans.category + ': ' + categoryName + '</p>' : '') +
+                '<p class="text-gray-600 text-xs">' + trans.color + ': ' + color + '</p>' +
+                '<p class="text-gray-600 text-xs font-semibold">' + trans.quantity + ': ' + quantity + '</p></div></div>' +
+                '<div class="mt-4 border-t pt-3"><div class="flex justify-around text-xs font-semibold text-gray-600">' +
+                '<button class="flex flex-col items-center gap-1 hover:text-[var(--primary-color)] transition" onclick="openFullStockDetails(' + stock.id + ')">' +
+                '<span class="material-symbols-outlined bg-pink-50 text-[var(--primary-color)] p-2 rounded-full text-base">info</span>' + trans.details + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-green-600 transition openQuantityBtn" onclick="openStockQuantity(' + stock.id + ')">' +
+                '<span class="material-symbols-outlined bg-green-50 text-green-600 p-2 rounded-full text-base">add</span>' + trans.enter_quantity + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-blue-500 transition" onclick="window.location.href=\'/edit_stock/' + stock.id + '?page=' + (currentStockPage || 1) + '\'">' +
+                '<span class="material-symbols-outlined bg-blue-50 text-blue-500 p-2 rounded-full text-base">edit</span>' + trans.edit + '</button>' +
+                '<button class="flex flex-col items-center gap-1 hover:text-red-500 transition delete-stock-btn-mobile" data-stock-id="' + stock.id + '">' +
+                '<span class="material-symbols-outlined bg-red-50 text-red-500 p-2 rounded-full text-base">delete</span>' + trans.delete + '</button></div></div></div>'
+        };
+    }
+    function renderFromFullData(page) {
+        var filtered = getFilteredStock();
+        var total = filtered.length;
+        var last = Math.max(1, Math.ceil(total / perPage));
+        var cur = Math.max(1, Math.min(page, last));
+        currentStockPage = cur;
+        var start = (cur - 1) * perPage;
+        var slice = filtered.slice(start, start + perPage);
+        var tableRows = '', mobileCards = '';
+        for (var i = 0; i < slice.length; i++) {
+            var o = buildRowFromStock(slice[i]);
+            tableRows += o.tableRow;
+            mobileCards += o.mobileCard;
+        }
+        $("#desktop_stock_body").html(tableRows);
+        $("#mobile_stock_cards").html(mobileCards);
+        var windowSize = 2;
+        var pagination = '';
+        var btn = function(pageNum, label, active, disabled) {
+            var base = "inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg transition shrink-0 ";
+            var activeCls = active ? "bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md" : "bg-white hover:bg-gray-100 border-gray-200";
+            var disCls = disabled ? "opacity-40 pointer-events-none bg-gray-200 border-gray-200" : "";
+            return '<li class="shrink-0"><a href="#" data-page="' + (disabled ? '' : pageNum) + '" class="' + base + (disabled ? disCls : activeCls) + '">' + label + '</a></li>';
+        };
+        pagination += btn(cur > 1 ? cur - 1 : '', '&laquo; Prev', false, cur <= 1);
+        if (last <= 7) {
+            for (var i = 1; i <= last; i++) pagination += btn(i, i, cur === i, false);
+        } else {
+            var showFirst = cur > windowSize + 2, showLast = cur < last - windowSize - 1;
+            var startP = Math.max(1, cur - windowSize), endP = Math.min(last, cur + windowSize);
+            if (showFirst) pagination += btn(1, '1', cur === 1, false) + '<li class="shrink-0 px-1 py-1.5 text-gray-400 text-sm">...</li>';
+            for (var j = startP; j <= endP; j++) pagination += btn(j, j, cur === j, false);
+            if (showLast) pagination += '<li class="shrink-0 px-1 py-1.5 text-gray-400 text-sm">...</li>' + btn(last, last, cur === last, false);
+        }
+        pagination += btn(cur < last ? cur + 1 : '', 'Next &raquo;', false, cur >= last);
+        $("#stock_pagination").html(pagination);
+        $("#stock_pagination_loader").hide();
+    }
+    function fetchAllStockThenRender(showPage) {
+        $("#stock_pagination_loader").show();
+        var data = [];
+        var page = 1;
+        function fetchNext() {
+            $.get("/stock/list", { page: page }).done(function(res) {
+                data = data.concat(res.data || []);
+                var lastPage = res.last_page || 1;
+                if (page >= lastPage) {
+                    allStockData = data;
+                    allStockLoaded = true;
+                    renderFromFullData(showPage);
                 } else {
-                    const showFirst = cur > windowSize + 2;
-                    const showLast = cur < last - windowSize - 1;
-                    const start = Math.max(1, cur - windowSize);
-                    const end = Math.min(last, cur + windowSize);
-
-                    if (showFirst) pagination += btn("/stock/list?page=1", "1", cur === 1, false);
-                    if (showFirst) pagination += '<li class="shrink-0 px-1 py-1.5 text-gray-400 text-sm">...</li>';
-
-                    for (let i = start; i <= end; i++) {
-                        pagination += btn("/stock/list?page=" + i, i, cur === i, false);
-                    }
-
-                    if (showLast) pagination += '<li class="shrink-0 px-1 py-1.5 text-gray-400 text-sm">...</li>';
-                    if (showLast) pagination += btn("/stock/list?page=" + last, last, cur === last, false);
+                    page++;
+                    fetchNext();
                 }
-
-                // Next
-                pagination += btn(res.next_page_url, "Next &raquo;", false, !res.next_page_url);
-
-                $("#stock_pagination").html(pagination);
-
-                // Apply filters after data is loaded (in case there's an active search/filter)
-                if (typeof applyFilters === 'function') {
-                    setTimeout(function() {
-                        applyFilters();
-                    }, 100);
-                }
-
-            })
-            .always(function() {
+            }).fail(function() {
                 $("#stock_pagination_loader").hide();
             });
+        }
+        fetchNext();
+    }
+    function loadStock(page) {
+        page = page || currentStockPage || 1;
+        if (!allStockLoaded) {
+            fetchAllStockThenRender(page);
+            return;
+        }
+        $("#stock_pagination_loader").show();
+        renderFromFullData(page);
     }
 
-    // Function to apply both search and quantity filters (global scope)
-    function applyFilters() {
-        let search = $("#stock_search").val().toLowerCase();
-        let filterValue = $("#stock_filter").val();
-
-        // Filter desktop table
-        $("#desktop_stock_body tr").each(function() {
-            let $row = $(this);
-            let rowText = $row.text().toLowerCase();
-            let quantityStatus = $row.data('quantity-status') || '';
-            
-            let matchesSearch = search === '' || rowText.indexOf(search) > -1;
-            let matchesFilter = filterValue === 'all' || quantityStatus === filterValue;
-            
-            $row.toggle(matchesSearch && matchesFilter);
-        });
-
-        // Filter mobile cards
-        $("#mobile_stock_cards > div").each(function() {
-            let $card = $(this);
-            let cardText = $card.text().toLowerCase();
-            let quantityStatus = $card.data('quantity-status') || '';
-            
-            let matchesSearch = search === '' || cardText.indexOf(search) > -1;
-            let matchesFilter = filterValue === 'all' || quantityStatus === filterValue;
-            
-            $card.toggle(matchesSearch && matchesFilter);
-        });
-    }
-
+    var stockSearchTimeout = null;
     $(document).ready(function() {
-        // Pagination click
         $(document).on("click", "#stock_pagination a", function(e) {
             e.preventDefault();
-            let href = $(this).attr("href");
-            if (href && href !== "#") {
-                let page = new URL(href, window.location.origin).searchParams.get("page");
-                if (page) {
-                    $("#stock_pagination_loader").show();
-                    loadStock(page);
-                }
+            var p = $(this).attr("data-page");
+            if (p !== undefined && p !== '' && !isNaN(parseInt(p, 10))) {
+                $("#stock_pagination_loader").show();
+                loadStock(parseInt(p, 10));
             }
         });
-
-        // Client-side search
         $("#stock_search").on("keyup", function() {
-            applyFilters();
+            if (stockSearchTimeout) clearTimeout(stockSearchTimeout);
+            stockSearchTimeout = setTimeout(function() {
+                if (allStockLoaded) {
+                    currentStockPage = 1;
+                    $("#stock_pagination_loader").show();
+                    renderFromFullData(1);
+                } else {
+                    loadStock(1);
+                }
+            }, 350);
         });
-
-        // Quantity filter
         $("#stock_filter").on("change", function() {
-            applyFilters();
+            if (allStockLoaded) {
+                currentStockPage = 1;
+                $("#stock_pagination_loader").show();
+                renderFromFullData(1);
+            } else {
+                loadStock(1);
+            }
         });
-
-        // Initial load: use ?page=X from URL when returning from edit (e.g. view_stock?page=34)
         var startPage = 1;
         var urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('page')) {
             var p = parseInt(urlParams.get('page'), 10);
-            if (!isNaN(p) && p >= 1) {
-                startPage = p;
-            }
+            if (!isNaN(p) && p >= 1) startPage = p;
         }
         loadStock(startPage);
     });

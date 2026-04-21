@@ -1,31 +1,39 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
-use App\Http\Controllers\SizeController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\ColorController;
-use App\Http\Controllers\StockController;
-use App\Http\Controllers\BranchController;
-use App\Http\Controllers\ResaleController;
-use App\Http\Controllers\TailorController;
-use App\Http\Controllers\ChannelController;
-use App\Http\Controllers\BoutiqueController;
-use App\Http\Controllers\MaterialController;
-use App\Http\Controllers\WharehouseController;
-use App\Http\Controllers\SpecialOrderController;
-use App\Http\Controllers\CategoryController;
-use App\Http\Controllers\PosController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AreaController;
+use App\Http\Controllers\BoutiqueController;
+use App\Http\Controllers\BranchController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\CityController;
+use App\Http\Controllers\ColorController;
 use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
-use App\Http\Controllers\SMSController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ResaleController;
+use App\Http\Controllers\SalonCustomerController;
+use App\Http\Controllers\SalonServiceController;
+use App\Http\Controllers\SalonStaffController;
+use App\Http\Controllers\SalonTeamController;
+use App\Http\Controllers\SaloonBookingController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SizeController;
+use App\Http\Controllers\SMSController;
+use App\Http\Controllers\SpecialOrderController;
+use App\Http\Controllers\StockController;
+use App\Http\Controllers\TailorController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\WharehouseController;
+use App\Http\Controllers\SalonToolController;
+use App\Http\Controllers\SalonExpenseCategoryController;
+use App\Http\Controllers\SalonExpenseController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -107,7 +115,8 @@ Route::post('users', [UserController::class, 'store']);
 Route::put('users/{user}', [UserController::class, 'update']);
 Route::delete('users/{user}', [UserController::class, 'destroy']);
 Route::get('users/list', [UserController::class, 'getusers']);
-Route::get('users/{user}', [UserController::class, 'show']);
+Route::get('users/staff-options', [UserController::class, 'staffOptionsForUsers']);
+Route::get('users/{user}', [UserController::class, 'show'])->whereNumber('user');
 Route::get('login_page', [UserController::class, 'login_page'])->name('login_page');
 Route::post('/login-user', [UserController::class, 'login_user'])->name('login_user');
 Route::post('/logout', [UserController::class, 'logout'])->name('logout');
@@ -241,6 +250,8 @@ Route::get('stock/audit/list', [StockController::class, 'getStockAuditList'])->n
 Route::get('stock/audit/details', [StockController::class, 'getStockAuditDetails'])->name('stock.audit.details');
 Route::get('stock/comprehensive-audit', [StockController::class, 'comprehensiveAudit'])->name('stock.comprehensive_audit');
 Route::get('stock/comprehensive-audit/list', [StockController::class, 'getComprehensiveAudit'])->name('stock.comprehensive_audit.list');
+Route::get('stock/channel-audit', [StockController::class, 'channelAudit'])->name('stock.channel_audit');
+Route::get('stock/channel-audit/list', [StockController::class, 'getChannelAudit'])->name('stock.channel_audit.list');
 Route::get('stock/material-audit', [StockController::class, 'materialAudit'])->name('material.audit');
 Route::get('stock/material-audit/data', [StockController::class, 'getMaterialAuditData'])->name('material.audit.data');
 Route::get('sync-pending-stocks', [StockController::class, 'syncPendingStocks'])->name('sync.pending_stocks');
@@ -283,6 +294,7 @@ Route::get('send_request/data', [SpecialOrderController::class, 'getTailorAssign
 Route::post('send_request/assign', [SpecialOrderController::class, 'assignItemsToTailor'])->name('send_request.assign');
 Route::post('send_request/receive', [SpecialOrderController::class, 'markTailorItemsReceived'])->name('send_request.receive');
 Route::get('send_request/export-excel', [SpecialOrderController::class, 'exportAbayasToTailorExcel'])->name('send_request.export_excel');
+Route::get('orders_Sent_to_tailor', [SpecialOrderController::class, 'ordersSentToTailor'])->name('orders_sent_to_tailor');
 Route::get('tailor-orders-list', [SpecialOrderController::class, 'tailorOrdersList'])->name('tailor_orders_list');
 Route::get('tailor-orders-list/data', [SpecialOrderController::class, 'getTailorOrdersList'])->name('tailor_orders_list.data');
 Route::get('tailor-orders-list/export-pdf', [SpecialOrderController::class, 'exportTailorOrdersPDF'])->name('tailor_orders_list.export_pdf');
@@ -299,6 +311,7 @@ Route::post('maintenance/receive', [SpecialOrderController::class, 'receiveFromT
 Route::post('maintenance/deliver', [SpecialOrderController::class, 'markRepairedDelivered'])->name('maintenance.deliver');
 
 Route::get('spcialorder', [SpecialOrderController::class, 'index'])->name('spcialorder');
+Route::get('special-order/edit/{id}', [SpecialOrderController::class, 'editPage'])->name('special_order.edit')->where('id', '[0-9]+');
 Route::post('add_spcialorder', [SpecialOrderController::class, 'add_specialorder'])->name('add_spcialorder');
 Route::post('special-order/shipping-fee', [SpecialOrderController::class, 'getShippingFee'])->name('special_order.shipping_fee');
 Route::get('view_special_order', [SpecialOrderController::class, 'view_special_order'])->name('view_special_order');
@@ -307,8 +320,10 @@ Route::get('get_orders_list', [SpecialOrderController::class, 'getOrdersList'])-
 Route::post('record_payment', [SpecialOrderController::class, 'recordPayment'])->name('record_payment');
 Route::post('update_delivery_status', [SpecialOrderController::class, 'updateDeliveryStatus'])->name('update_delivery_status');
 Route::post('delete_order', [SpecialOrderController::class, 'deleteOrder'])->name('delete_order');
-Route::post('edit_spcialorder', [SpecialOrderController::class, 'edit_spcialorder'])->name('edit_spcialorder');
-Route::post('update_spcialorder', [SpecialOrderController::class, 'update_spcialorder'])->name('update_spcialorder');
+Route::post('special-order/take-from-stock', [SpecialOrderController::class, 'takeItemFromStock'])->name('special_order.take_from_stock');
+Route::get('special-order/item-stock-availability', [SpecialOrderController::class, 'getItemStockAvailability'])->name('special_order.item_stock_availability');
+Route::post('edit_spcialorder', [SpecialOrderController::class, 'edit_specialorder'])->name('edit_spcialorder');
+Route::post('update_spcialorder', [SpecialOrderController::class, 'update_specialorder'])->name('update_spcialorder');
 Route::post('delete_spcialorder', [SpecialOrderController::class, 'delete_spcialorder'])->name('delete_spcialorder');
 Route::get('search_abayas', [SpecialOrderController::class, 'searchAbayas'])->name('search_abayas');
 Route::get('send_request/export-pdf', [SpecialOrderController::class, 'exportAbayasToTailorPDF'])->name('send_request.export_pdf');
@@ -352,6 +367,7 @@ Route::get('pos/cities', [PosController::class, 'citiesByArea'])->name('pos.citi
 Route::get('pos/orders/list', [PosController::class, 'ordersList'])->name('pos.orders.list');
 Route::get('pos/orders/list/data', [PosController::class, 'getOrdersList'])->name('pos.orders.list.data');
 Route::post('pos/orders/update-delivery-status', [PosController::class, 'updateDeliveryStatus'])->name('pos.orders.update_delivery_status');
+Route::delete('pos/orders/{id}', [PosController::class, 'deleteOrder'])->name('pos.orders.delete');
 Route::get('pos/active-channels', [PosController::class, 'getActiveChannels'])->name('pos.active_channels');
 Route::post('pos/select-channel', [PosController::class, 'selectChannel'])->name('pos.select_channel');
 Route::get('pos_bill', [PosController::class, 'pos_bill'])->name('pos_bill');
@@ -379,3 +395,73 @@ Route::get('reports/daily-sales', [ReportController::class, 'dailySalesReport'])
 Route::get('reports/daily-sales/data', [ReportController::class, 'getDailySalesReport'])->name('reports.daily_sales.data');
 Route::get('reports/daily-sales/export-excel', [ReportController::class, 'exportDailySalesExcel'])->name('reports.daily_sales.export_excel');
 Route::get('yearly_income_report', [ReportController::class, 'yearlyIncomeReport'])->name('reports.yearly_income_report');
+
+
+//saloon
+Route::get('saloon_dashboard', [App\Http\Controllers\SaloonController::class, 'saloon_dashboard'])->name('saloon_dashboard');
+Route::get('saloon-dashboard/monthly-income-chart', [App\Http\Controllers\SaloonController::class, 'monthlyIncomeChartJson'])->name('saloon_dashboard.monthly_income_chart');
+Route::get('saloon_bookings', [App\Http\Controllers\SaloonController::class, 'bookings'])->name('saloon_bookings');
+Route::get('saloon_booking_page', [App\Http\Controllers\SaloonController::class, 'booking_page'])->name('saloon_booking_page');
+Route::get('saloon-bookings/customers/search', [SaloonBookingController::class, 'searchCustomers'])->name('saloon_bookings.customers.search');
+Route::get('saloon-bookings/availability/range', [SaloonBookingController::class, 'availabilityRange'])->name('saloon_bookings.availability.range');
+Route::get('saloon-bookings/availability/day', [SaloonBookingController::class, 'availabilityDay'])->name('saloon_bookings.availability.day');
+Route::post('saloon-bookings/availability/check', [SaloonBookingController::class, 'availabilityCheck'])->name('saloon_bookings.availability.check');
+Route::post('saloon-bookings', [SaloonBookingController::class, 'store'])->name('saloon_bookings.store');
+Route::get('view_bookings', [SaloonBookingController::class, 'index'])->name('view_bookings');
+Route::get('booking_management', [SaloonBookingController::class, 'bookingManagement'])->name('booking_management');
+Route::get('saloon-bookings/{booking}', [SaloonBookingController::class, 'show'])->name('saloon_bookings.show');
+Route::post('saloon-bookings/{booking}/approve', [SaloonBookingController::class, 'approve'])->name('saloon_bookings.approve');
+Route::post('saloon-bookings/{booking}/payment', [SaloonBookingController::class, 'addPayment'])->name('saloon_bookings.add_payment');
+Route::delete('saloon-bookings/{booking}', [SaloonBookingController::class, 'destroy'])->name('saloon_bookings.destroy');
+Route::get('saloon-monthly-income-report', [SaloonBookingController::class, 'monthlyIncomeReport'])->name('saloon_monthly_income_report');
+Route::get('saloon-monthly-income-report/export-excel', [SaloonBookingController::class, 'monthlyIncomeReportExportExcel'])->name('saloon_monthly_income_report.export_excel');
+Route::get('saloon-income-expense-report', [SaloonBookingController::class, 'incomeExpenseReport'])->name('saloon_income_expense_report');
+Route::get('saloon-income-expense-report/export-excel', [SaloonBookingController::class, 'incomeExpenseReportExportExcel'])->name('saloon_income_expense_report.export_excel');
+Route::get('salon-teams', [SalonTeamController::class, 'index'])->name('salon_team.index');
+Route::post('salon-teams', [SalonTeamController::class, 'store'])->name('salon_team.store');
+Route::get('salon-teams/{salonTeam}', [SalonTeamController::class, 'show'])->name('salon_team.show');
+Route::put('salon-teams/{salonTeam}', [SalonTeamController::class, 'update'])->name('salon_team.update');
+Route::delete('salon-teams/{salonTeam}', [SalonTeamController::class, 'destroy'])->name('salon_team.destroy');
+
+Route::get('salonstaffs', [SalonStaffController::class, 'index'])->name('salonstaff.index');
+Route::post('salonstaffs', [SalonStaffController::class, 'store'])->name('salonstaff.store');
+Route::get('salonstaffs/{salonstaff}', [SalonStaffController::class, 'show'])->name('salonstaff.show');
+Route::put('salonstaffs/{salonstaff}', [SalonStaffController::class, 'update'])->name('salonstaff.update');
+Route::delete('salonstaffs/{salonstaff}', [SalonStaffController::class, 'destroy'])->name('salonstaff.destroy');
+Route::get('salonstaffs/{salonstaff}/profile', [SalonStaffController::class, 'profile'])->name('salonstaff.profile');
+Route::get('salonstaffs/{salonstaff}/profile/availability-range', [SalonStaffController::class, 'profileAvailabilityRange'])->name('salonstaff.profile.availability.range');
+Route::get('salonstaffs/{salonstaff}/profile/availability-day', [SalonStaffController::class, 'profileAvailabilityDay'])->name('salonstaff.profile.availability.day');
+
+Route::get('salontools', [SalonToolController::class, 'index'])->name('salontool.index');
+Route::post('salontools', [SalonToolController::class, 'store'])->name('salontool.store');
+Route::get('salontools/{salontool}', [SalonToolController::class, 'show'])->name('salontool.show');
+Route::put('salontools/{salontool}', [SalonToolController::class, 'update'])->name('salontool.update');
+Route::delete('salontools/{salontool}', [SalonToolController::class, 'destroy'])->name('salontool.destroy');
+
+Route::get('saloon-expense-categories', [SalonExpenseCategoryController::class, 'index'])->name('saloon_expense_category.index');
+Route::post('saloon-expense-categories', [SalonExpenseCategoryController::class, 'store'])->name('saloon_expense_category.store');
+Route::get('saloon-expense-categories/{salonExpenseCategory}', [SalonExpenseCategoryController::class, 'show'])->name('saloon_expense_category.show');
+Route::put('saloon-expense-categories/{salonExpenseCategory}', [SalonExpenseCategoryController::class, 'update'])->name('saloon_expense_category.update');
+Route::delete('saloon-expense-categories/{salonExpenseCategory}', [SalonExpenseCategoryController::class, 'destroy'])->name('saloon_expense_category.destroy');
+
+Route::get('saloon-expenses', [SalonExpenseController::class, 'index'])->name('saloon_expense.index');
+Route::post('saloon-expenses', [SalonExpenseController::class, 'store'])->name('saloon_expense.store');
+Route::get('saloon-expenses/{salonExpense}', [SalonExpenseController::class, 'show'])->name('saloon_expense.show');
+Route::put('saloon-expenses/{salonExpense}', [SalonExpenseController::class, 'update'])->name('saloon_expense.update');
+Route::delete('saloon-expenses/{salonExpense}', [SalonExpenseController::class, 'destroy'])->name('saloon_expense.destroy');
+Route::get('saloon-expense-report', [SalonExpenseController::class, 'report'])->name('saloon_expense.report');
+Route::get('saloon-expense-report/export-excel', [SalonExpenseController::class, 'reportExportExcel'])->name('saloon_expense.report_export_excel');
+
+Route::get('salonservices', [SalonServiceController::class, 'index'])->name('salonservice.index');
+Route::post('salonservices', [SalonServiceController::class, 'store'])->name('salonservice.store');
+Route::get('salonservices/{salonservice}', [SalonServiceController::class, 'show'])->name('salonservice.show');
+Route::put('salonservices/{salonservice}', [SalonServiceController::class, 'update'])->name('salonservice.update');
+Route::delete('salonservices/{salonservice}', [SalonServiceController::class, 'destroy'])->name('salonservice.destroy');
+
+
+Route::get('saloncustomers', [SalonCustomerController::class, 'index'])->name('saloncustomer.index');
+Route::post('saloncustomers', [SalonCustomerController::class, 'store'])->name('saloncustomer.store');
+Route::get('saloncustomers/{saloncustomer}/profile', [SalonCustomerController::class, 'profile'])->name('saloncustomer.profile');
+Route::get('saloncustomers/{saloncustomer}', [SalonCustomerController::class, 'show'])->name('saloncustomer.show');
+Route::put('saloncustomers/{saloncustomer}', [SalonCustomerController::class, 'update'])->name('saloncustomer.update');
+Route::delete('saloncustomers/{saloncustomer}', [SalonCustomerController::class, 'destroy'])->name('saloncustomer.destroy');
