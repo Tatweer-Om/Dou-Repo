@@ -50,7 +50,7 @@
          @include('custom_js.material_list_js')
            @elseif ($route_name == 'edit_material')
          @include('custom_js.edit_material_js')
-          @elseif ($route_name == 'spcialorder')
+          @elseif ($route_name == 'spcialorder' || $routeName == 'special_order.edit')
          @include('custom_js.special_order_js')
               @elseif ($route_name == 'view_special_order')
          @include('custom_js.view_orders_js')
@@ -82,6 +82,7 @@
          @include('custom_js.movement_log_js')
           @elseif ($routeName == 'tailor_material_audit')
          @include('custom_js.material_audit_js')
+         
     @endif
          
   </body>

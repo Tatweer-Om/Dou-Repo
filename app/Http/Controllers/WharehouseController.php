@@ -260,10 +260,21 @@ public function get_inventory(Request $request)
     $perPage = min(100, max(1, $perPage));
     $page = max(1, (int) $request->input('page', 1));
 
-    // Full list (e.g. for warehouseInventory when transferring from channel to main) - keep existing behavior
+    // Full list (e.g. for warehouseInventory when transferring from channel to main)
+    $skipWebsiteQty = $request->boolean('skip_website_qty');
     if ($full) {
-        $inventory = $this->buildFullInventory($locale);
+        $inventory = $this->buildFullInventory($locale, $skipWebsiteQty);
         return response()->json($inventory);
+    }
+
+    // Search: filter by code or name across all inventory (server-side so pagination applies to filtered set)
+    $search = trim((string) $request->input('search', $request->input('q', '')));
+    $whereClause = '';
+    $bindings = [];
+    if ($search !== '') {
+        $whereClause = ' WHERE (u.abaya_code LIKE ? OR u.design_name LIKE ?)';
+        $like = '%' . $search . '%';
+        $bindings = [$like, $like];
     }
 
     // DB-level pagination: union of size/color/color_size rows, then limit/offset
@@ -293,14 +304,16 @@ public function get_inventory(Request $request)
           INNER JOIN colors c ON c.id = cs.color_id
           WHERE s.mode = 'color_size' )
     ";
-    $countResult = DB::selectOne("SELECT COUNT(*) as total FROM ({$unionSql}) as u");
+    $countSql = "SELECT COUNT(*) as total FROM ({$unionSql}) as u" . $whereClause;
+    $countResult = DB::selectOne($countSql, $bindings);
     $total = (int) ($countResult->total ?? 0);
     $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
     $offset = ($page - 1) * $perPage;
 
-    $rows = DB::select(
-        "SELECT * FROM ({$unionSql}) as u ORDER BY abaya_code, mode, size_name_en, color_name_en LIMIT " . (int) $perPage . " OFFSET " . (int) $offset
-    );
+    $limit = (int) $perPage;
+    $offsetInt = (int) $offset;
+    $orderSql = "SELECT * FROM ({$unionSql}) as u" . $whereClause . " ORDER BY u.abaya_code, u.mode, u.size_name_en, u.color_name_en LIMIT {$limit} OFFSET {$offsetInt}";
+    $rows = DB::select($orderSql, $bindings);
 
     $inventory = [];
     foreach ($rows as $row) {
@@ -339,7 +352,8 @@ public function get_inventory(Request $request)
         } else {
             $uid = $code . '|' . ($sizeName ?: '') . '|' . ($colorName ?: '');
             $webisteQty = 0;
-            if ($row->stock_id && $row->color_id && $row->size_id) {
+            $skipWebsiteQty = $request->boolean('skip_website_qty');
+            if (!$skipWebsiteQty && $row->stock_id && $row->color_id && $row->size_id) {
                 $barcode = DB::table('stocks')->where('id', $row->stock_id)->value('barcode');
                 $webisteQty = (int) fetchWebsiteCurrentQty($row->stock_id, $barcode, $row->color_id, $row->size_id);
             }
@@ -368,8 +382,9 @@ public function get_inventory(Request $request)
 
 /**
  * Build full inventory list (used when full=1 for warehouseInventory).
+ * When $skipWebsiteQty is true, skips external website API calls so response is fast (light form).
  */
-private function buildFullInventory($locale)
+private function buildFullInventory($locale, $skipWebsiteQty = false)
 {
     $inventory = [];
     $stocks = Stock::with(['sizes.size', 'colors.color', 'colorSizes.color', 'colorSizes.size'])
@@ -421,7 +436,10 @@ private function buildFullInventory($locale)
         } elseif ($mode === 'color_size') {
             foreach ($stock->colorSizes as $colorSize) {
                 if ((int) $colorSize->qty <= 0) continue;
-                $result = fetchWebsiteCurrentQty($colorSize->stock_id, $barcode, $colorSize->color_id, $colorSize->size_id);
+                $webisteQty = 0;
+                if (!$skipWebsiteQty) {
+                    $webisteQty = (int) fetchWebsiteCurrentQty($colorSize->stock_id, $barcode, $colorSize->color_id, $colorSize->size_id);
+                }
                 $color = $colorSize->color;
                 $size = $colorSize->size;
                 $colorName = $color ? ($locale == 'ar' ? $color->color_name_ar : $color->color_name_en) : null;
@@ -437,7 +455,7 @@ private function buildFullInventory($locale)
                     'color' => $colorName,
                     'color_code' => $colorCode,
                     'available' => (int) $colorSize->qty,
-                    'webiste_available' => (int) $result
+                    'webiste_available' => $webisteQty
                 ];
             }
         }
@@ -664,81 +682,130 @@ public function execute_transfer(Request $request)
                 $transferItem->save();
             }
 
+            // Get destination channel stock quantity BEFORE update (for audit log when transferring TO channel)
+            $channelQtyBefore = null;
+            if ($toChannel !== 'main' && strpos($toChannel, 'channel-') === 0 && $itemType === 'color_size' && $colorId && $sizeId) {
+                $toChId = (int) explode('-', $toChannel)[1];
+                $chStock = ChannelStock::where('stock_id', $stock->id)->where('location_type', 'channel')->where('location_id', $toChId)
+                    ->where('color_id', $colorId)->where('size_id', $sizeId)->first();
+                $channelQtyBefore = $chStock ? (int) $chStock->quantity : 0;
+            }
+            // Get source channel stock quantity BEFORE update (for audit log when transferring FROM channel)
+            $fromChannelQtyBefore = null;
+            if ($fromChannel !== 'main' && strpos($fromChannel, 'channel-') === 0 && $itemType === 'color_size' && $colorId && $sizeId) {
+                $fromChId = (int) explode('-', $fromChannel)[1];
+                $chStock = ChannelStock::where('stock_id', $stock->id)->where('location_type', 'channel')->where('location_id', $fromChId)
+                    ->where('color_id', $colorId)->where('size_id', $sizeId)->first();
+                $fromChannelQtyBefore = $chStock ? (int) $chStock->quantity : 0;
+            }
+
             // Update channel stocks
             $this->updateChannelStock($stock->id, $item['code'], $itemType, $colorId, $sizeId, $colorName, $sizeName, $fromChannel, $toChannel, (int)$item['qty']);
 
             // Update main warehouse quantities (if transferring from/to main)
             if ($fromChannel === 'main') {
-                // Get current quantity before decrease
-                $currentQty = 0;
-                if ($itemType === 'color_size' && $colorId && $sizeId) {
-                    $colorSize = ColorSize::where('stock_id', $stock->id)
-                        ->where('color_id', $colorId)
-                        ->where('size_id', $sizeId)
-                        ->first();
-                    $currentQty = $colorSize ? (int)$colorSize->qty : 0;
-                }
-                
                 $this->decreaseMainWarehouseStock($stock->id, $itemType, $colorId, $sizeId, (int)$item['qty']);
-                
-                // Log audit entry for transfer out
-                $newQty = max(0, $currentQty - (int)$item['qty']);
-                $toWhom = $toType === 'boutique' ? (Boutique::find($toId)->boutique_name ?? $toChannel) : ($toType === 'channel' ? (Channel::find($toId)->channel_name ?? $toChannel) : $toChannel);
-                
-                StockAuditLog::create([
-                    'stock_id' => $stock->id,
-                    'abaya_code' => $stock->abaya_code,
-                    'barcode' => $stock->barcode,
-                    'design_name' => $stock->design_name,
-                    'operation_type' => 'transferred',
-                    'previous_quantity' => $currentQty,
-                    'new_quantity' => $newQty,
-                    'quantity_change' => -(int)$item['qty'],
-                    'related_id' => $transferCode,
-                    'related_type' => 'transfer',
-                    'related_info' => ['to' => $toWhom, 'from' => 'Main Warehouse'],
-                    'color_id' => $colorId,
-                    'size_id' => $sizeId,
-                    'user_id' => $user_id,
-                    'added_by' => $user_name,
-                    'notes' => 'Transferred out',
-                ]);
+
+                // Log audit: when destination is a channel, store channel-side quantities (per barcode) so channel audit shows correctly
+                if ($toType === 'channel' && $channelQtyBefore !== null) {
+                    $channelNewQty = $channelQtyBefore + (int)$item['qty'];
+                    StockAuditLog::create([
+                        'stock_id' => $stock->id,
+                        'abaya_code' => $stock->abaya_code,
+                        'barcode' => $stock->barcode,
+                        'design_name' => $stock->design_name,
+                        'operation_type' => 'transferred',
+                        'previous_quantity' => $channelQtyBefore,
+                        'new_quantity' => $channelNewQty,
+                        'quantity_change' => (int)$item['qty'],
+                        'related_id' => $transferCode,
+                        'related_type' => 'transfer',
+                        'related_info' => ['to' => $toChannel, 'from' => 'main'],
+                        'color_id' => $colorId,
+                        'size_id' => $sizeId,
+                        'user_id' => $user_id,
+                        'added_by' => $user_name,
+                        'notes' => 'Transferred out',
+                    ]);
+                } else {
+                    $currentQty = 0;
+                    if ($itemType === 'color_size' && $colorId && $sizeId) {
+                        $colorSize = ColorSize::where('stock_id', $stock->id)->where('color_id', $colorId)->where('size_id', $sizeId)->first();
+                        $currentQty = $colorSize ? (int)$colorSize->qty : 0;
+                    }
+                    $newQty = max(0, $currentQty - (int)$item['qty']);
+                    $toWhom = $toType === 'boutique' ? (Boutique::find($toId)->boutique_name ?? $toChannel) : $toChannel;
+                    StockAuditLog::create([
+                        'stock_id' => $stock->id,
+                        'abaya_code' => $stock->abaya_code,
+                        'barcode' => $stock->barcode,
+                        'design_name' => $stock->design_name,
+                        'operation_type' => 'transferred',
+                        'previous_quantity' => $currentQty,
+                        'new_quantity' => $newQty,
+                        'quantity_change' => -(int)$item['qty'],
+                        'related_id' => $transferCode,
+                        'related_type' => 'transfer',
+                        'related_info' => ['to' => $toChannel, 'from' => 'main'],
+                        'color_id' => $colorId,
+                        'size_id' => $sizeId,
+                        'user_id' => $user_id,
+                        'added_by' => $user_name,
+                        'notes' => 'Transferred out',
+                    ]);
+                }
             }
             if ($toChannel === 'main') {
-                // Get current quantity before increase
-                $currentQty = 0;
-                if ($itemType === 'color_size' && $colorId && $sizeId) {
-                    $colorSize = ColorSize::where('stock_id', $stock->id)
-                        ->where('color_id', $colorId)
-                        ->where('size_id', $sizeId)
-                        ->first();
-                    $currentQty = $colorSize ? (int)$colorSize->qty : 0;
-                }
-                
                 $this->increaseMainWarehouseStock($stock->id, $itemType, $colorId, $sizeId, (int)$item['qty']);
-                
-                // Log audit entry for transfer in
-                $newQty = $currentQty + (int)$item['qty'];
-                $fromWhom = $fromType === 'boutique' ? (Boutique::find($fromId)->boutique_name ?? $fromChannel) : ($fromType === 'channel' ? (Channel::find($fromId)->channel_name ?? $fromChannel) : $fromChannel);
-                
-                StockAuditLog::create([
-                    'stock_id' => $stock->id,
-                    'abaya_code' => $stock->abaya_code,
-                    'barcode' => $stock->barcode,
-                    'design_name' => $stock->design_name,
-                    'operation_type' => 'transferred',
-                    'previous_quantity' => $currentQty,
-                    'new_quantity' => $newQty,
-                    'quantity_change' => (int)$item['qty'],
-                    'related_id' => $transferCode,
-                    'related_type' => 'transfer',
-                    'related_info' => ['from' => $fromWhom, 'to' => 'Main Warehouse'],
-                    'color_id' => $colorId,
-                    'size_id' => $sizeId,
-                    'user_id' => $user_id,
-                    'added_by' => $user_name,
-                    'notes' => 'Transferred in',
-                ]);
+
+                // Log audit: when source is a channel, store channel-side quantities for channel audit
+                if ($fromType === 'channel' && $fromChannelQtyBefore !== null) {
+                    $channelNewQty = max(0, $fromChannelQtyBefore - (int)$item['qty']);
+                    StockAuditLog::create([
+                        'stock_id' => $stock->id,
+                        'abaya_code' => $stock->abaya_code,
+                        'barcode' => $stock->barcode,
+                        'design_name' => $stock->design_name,
+                        'operation_type' => 'transferred',
+                        'previous_quantity' => $fromChannelQtyBefore,
+                        'new_quantity' => $channelNewQty,
+                        'quantity_change' => -(int)$item['qty'],
+                        'related_id' => $transferCode,
+                        'related_type' => 'transfer',
+                        'related_info' => ['from' => $fromChannel, 'to' => 'main'],
+                        'color_id' => $colorId,
+                        'size_id' => $sizeId,
+                        'user_id' => $user_id,
+                        'added_by' => $user_name,
+                        'notes' => 'Transferred in',
+                    ]);
+                } else {
+                    $currentQty = 0;
+                    if ($itemType === 'color_size' && $colorId && $sizeId) {
+                        $colorSize = ColorSize::where('stock_id', $stock->id)->where('color_id', $colorId)->where('size_id', $sizeId)->first();
+                        $currentQty = $colorSize ? (int)$colorSize->qty : 0;
+                    }
+                    $newQty = $currentQty + (int)$item['qty'];
+                    $fromWhom = $fromType === 'boutique' ? (Boutique::find($fromId)->boutique_name ?? $fromChannel) : $fromChannel;
+                    StockAuditLog::create([
+                        'stock_id' => $stock->id,
+                        'abaya_code' => $stock->abaya_code,
+                        'barcode' => $stock->barcode,
+                        'design_name' => $stock->design_name,
+                        'operation_type' => 'transferred',
+                        'previous_quantity' => $currentQty,
+                        'new_quantity' => $newQty,
+                        'quantity_change' => (int)$item['qty'],
+                        'related_id' => $transferCode,
+                        'related_type' => 'transfer',
+                        'related_info' => ['from' => $fromChannel, 'to' => 'main'],
+                        'color_id' => $colorId,
+                        'size_id' => $sizeId,
+                        'user_id' => $user_id,
+                        'added_by' => $user_name,
+                        'notes' => 'Transferred in',
+                    ]);
+                }
             }
 
             // Create transfer item history

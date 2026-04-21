@@ -1,6 +1,8 @@
 <script>
+    var canDeletePosOrder = @json(in_array(13, auth()->user()->permissions ?? []));
     $(document).ready(function() {
         let currentPage = 1;
+        let currentSearch = '';
 
         // Function to get delivery status badge HTML
         function getDeliveryStatusBadge(status, orderTypeRaw) {
@@ -48,9 +50,12 @@
 
         function loadOrders(page = 1) {
             currentPage = page;
-            $.get("{{ url('pos/orders/list/data') }}?page=" + page, function(res) {
+            $.get("{{ url('pos/orders/list/data') }}", {
+                page: page,
+                search: currentSearch
+            }, function(res) {
                 if (!res.success) {
-                    $('#ordersTableBody').html('<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
+                    $('#ordersTableBody').html('<tr><td colspan="13" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
                     return;
                 }
 
@@ -62,6 +67,7 @@
                         <tr class="hover:bg-pink-50/50 transition-colors" data-id="${order.id}">
                             <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] font-semibold whitespace-nowrap">#${order.order_no}</td>
                             <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${order.customer_name || '-'}</td>
+                            <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">${order.customer_phone || '-'}</td>
                             <td class="px-3 sm:px-4 md:px-6 py-5 text-[var(--text-primary)] whitespace-nowrap">
                                 <span class="px-2 py-1 rounded-full text-xs font-semibold ${order.order_type === 'Delivery' || order.order_type === 'توصيل' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
                                     ${order.order_type || '-'}
@@ -97,13 +103,21 @@
                                             title="{{ trans('messages.print', [], session('locale')) }}">
                                         <span class="material-symbols-outlined text-[22px]">print</span>
                                     </button>
+                                    ${canDeletePosOrder ? `
+                                    <button class="delete-order-btn p-2 rounded-lg text-white bg-red-600 hover:bg-red-700 transition shadow-sm" 
+                                            data-order-id="${order.id}"
+                                            data-order-no="#${order.order_no}"
+                                            title="{{ trans('messages.delete', [], session('locale')) }}">
+                                        <span class="material-symbols-outlined text-[22px]">delete</span>
+                                    </button>
+                                    ` : ''}
                                 </div>
                             </td>
                         </tr>
                         `;
                     });
                 } else {
-                    rows = '<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-gray-500">{{ trans('messages.no_orders', [], session('locale')) ?: 'No orders found' }}</td></tr>';
+                    rows = '<tr><td colspan="13" class="px-3 sm:px-4 md:px-6 py-8 text-center text-gray-500">{{ trans('messages.no_orders', [], session('locale')) ?: 'No orders found' }}</td></tr>';
                 }
                 $('#ordersTableBody').html(rows);
 
@@ -133,7 +147,7 @@
                 }
                 $('#pagination').html(pagination);
             }).fail(function() {
-                $('#ordersTableBody').html('<tr><td colspan="12" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
+                $('#ordersTableBody').html('<tr><td colspan="13" class="px-3 sm:px-4 md:px-6 py-8 text-center text-red-500">Error loading orders</td></tr>');
             });
         }
 
@@ -149,14 +163,10 @@
         // Initial load
         loadOrders();
 
-        // Search functionality
+        // Search functionality (server side)
         $('#search_order').on('keyup', function() {
-            let value = $(this).val().toLowerCase();
-            $('tbody tr').filter(function() {
-                $(this).toggle(
-                    $(this).text().toLowerCase().indexOf(value) > -1
-                );
-            });
+            currentSearch = ($(this).val() || '').trim();
+            loadOrders(1);
         });
 
         // View details button click
@@ -386,6 +396,62 @@
             if ($(e.target).is('#deliveryStatusModal')) {
                 closeDeliveryStatusModal();
             }
+        });
+
+        // Delete order: SweetAlert confirmation then delete from DB
+        $(document).on('click', '.delete-order-btn', function() {
+            let orderId = $(this).data('order-id');
+            let orderNo = $(this).data('order-no') || ('#' + orderId);
+            Swal.fire({
+                title: '{{ trans('messages.delete_order', [], session('locale')) ?: 'Delete Order' }}',
+                html: '{{ trans('messages.delete_order_confirm', [], session('locale')) ?: 'Are you sure you want to delete order' }} ' + orderNo + '?<br>{{ trans('messages.delete_order_warning', [], session('locale')) ?: 'This action cannot be undone.' }}',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: '{{ trans('messages.delete', [], session('locale')) ?: 'Delete' }}',
+                cancelButtonText: '{{ trans('messages.cancel', [], session('locale')) ?: 'Cancel' }}'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ url('pos/orders') }}/" + orderId,
+                        type: 'POST',
+                        data: {
+                            _token: "{{ csrf_token() }}",
+                            _method: 'DELETE'
+                        },
+                        success: function(res) {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: '{{ trans('messages.success', [], session('locale')) }}',
+                                    text: res.message || '{{ trans('messages.order_deleted_successfully', [], session('locale')) ?: 'Order deleted successfully.' }}',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                });
+                                loadOrders(currentPage);
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: '{{ trans('messages.error', [], session('locale')) }}',
+                                    text: res.message || '{{ trans('messages.error_deleting_order', [], session('locale')) ?: 'Error deleting order.' }}'
+                                });
+                            }
+                        },
+                        error: function(xhr) {
+                            let message = '{{ trans('messages.error_deleting_order', [], session('locale')) ?: 'Error deleting order.' }}';
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                message = xhr.responseJSON.message;
+                            }
+                            Swal.fire({
+                                icon: 'error',
+                                title: '{{ trans('messages.error', [], session('locale')) }}',
+                                text: message
+                            });
+                        }
+                    });
+                }
+            });
         });
     });
 </script>

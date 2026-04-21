@@ -1,7 +1,32 @@
 <script>
-function openDetails(transfer) {
+function decodeHtmlEntities(str) {
+    if (!str) return '';
+    var txt = document.createElement('textarea');
+    txt.innerHTML = str;
+    return txt.value;
+}
+
+function openDetails(btnOrTransfer) {
+    var transfer;
+    if (typeof btnOrTransfer === 'object' && btnOrTransfer !== null && btnOrTransfer.getAttribute) {
+        try {
+            var raw = btnOrTransfer.getAttribute('data-transfer') || '{}';
+            var decoded = decodeHtmlEntities(raw);
+            transfer = JSON.parse(decoded);
+        } catch (e) {
+            console.error('Invalid transfer data', e);
+            return;
+        }
+    } else {
+        transfer = btnOrTransfer;
+    }
+    if (!transfer || !transfer.items) {
+        transfer = transfer || {};
+        transfer.items = Array.isArray(transfer.items) ? transfer.items : [];
+    }
     const modal = document.getElementById('detailsModal');
     const content = document.getElementById('detailsContent');
+    if (!modal || !content) return;
     
     let html = `
         <div class="space-y-4">
@@ -63,6 +88,17 @@ function openDetails(transfer) {
 }
 
 function closeDetails() {
-    document.getElementById('detailsModal').classList.add('hidden');
+    var modal = document.getElementById('detailsModal');
+    if (modal) modal.classList.add('hidden');
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.movement-detail-btn');
+        if (btn) {
+            e.preventDefault();
+            openDetails(btn);
+        }
+    });
+});
 </script>

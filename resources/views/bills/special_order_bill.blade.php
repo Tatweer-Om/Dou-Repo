@@ -311,6 +311,23 @@ td img{
     <div id="qrcode"></div>
 
     <div class="summary-box">
+      @php
+        $itemsSubtotal = $specialOrder->items->sum(fn($i) => $i->price * $i->quantity);
+        $discount = floatval($specialOrder->discount ?? 0);
+        $subtotalBeforeDiscount = $itemsSubtotal + floatval($specialOrder->shipping_fee ?? 0);
+      @endphp
+
+      @if(!$isStockOrder && $discount > 0)
+      <div>
+        <span>{{ trans('messages.subtotal', [], session('locale')) ?: 'Subtotal' }}</span>
+        <span>{{ number_format($subtotalBeforeDiscount, 3) }} {{ trans('messages.currency', [], session('locale')) }}</span>
+      </div>
+      <div style="color:#059669;">
+        <span>{{ trans('messages.discount', [], session('locale')) ?: 'Discount' }}</span>
+        <span>– {{ number_format($discount, 3) }} {{ trans('messages.currency', [], session('locale')) }}</span>
+      </div>
+      @endif
+
       <div><span>{{ trans('messages.total', [], session('locale')) }}</span><span>{{ number_format($specialOrder->total_amount, 3) }} {{ trans('messages.currency', [], session('locale')) }}</span></div>
       <div><span>{{ trans('messages.paid', [], session('locale')) }}</span><span>{{ number_format($specialOrder->paid_amount, 3) }} {{ trans('messages.currency', [], session('locale')) }}</span></div>
       <div class="total"><span>{{ trans('messages.remaining', [], session('locale')) }}</span><span>{{ number_format($specialOrder->total_amount - $specialOrder->paid_amount, 3) }} {{ trans('messages.currency', [], session('locale')) }}</span></div>

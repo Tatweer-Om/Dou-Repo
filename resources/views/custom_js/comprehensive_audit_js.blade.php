@@ -72,7 +72,6 @@ $(document).ready(function() {
                             <td class="px-4 py-3 border text-right text-xs">${item.time}</td>
                             <td class="px-4 py-3 border text-right text-xs font-medium">${item.abaya_code}</td>
                             <td class="px-4 py-3 border text-right text-xs">${item.barcode}</td>
-                            <td class="px-4 py-3 border text-right text-xs">${item.size || '—'}</td>
                             <td class="px-4 py-3 border text-right text-xs">${item.design_name}</td>
                             <td class="px-4 py-3 border text-right text-xs">
                                 <span class="px-1 rounded text-xs font-medium ${
@@ -85,6 +84,7 @@ $(document).ready(function() {
                                     ${item.operation_label}
                                 </span>
                             </td>
+                            <td class="px-4 py-3 border text-right text-xs">${item.channel_name || '—'}</td>
                             <td class="px-4 py-3 border text-right text-xs">${item.previous_quantity}</td>
                             <td class="px-4 py-3 border text-right text-xs font-semibold ${changeClass}">${changeSign}${item.quantity_change}</td>
                             <td class="px-4 py-3 border text-right text-xs font-semibold">${item.new_quantity}</td>

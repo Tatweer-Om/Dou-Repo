@@ -19,11 +19,31 @@ class CustomerController extends Controller
         return view('customers.customer', compact('areas', 'cities'));
     }
 
-    public function getCustomers()
+    public function getCustomers(Request $request)
     {
-        return Customer::with(['city', 'area'])
-            ->orderBy('id', 'DESC')
-            ->paginate(10);
+        $search = trim((string) $request->input('search', ''));
+
+        $query = Customer::with(['city', 'area'])
+            ->orderBy('id', 'DESC');
+
+        if ($search !== '') {
+            $term = '%' . $search . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)
+                  ->orWhere('phone', 'like', $term)
+                  ->orWhere('notes', 'like', $term)
+                  ->orWhereHas('city', function ($cq) use ($term) {
+                      $cq->where('city_name_ar', 'like', $term)
+                         ->orWhere('city_name_en', 'like', $term);
+                  })
+                  ->orWhereHas('area', function ($aq) use ($term) {
+                      $aq->where('area_name_ar', 'like', $term)
+                         ->orWhere('area_name_en', 'like', $term);
+                  });
+            });
+        }
+
+        return $query->paginate(10);
     }
 
     public function store(Request $request)

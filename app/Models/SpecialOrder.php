@@ -13,10 +13,14 @@ class SpecialOrder extends Model
         'pos_order_id',
         'source',
         'customer_id',
+        'customer_city',
+        'customer_area',
+        'customer_address',
         'send_as_gift',
         'gift_text',
         'notes',
         'shipping_fee',
+        'discount',
         'status',
         'total_amount',
         'paid_amount',
@@ -28,9 +32,10 @@ class SpecialOrder extends Model
 
     protected $casts = [
         'send_as_gift' => 'boolean',
-        'shipping_fee' => 'decimal:3',
-        'total_amount' => 'decimal:3',
-        'paid_amount' => 'decimal:3',
+        'shipping_fee' => \App\Casts\SafeDecimalCast::class . ':3',
+        'discount' => \App\Casts\SafeDecimalCast::class . ':3',
+        'total_amount' => \App\Casts\SafeDecimalCast::class . ':3',
+        'paid_amount' => \App\Casts\SafeDecimalCast::class . ':3',
     ];
 
     /**

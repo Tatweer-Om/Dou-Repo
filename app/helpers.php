@@ -398,7 +398,7 @@ function sms_module($contact, $sms)
  */
 function syncPendingStocksToWebsite()
 {
-    $apiUrl = 'http://duo-fashion.com/admin_advance/Api/add_stock_website';
+    $apiUrl = 'http://duo-fashion.com/admin/Api/add_stock_website';
     $results = [
         'picked' => 0,
         'successful' => 0,
@@ -473,7 +473,7 @@ function syncPendingStocksToWebsite()
                     'Content-Type' => 'application/json',
                     'User-Agent'   => 'TatweerClothingStockSync/1.0', // optional, some APIs like this
                 ])
-                ->post('https://duo-fashion.com/admin_advance/Api/add_stock_website', $payload);
+                ->post('https://duo-fashion.com/admin/Api/add_stock_website', $payload);
 
             // For better debugging
             \Log::info('Website API call', [
@@ -515,123 +515,6 @@ function syncPendingStocksToWebsite()
 }
 
 
-
-// function syncPendingTransferItemsToWebsite()
-// {
-//     $apiUrl = 'https://duo-fashion.com/admin_advance/Api/receive_stock_qty';
-
-//     $results = [
-//         'picked'     => 0,
-//         'successful' => 0,
-//         'failed'     => 0,
-//         'details'    => [],
-//     ];
-
-//     $limit = (int) (request()->input('limit', 0));
-
-//     $query = TransferItem::where('to_location', 'channel-1')
-//         ->whereIn('website_data_delivery_status', [0, 1])
-//         ->orderBy('id', 'asc');
-
-//     if ($limit > 0) {
-//         $query->limit($limit);
-//     }
-
-//     $items = $query->get();
-//     $results['picked'] = $items->count();
-
-//     foreach ($items as $item) {
-
-//         $transferItemId = (int) $item->id;
-
-//         // Minimal & valid payload
-//         $itemPayload = [
-//             'stock_id'   => (int) $item->stock_id,
-//             'abaya_code' => $item->abaya_code ?? '',
-//             'quantity'   => (int) $item->quantity,
-//             'color_id'   => (int) ($item->color_id ?? 0),
-//             'size_id'    => (int) ($item->size_id ?? 0),
-//             'from'       => $item->from_location ?? '',
-//             'to'         => $item->to_location ?? '',
-//         ];
-
-//         try {
-
-//             $response = Http::timeout(30)
-//                 ->withHeaders([
-//                     'Accept'       => 'application/json',
-//                     'Content-Type' => 'application/json',
-//                     'User-Agent'   => 'TatweerClothingTransferSync/1.0',
-//                 ])
-//                 ->post($apiUrl, [
-//                     'item' => $itemPayload, // ✅ Critical: API expects "item"
-//                 ]);
-
-//             // Log for debugging
-//             Log::info('Transfer API call', [
-//                 'transfer_item_id' => $transferItemId,
-//                 'payload'          => ['item' => $itemPayload],
-//                 'http_status'      => $response->status(),
-//                 'response'         => $response->json(),
-//             ]);
-
-//             // ✅ Success condition: HTTP 200 + status=true OR empty body
-//             $isSuccess = $response->successful() &&
-//                 ($response->json('status') === true || empty($response->body()));
-
-//             if ($isSuccess) {
-
-//                 // Mark as delivered
-//                 TransferItem::where('id', $transferItemId)
-//                     ->update(['website_data_delivery_status' => 2]);
-
-//                 $results['successful']++;
-//                 $results['details'][] = [
-//                     'transfer_item_id' => $transferItemId,
-//                     'success'          => true,
-//                     'http_status'      => $response->status(),
-//                     'api_message'      => $response->json('message') ?? 'OK',
-//                 ];
-
-//             } else {
-
-//                 // Mark as retryable
-//                 TransferItem::where('id', $transferItemId)
-//                     ->update(['website_data_delivery_status' => 1]);
-
-//                 $results['failed']++;
-//                 $results['details'][] = [
-//                     'transfer_item_id' => $transferItemId,
-//                     'success'          => false,
-//                     'http_status'      => $response->status(),
-//                     'api_response'     => $response->json() ?? $response->body(),
-//                 ];
-//             }
-
-//         } catch (\Exception $e) {
-
-//             // Exception → mark failed
-//             Log::error('Transfer sync exception', [
-//                 'transfer_item_id' => $transferItemId,
-//                 'error'            => $e->getMessage(),
-//             ]);
-
-//             TransferItem::where('id', $transferItemId)
-//                 ->update(['website_data_delivery_status' => 0]);
-
-//             $results['failed']++;
-//             $results['details'][] = [
-//                 'transfer_item_id' => $transferItemId,
-//                 'success'          => false,
-//                 'error'            => $e->getMessage(),
-//             ];
-//         }
-//     }
-
-//     return $results;
-// }
-
-
 function syncAllTransferItemsToWebsiteReceiveQty(string $targetToLocation = 'channel-1', int $limit = 0)
 {
     $query = TransferItem::query()
@@ -657,7 +540,7 @@ function syncAllTransferItemsToWebsiteReceiveQty(string $targetToLocation = 'cha
 
         $payload = json_encode(['item' => $payload_item]);
 
-        $url = "https://duo-fashion.com/admin_advance/Api/receive_stock_qty";
+        $url = "https://duo-fashion.com/admin/Api/receive_stock_qty";
 
         $curl = curl_init($url);
 
@@ -700,7 +583,7 @@ function syncAllTransferItemsToWebsiteReceiveQty(string $targetToLocation = 'cha
  */
 function fetchWebsiteCurrentQty($stock_id, $barcode, $color_id, $size_id)
 {
-    $url = "https://duo-fashion.com/admin_advance/Api/website_current_qty";
+    $url = "https://duo-fashion.com/admin/Api/website_current_qty";
 
 
 
@@ -766,7 +649,7 @@ function fetchWebsiteCurrentQty($stock_id, $barcode, $color_id, $size_id)
  */
 function get_shipping_fee_from_api($area_id, $city_id, $customer_id, $total_quantity)
 {
-    $url = 'https://www.duo-fashion.com/admin_advance/Api/send_shipping_price';
+    $url = 'https://www.duo-fashion.com/admin/Api/send_shipping_price';
 
     $payload = json_encode([
         'area_id'        => (int) $area_id,
@@ -836,7 +719,7 @@ function get_shipping_fee_from_api($area_id, $city_id, $customer_id, $total_quan
  */
 function get_shipping_fee_for_pos_order($area_id, $city_id, $customer_id, $total_quantity, $phone = '')
 {
-    $url = 'https://www.duo-fashion.com/admin_advance/Api/send_shipping_price';
+    $url = 'https://www.duo-fashion.com/admin/Api/send_shipping_price';
 
     $payload = [
         'area_id'        => (int) $area_id,

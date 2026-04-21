@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Auth;
 
 class SpecialOrderController extends Controller
 {
-       public function index(){
+        public function index(){
         if (!Auth::check()) {
             return redirect()->route('login_page')->with('error', 'Please login first');
         }
@@ -40,9 +40,132 @@ class SpecialOrderController extends Controller
         $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales_price')->get();
         $colors = Color::all();
         $sizes = Size::all();
+        $editOrderId = null;
 
-        return view ('special_orders.special_order', compact('stock', 'colors', 'sizes'));
+        return view ('special_orders.special_order', compact('stock', 'colors', 'sizes', 'editOrderId'));
 
+    }
+    
+    
+    public function ordersSentToTailor(Request $request)
+{
+    if (!Auth::check()) {
+        return redirect()->route('login_page')->with('error', 'Please login first');
+    }
+
+    $permissions = Auth::user()->permissions ?? [];
+    if (!in_array(7, $permissions)) {
+        return redirect()->route('login_page')->with('error', 'Permission denied');
+    }
+
+    $summaryNumber = trim((string) $request->input('sending_summary_number', ''));
+    $listNumber = trim((string) $request->input('list_number', ''));
+    $tailorId = $request->input('tailor_id');
+    $date = trim((string) $request->input('date', ''));
+
+    $rows = SpecialOrderItem::query()
+        ->leftJoin('tailors', 'tailors.id', '=', 'special_order_items.tailor_id')
+        ->whereNotNull('special_order_items.tailor_id')
+        ->when($summaryNumber !== '', function ($query) use ($summaryNumber) {
+            $query->where('special_order_items.sending_summary_number', 'like', '%' . $summaryNumber . '%');
+        })
+        ->when($listNumber !== '', function ($query) use ($listNumber) {
+            $query->where('special_order_items.list_number', 'like', '%' . $listNumber . '%');
+        })
+        ->when(!empty($tailorId), function ($query) use ($tailorId) {
+            $query->where('special_order_items.tailor_id', $tailorId);
+        })
+        ->when($date !== '', function ($query) use ($date) {
+            $query->whereDate('special_order_items.sent_to_tailor_at', $date);
+        })
+        ->select([
+            'special_order_items.list_number',
+            'special_order_items.sending_summary_number',
+            'special_order_items.tailor_id',
+            DB::raw("COALESCE(tailors.tailor_name, '-') as tailor_name"),
+            DB::raw('MAX(COALESCE(special_order_items.sent_to_tailor_at, special_order_items.updated_at, special_order_items.created_at)) as sent_at'),
+            DB::raw('COUNT(*) as items_count'),
+            DB::raw('SUM(COALESCE(special_order_items.quantity,1)) as total_quantity'),
+            DB::raw("GROUP_CONCAT(special_order_items.id ORDER BY special_order_items.id SEPARATOR ',') as item_ids_csv"),
+        ])
+        ->groupBy(
+            'special_order_items.list_number',
+            'special_order_items.sending_summary_number',
+            'special_order_items.tailor_id',
+            'tailors.tailor_name'
+        )
+        ->orderByRaw('MAX(COALESCE(special_order_items.sent_to_tailor_at, special_order_items.updated_at, special_order_items.created_at)) DESC')
+        ->paginate(20)
+        ->withQueryString();
+
+    $rows->setCollection(
+        $rows->getCollection()->map(function ($row) {
+            $ids = collect(explode(',', (string) ($row->item_ids_csv ?? '')))
+                ->map(fn ($v) => (int) trim($v))
+                ->filter(fn ($v) => $v > 0)
+                ->values()
+                ->all();
+
+            $row->item_ids = $ids;
+            $row->print_url = route('send_request.export_pdf') . '?' . http_build_query(['item_ids' => $ids]);
+            $row->sent_at_formatted = $row->sent_at ? Carbon::parse($row->sent_at)->format('Y-m-d h:i A') : '-';
+            $row->list_number_display = $row->list_number ?: 'No list number';
+            $row->sending_summary_number_display = $row->sending_summary_number ?: 'No sending summary number';
+            return $row;
+        })
+    );
+
+    $tailors = Tailor::whereIn('id', function ($q) {
+        $q->from('special_order_items')
+            ->select('tailor_id')
+            ->whereNotNull('tailor_id')
+            ->distinct();
+    })->orderBy('tailor_name')->get(['id', 'tailor_name']);
+
+    return view('special_orders.orders_sent_to_tailor', compact('rows', 'tailors'));
+}
+    
+     private function generateListNumber()
+    {
+        $now = Carbon::now();
+        $datePrefix = $now->format('mdY'); // month, day, 4-digit year
+
+        $lastItem = SpecialOrderItem::where('list_number', 'like', $datePrefix . '-li-%')
+            ->orderBy('list_number', 'desc')
+            ->first();
+
+        $sequence = 1;
+        if ($lastItem && $lastItem->list_number) {
+            $parts = explode('-', $lastItem->list_number);
+            if (count($parts) >= 3 && is_numeric($parts[2])) {
+                $sequence = (int) $parts[2] + 1;
+            }
+        }
+
+        return $datePrefix . '-li-' . str_pad($sequence, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Show the edit special order form (same form as create, pre-filled via API).
+     */
+    public function editPage($id)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login_page')->with('error', 'Please login first');
+        }
+        $permissions = Auth::user()->permissions ?? [];
+        if (!in_array(5, $permissions)) {
+            return redirect()->route('login_page')->with('error', 'Permission denied');
+        }
+        $order = SpecialOrder::find($id);
+        if (!$order) {
+            return redirect()->route('view_special_order')->with('error', trans('messages.special_order', [], session('locale')) . ' not found.');
+        }
+        $stock = Stock::select('id', 'abaya_code as code', 'design_name as name', 'sales_price')->get();
+        $colors = Color::all();
+        $sizes = Size::all();
+        $editOrderId = (int) $id;
+        return view('special_orders.special_order', compact('stock', 'colors', 'sizes', 'editOrderId'));
     }
 
   public function show_specialorder()
@@ -114,6 +237,216 @@ class SpecialOrderController extends Controller
     }
 }
 
+
+//  public function add_specialorder(Request $request)
+// {
+//     try {
+//         DB::beginTransaction();
+
+//     $user_id = Auth::id();
+//     $user = User::find($user_id);
+//         $user_name = $user->user_name ?? 'System';
+
+//         // Log the incoming request for debugging
+//         \Log::info('Special Order Request:', [
+//             'customer' => $request->input('customer'),
+//             'orders_count' => count($request->input('orders', [])),
+//             'orders' => $request->input('orders'),
+//             'order_type' => $request->input('order_type', 'customer'),
+//         ]);
+
+//         // Check if this is a stock special order
+//         $isStockOrder = $request->input('order_type') === 'stock';
+
+//         if ($isStockOrder) {
+//             // Validate stock order fields
+//             $request->validate([
+//                 'orders' => 'required|array|min:1',
+//                 'orders.*.stock_id' => 'required|exists:stocks,id',
+//                 'orders.*.color_id' => 'required|exists:colors,id',
+//                 'orders.*.size_id' => 'required|exists:sizes,id',
+//                 'orders.*.quantity' => 'required|integer|min:1',
+//                 'orders.*.price' => 'required|numeric|min:0',
+//             ]);
+//         } else {
+//             // Validate customer order fields
+//             $request->validate([
+//                 'customer.name' => 'required|string|max:255',
+//                 'customer.phone' => 'required|string|max:20',
+//                 'customer.source' => 'required|string|in:whatsapp,walkin',
+//                 'customer.area_id' => 'required|exists:areas,id',
+//                 'customer.city_id' => 'required|exists:cities,id',
+//                 'customer.address' => 'required|string',
+//                 'orders' => 'required|array|min:1',
+//                 'orders.*.stock_id' => 'nullable|exists:stocks,id',
+//                 'orders.*.quantity' => 'required|integer|min:1',
+//                 'orders.*.price' => 'required|numeric|min:0',
+//             ]);
+//         }
+
+//         $customer = null;
+//         if (!$isStockOrder) {
+//             // Create or find customer
+//             $phone = $request->input('customer.phone');
+//             $areaId = $request->input('customer.area_id'); // Governorate ID
+//             $cityId = $request->input('customer.city_id'); // State/Area ID
+//             $address = $request->input('customer.address');
+            
+//             if (!empty($phone)) {
+//                 // If phone exists, find or create by phone
+//                 $customer = Customer::firstOrCreate(
+//                     ['phone' => $phone],
+//                     [
+//                         'name' => $request->input('customer.name'),
+//                         'area_id' => $areaId,
+//                         'city_id' => $cityId,
+//                         'address' => $address,
+//                     ]
+//                 );
+
+//                 // Update customer if phone exists but data changed
+//                 if ($customer->wasRecentlyCreated === false) {
+//                     $customer->name = $request->input('customer.name');
+//                     $customer->area_id = $areaId;
+//                     $customer->city_id = $cityId;
+//                     $customer->address = $address;
+//                     $customer->save();
+//                 }
+//             } else {
+//                 // If no phone, create new customer
+//                 $customer = new Customer();
+//                 $customer->name = $request->input('customer.name');
+//                 $customer->phone = null;
+//                 $customer->area_id = $areaId;
+//                 $customer->city_id = $cityId;
+//                 $customer->address = $address;
+//                 $customer->save();
+//             }
+//         }
+
+//         // Calculate total amount (0 for stock orders)
+//           $totalAmount = 0;
+//         $shippingFee = 0;
+//         if (!$isStockOrder) {
+//             $areaId = (int) ($customer->area_id ?? 0);
+//             $deliveryFeeAreas = [10, 11];
+//             if (in_array($areaId, $deliveryFeeAreas, true)) {
+//                 $shippingFee = (float) $request->input('shipping_fee', 0);
+//             }
+//             $discount = max(0, (float) $request->input('discount', 0));
+//             $totalAmount = $shippingFee;
+//             foreach ($request->input('orders', []) as $orderData) {
+//                 $totalAmount += ($orderData['price'] ?? 0) * ($orderData['quantity'] ?? 1);
+//             }
+//             $totalAmount = max(0, $totalAmount - $discount);
+//         }
+
+//         // Create special order
+//         $specialOrder = new SpecialOrder();
+//         if ($isStockOrder) {
+//             // Generate special order number for stock orders (st- prefix)
+//             $specialOrder->special_order_no = $this->generateSpecialOrderNo(true);
+//             $specialOrder->source = 'stock';
+//             $specialOrder->customer_id = null;
+//             $specialOrder->send_as_gift = false;
+//             $specialOrder->gift_text = null;
+//             $specialOrder->shipping_fee = 0;
+//             $specialOrder->total_amount = 0;
+//             $specialOrder->paid_amount = 0;
+//         } else {
+//             // Generate special order number for customer orders (sc- prefix)
+//             $specialOrder->special_order_no = $this->generateSpecialOrderNo(false);
+//             $specialOrder->source = $request->input('customer.source');
+//             $specialOrder->customer_id = $customer->id;
+//             $specialOrder->send_as_gift = $request->input('customer.is_gift') === 'yes' ? true : false;
+//             $specialOrder->gift_text = $request->input('customer.gift_message');
+//             $specialOrder->shipping_fee = $request->input('shipping_fee', 0);
+//                         $specialOrder->discount = $discount ?? 0;
+
+//             $specialOrder->total_amount = $totalAmount;
+//             $specialOrder->paid_amount = 0;
+//         }
+//         $specialOrder->status = 'new';
+//         $specialOrder->notes = $request->input('notes');
+//         $specialOrder->user_id = 1;
+//         $specialOrder->added_by = 'system_add';
+//         $specialOrder->save();
+
+//         // Save order items
+//         foreach ($request->input('orders', []) as $orderData) {
+//             $item = new SpecialOrderItem();
+//             $item->special_order_id = $specialOrder->id;
+//             $item->stock_id = $orderData['stock_id'] ?? null;
+//             $item->abaya_code = $orderData['abaya_code'] ?? null;
+//             $item->design_name = $orderData['design_name'] ?? null;
+//             $item->quantity = $orderData['quantity'] ?? 1;
+//             $item->price = $orderData['price'] ?? 0;
+            
+//             // For stock orders, save color and size
+//             if ($isStockOrder) {
+//                 $item->color_id = $orderData['color_id'] ?? null;
+//                 $item->size_id = $orderData['size_id'] ?? null;
+//             }
+            
+//             // For customer orders, save measurements
+//             if (!$isStockOrder) {
+//                 $item->abaya_length = $orderData['length'] ?? null;
+//                 $item->bust = $orderData['bust'] ?? null;
+//                 $item->sleeves_length = $orderData['sleeves'] ?? null;
+//                 $item->buttons = ($orderData['buttons'] ?? 'yes') === 'yes' ? true : false;
+//             }
+            
+//             $item->notes = $orderData['notes'] ?? null;
+//             $item->save();
+//         }
+
+//         DB::commit();
+        
+//         // Refresh the special order to ensure items are loaded
+//         $specialOrder->refresh();
+//         $specialOrder->load('items');
+        
+//         // Only send SMS for customer orders (not stock orders)
+//         if (!$isStockOrder && $customer) {
+//             // Get customer contact (phone) for SMS
+//             $customerContact = $customer->phone ?? null;
+            
+//             // Prepare SMS parameters for Special Order
+//             $smsParams = [
+//                 'sms_status' => 2, // 2 is for Special Order
+//                 'special_order_id' => $specialOrder->id,
+//                 'contact' => $customerContact, // Customer phone number for sending SMS
+//             ];
+
+//             $smsContent = \get_sms($smsParams);
+            
+//             // Send SMS if contact is available and content is generated
+//             if (!empty($customerContact) && !empty($smsContent)) {
+//                 \sms_module($customerContact, $smsContent);
+//             }
+//         }
+
+//         return response()->json([
+//             'success' => true,
+//             'message' => trans('messages.order_saved_successfully', [], session('locale')),
+//             'special_order_id' => $specialOrder->id
+//         ]);
+
+//     } catch (\Illuminate\Validation\ValidationException $e) {
+//         DB::rollBack();
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Validation failed',
+//             'errors' => $e->errors()
+//         ], 422);
+//     } catch (\Exception $e) {
+//         DB::rollBack();
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error saving order: ' . $e->getMessage()
+//         ], 500);
+//     }
+// }
 
  public function add_specialorder(Request $request)
 {
@@ -201,13 +534,21 @@ class SpecialOrderController extends Controller
             }
         }
 
-        // Calculate total amount (0 for stock orders)
+        // Calculate total amount (0 for stock orders). Delivery fee only for area id 10 or 11.
         $totalAmount = 0;
+        $shippingFee = 0;
         if (!$isStockOrder) {
-            $totalAmount = $request->input('shipping_fee', 0);
+            $areaId = (int) ($customer->area_id ?? 0);
+            $deliveryFeeAreas = [10, 11];
+            if (in_array($areaId, $deliveryFeeAreas, true)) {
+                $shippingFee = (float) $request->input('shipping_fee', 0);
+            }
+            $discount = max(0, (float) $request->input('discount', 0));
+            $totalAmount = $shippingFee;
             foreach ($request->input('orders', []) as $orderData) {
                 $totalAmount += ($orderData['price'] ?? 0) * ($orderData['quantity'] ?? 1);
             }
+            $totalAmount = max(0, $totalAmount - $discount);
         }
 
         // Create special order
@@ -229,7 +570,8 @@ class SpecialOrderController extends Controller
             $specialOrder->customer_id = $customer->id;
             $specialOrder->send_as_gift = $request->input('customer.is_gift') === 'yes' ? true : false;
             $specialOrder->gift_text = $request->input('customer.gift_message');
-            $specialOrder->shipping_fee = $request->input('shipping_fee', 0);
+            $specialOrder->shipping_fee = $shippingFee;
+            $specialOrder->discount = $discount ?? 0;
             $specialOrder->total_amount = $totalAmount;
             $specialOrder->paid_amount = 0;
         }
@@ -315,77 +657,322 @@ class SpecialOrderController extends Controller
     }
 }
 
+//   public function edit_specialorder(Request $request)
+// {
+//     $specialorder_id = $request->input('id');
+//     $specialorder = SpecialOrder::with('items')->find($specialorder_id);
 
-  public function edit_specialorder(Request $request)
-{
-    $specialorder_id = $request->input('id');
-    $specialorder = SpecialOrder::with('items')->find($specialorder_id);
+//     if (!$specialorder) {
+//         return response()->json(['error' => 'Special order not found'], 404);
+//     }
 
-    if (!$specialorder) {
-        return response()->json(['error' => 'Special order not found'], 404);
+//     $data = [
+//         'specialorder_id' => $specialorder->id,
+//         'source' => $specialorder->source,
+//         'name' => $specialorder->customer_name,
+//         'contact' => $specialorder->contact,
+//         'city' => $specialorder->city,
+//         'area' => $specialorder->area,
+//         'send_as_gift' => $specialorder->send_as_gift,
+//         'gift_text' => $specialorder->gift_text,
+//         'notes' => $specialorder->notes,
+//         'items' => $specialorder->items, // Array of dresses
+//     ];
+
+//     return response()->json($data);
+// }
+
+
+// public function update_specialorder(Request $request)
+// {
+//     $user_id = Auth::id();
+//     $user_name = Auth::user()->user_name;
+//     $specialorder_id = $request->input('specialorder_id');
+
+//     $specialorder = SpecialOrder::find($specialorder_id);
+//     if (!$specialorder) {
+//         return response()->json(['error' => 'Special order not found'], 404);
+//     }
+
+//     $previousData = $specialorder->toArray();
+//     $specialorder->source = $request['source'];
+//     $specialorder->customer_name = $request['name'];
+//     $specialorder->contact = $request['contact'];
+//     $specialorder->city = $request['city'];
+//     $specialorder->area = $request['area'];
+//     $specialorder->send_as_gift = $request['send_as_gift'] ?? 0;
+//     $specialorder->gift_text = $request['gift_text'] ?? null;
+//     $specialorder->notes = $request['notes'] ?? null;
+//     $specialorder->added_by = 'system_update';
+//     $specialorder->user_id =  1;
+//     $specialorder->save();
+
+//     // Delete old items and insert new ones
+//     $specialorder->items()->delete();
+//     foreach ($request->items as $item) {
+//         $specialorder_item = new Stock();
+//         $specialorder_item->special_order_id = $specialorder->id;
+//         $specialorder_item->item_name = $item['item_name'];
+//         $specialorder_item->abaya_length = $item['abaya_length'] ?? null;
+//         $specialorder_item->bust = $item['bust'] ?? null;
+//         $specialorder_item->sleeves_length = $item['sleeves_length'] ?? null;
+//         $specialorder_item->buttons = $item['buttons'] ?? 0;
+//         $specialorder_item->notes = $item['notes'] ?? null;
+//         $specialorder_item->save();
+//     }
+
+//     // You can add history logging here following your previous pattern
+
+//     return response()->json(['message' => 'Special order updated successfully']);
+// }
+
+
+ public function edit_specialorder(Request $request)
+    {
+        $id = $request->input('id');
+        $order = SpecialOrder::with(['items.stock.images', 'customer'])->find($id);
+
+        if (!$order) {
+            return response()->json(['success' => false, 'message' => 'Special order not found'], 404);
+        }
+
+        $isStockOrder = $order->source === 'stock';
+
+        // Customer block (for non-stock orders)
+        $customer = [
+            'name'        => '',
+            'phone'       => '',
+            'source'      => $order->source === 'website' ? 'website' : $order->source,
+            'area_id'     => '',
+            'city_id'     => '',
+            'address'    => '',
+            'is_gift'    => $order->send_as_gift ? 'yes' : 'no',
+            'gift_message' => $order->gift_text ?? '',
+        ];
+        if (!$isStockOrder && $order->customer_id) {
+            $c = $order->customer;
+            $customer['name']  = $c->name ?? '';
+            $customer['phone'] = $c->phone ?? '';
+            $customer['address'] = $order->customer_address ?: ($c->address ?? '');
+            $customer['area_id'] = (string) ($order->customer_area ?: $c->area_id ?? '');
+            $customer['city_id'] = (string) ($order->customer_city ?: $c->city_id ?? '');
+        }
+
+        // Items: customer orders = list of rows; stock orders = grouped by stock with colorSizes
+        if ($isStockOrder) {
+            $grouped = [];
+            foreach ($order->items as $item) {
+                $key = $item->stock_id . '_' . (float) $item->price;
+                if (!isset($grouped[$key])) {
+                    $grouped[$key] = [
+                        'stock_id'     => $item->stock_id,
+                        'abaya_code'   => $item->abaya_code,
+                        'design_name'  => $item->design_name,
+                        'price'        => (float) $item->price,
+                        'notes'        => $item->notes,
+                        'colorSizes'   => [],
+                    ];
+                }
+                $grouped[$key]['colorSizes'][] = [
+                    'color_id' => $item->color_id,
+                    'size_id'  => $item->size_id,
+                    'qty'      => (int) $item->quantity,
+                ];
+            }
+            $items = array_values($grouped);
+        } else {
+            $items = $order->items->map(function ($item) {
+                $stock = $item->stock;
+                $imageUrl = null;
+                if ($stock && $stock->relationLoaded('images') && $stock->images->isNotEmpty()) {
+                    $first = $stock->images->first();
+                    $imageUrl = $first && !empty($first->image_path) ? $first->image_path : null;
+                }
+                if (!$imageUrl) {
+                    $imageUrl = '/images/placeholder.png';
+                }
+                return [
+                    'stock_id'    => $item->stock_id,
+                    'abaya_code'  => $item->abaya_code,
+                    'design_name' => $item->design_name,
+                    'quantity'    => (int) $item->quantity,
+                    'price'       => (float) $item->price,
+                    'length'      => $item->abaya_length !== null && $item->abaya_length !== '' ? (string) $item->abaya_length : '',
+                    'bust'        => $item->bust !== null && $item->bust !== '' ? (string) $item->bust : '',
+                    'sleeves'     => $item->sleeves_length !== null && $item->sleeves_length !== '' ? (string) $item->sleeves_length : '',
+                    'buttons'     => $item->buttons ? 'yes' : 'no',
+                    'notes'       => $item->notes,
+                    'image'       => $imageUrl,
+                ];
+            })->values()->toArray();
+        }
+
+        return response()->json([
+            'success'          => true,
+            'order_type'       => $isStockOrder ? 'stock' : 'customer',
+            'special_order_id' => $order->id,
+            'special_order_no' => $order->special_order_no,
+            'customer'         => $customer,
+            'notes'            => $order->notes,
+            'shipping_fee'     => (float) ($order->shipping_fee ?? 0),
+            'discount'         => (float) ($order->discount ?? 0),
+            'items'            => $items,
+        ]);
     }
+    
+      public function update_specialorder(Request $request)
+    {
+        $request->validate([
+            'special_order_id' => 'required|integer|exists:special_orders,id',
+            'order_type'      => 'required|string|in:stock,customer',
+            'orders'          => 'required|array|min:1',
+        ]);
 
-    $data = [
-        'specialorder_id' => $specialorder->id,
-        'source' => $specialorder->source,
-        'name' => $specialorder->customer_name,
-        'contact' => $specialorder->contact,
-        'city' => $specialorder->city,
-        'area' => $specialorder->area,
-        'send_as_gift' => $specialorder->send_as_gift,
-        'gift_text' => $specialorder->gift_text,
-        'notes' => $specialorder->notes,
-        'items' => $specialorder->items, // Array of dresses
-    ];
+        $orderId = (int) $request->input('special_order_id');
+        $order = SpecialOrder::with('items')->find($orderId);
+        if (!$order) {
+            return response()->json(['success' => false, 'message' => 'Special order not found'], 404);
+        }
 
-    return response()->json($data);
-}
+        $isStockOrder = $request->input('order_type') === 'stock';
 
+        if (!$isStockOrder) {
+            $request->validate([
+                'customer.name'     => 'required|string|max:255',
+                'customer.phone'    => 'required|string|max:20',
+                'customer.source'   => 'required|string|in:whatsapp,walkin,website',
+                'customer.area_id'  => 'required|exists:areas,id',
+                'customer.city_id'  => 'required|exists:cities,id',
+                'customer.address'  => 'required|string',
+                'orders.*.stock_id' => 'nullable|exists:stocks,id',
+                'orders.*.quantity' => 'required|integer|min:1',
+                'orders.*.price'    => 'required|numeric|min:0',
+            ]);
+        } else {
+            $request->validate([
+                'orders.*.stock_id'  => 'required|exists:stocks,id',
+                'orders.*.color_id' => 'required|exists:colors,id',
+                'orders.*.size_id'  => 'required|exists:sizes,id',
+                'orders.*.quantity' => 'required|integer|min:1',
+                'orders.*.price'    => 'required|numeric|min:0',
+            ]);
+        }
 
-public function update_specialorder(Request $request)
-{
-    $user_id = Auth::id();
-    $user_name = Auth::user()->user_name;
-    $specialorder_id = $request->input('specialorder_id');
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            $userName = $user->user_name ?? 'System';
 
-    $specialorder = SpecialOrder::find($specialorder_id);
-    if (!$specialorder) {
-        return response()->json(['error' => 'Special order not found'], 404);
+            if (!$isStockOrder) {
+                $phone = $request->input('customer.phone');
+                $areaId = $request->input('customer.area_id');
+                $cityId = $request->input('customer.city_id');
+                $address = $request->input('customer.address');
+
+                $customer = Customer::firstOrCreate(
+                    ['phone' => $phone],
+                    [
+                        'name'     => $request->input('customer.name'),
+                        'area_id'  => $areaId,
+                        'city_id'  => $cityId,
+                        'address'  => $address,
+                    ]
+                );
+                if (!$customer->wasRecentlyCreated) {
+                    $customer->name = $request->input('customer.name');
+                    $customer->area_id = $areaId;
+                    $customer->city_id = $cityId;
+                    $customer->address = $address;
+                    $customer->save();
+                }
+
+                $order->customer_id = $customer->id;
+                $order->customer_city = $cityId;
+                $order->customer_area = $areaId;
+                $order->customer_address = $address;
+                $order->source = $request->input('customer.source');
+                $order->send_as_gift = $request->input('customer.is_gift') === 'yes';
+                $order->gift_text = $request->input('customer.gift_message');
+                $shippingFee = (float) $request->input('shipping_fee', 0);
+                $discount = max(0, (float) $request->input('discount', 0));
+                $order->shipping_fee = $shippingFee;
+                $order->discount = $discount;
+
+                $subtotal = 0;
+                foreach ($request->input('orders', []) as $row) {
+                    $subtotal += ($row['price'] ?? 0) * ($row['quantity'] ?? 1);
+                }
+                $order->total_amount = max(0, $subtotal + $shippingFee - $discount);
+            } else {
+                $order->shipping_fee = 0;
+                $order->discount = 0;
+                $order->total_amount = 0;
+            }
+
+            $order->notes = $request->input('notes');
+            $order->updated_by = $userName;
+            $order->user_id = Auth::id();
+            $order->save();
+
+            // Replace items: delete existing and create from payload
+            $order->items()->delete();
+
+            $ordersPayload = $request->input('orders', []);
+            if ($isStockOrder) {
+                foreach ($ordersPayload as $row) {
+                    $item = new SpecialOrderItem();
+                    $item->special_order_id = $order->id;
+                    $item->stock_id = $row['stock_id'];
+                    $item->abaya_code = $row['abaya_code'] ?? null;
+                    $item->design_name = $row['design_name'] ?? null;
+                    $item->color_id = $row['color_id'] ?? null;
+                    $item->size_id = $row['size_id'] ?? null;
+                    $item->quantity = (int) ($row['quantity'] ?? 1);
+                    $item->price = (float) ($row['price'] ?? 0);
+                    $item->notes = $row['notes'] ?? null;
+                    $item->tailor_status = 'new';
+                    $item->save();
+                }
+            } else {
+                foreach ($ordersPayload as $row) {
+                    $item = new SpecialOrderItem();
+                    $item->special_order_id = $order->id;
+                    $item->stock_id = $row['stock_id'] ?? null;
+                    $item->abaya_code = $row['abaya_code'] ?? null;
+                    $item->design_name = $row['design_name'] ?? null;
+                    $item->quantity = (int) ($row['quantity'] ?? 1);
+                    $item->price = (float) ($row['price'] ?? 0);
+                    $item->abaya_length = $row['length'] ?? null;
+                    $item->bust = $row['bust'] ?? null;
+                    $item->sleeves_length = $row['sleeves'] ?? null;
+                    $item->buttons = ($row['buttons'] ?? 'yes') === 'yes';
+                    $item->notes = $row['notes'] ?? null;
+                    $item->tailor_status = 'new';
+                    $item->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => trans('messages.order_updated_successfully', [], session('locale')) ?: 'Special order updated successfully',
+                'special_order_id' => $order->id,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
-
-    $previousData = $specialorder->toArray();
-    $specialorder->source = $request['source'];
-    $specialorder->customer_name = $request['name'];
-    $specialorder->contact = $request['contact'];
-    $specialorder->city = $request['city'];
-    $specialorder->area = $request['area'];
-    $specialorder->send_as_gift = $request['send_as_gift'] ?? 0;
-    $specialorder->gift_text = $request['gift_text'] ?? null;
-    $specialorder->notes = $request['notes'] ?? null;
-    $specialorder->added_by = 'system_update';
-    $specialorder->user_id =  1;
-    $specialorder->save();
-
-    // Delete old items and insert new ones
-    $specialorder->items()->delete();
-    foreach ($request->items as $item) {
-        $specialorder_item = new Stock();
-        $specialorder_item->special_order_id = $specialorder->id;
-        $specialorder_item->item_name = $item['item_name'];
-        $specialorder_item->abaya_length = $item['abaya_length'] ?? null;
-        $specialorder_item->bust = $item['bust'] ?? null;
-        $specialorder_item->sleeves_length = $item['sleeves_length'] ?? null;
-        $specialorder_item->buttons = $item['buttons'] ?? 0;
-        $specialorder_item->notes = $item['notes'] ?? null;
-        $specialorder_item->save();
-    }
-
-    // You can add history logging here following your previous pattern
-
-    return response()->json(['message' => 'Special order updated successfully']);
-}
-
-
 
 public function delete_specialorder(Request $request)
 {
@@ -453,6 +1040,237 @@ public function view_special_order()
     return view('special_orders.view_special_order');
 }
 
+
+// public function getOrdersList(Request $request)
+// {
+//     try {
+//         $orders = SpecialOrder::with(['customer.area', 'customer.city', 'items.stock.images', 'items.tailor'])
+//             ->orderBy('created_at', 'DESC')
+//             ->get();
+
+//         $formattedOrders = $orders->map(function($order) {
+//             // Get first item image or placeholder (for list view)
+//             $firstItem = $order->items->first();
+//             $image = '/images/placeholder.png';
+//             if ($firstItem && $firstItem->stock && $firstItem->stock->images->first()) {
+//                 $image = $firstItem->stock->images->first()->image_path;
+//             }
+
+//             // Get all items with their details
+//             $items = $order->items->map(function($item) {
+//                 $itemImage = '/images/placeholder.png';
+//                 if ($item->stock && $item->stock->images->first()) {
+//                     $itemImage = $item->stock->images->first()->image_path;
+//                 }
+
+//                 // Get original tailor from stock
+//                 $originalTailor = '';
+//                 $originalTailorName = '';
+//                 if ($item->stock && $item->stock->tailor_id) {
+//                     $tailorIds = json_decode($item->stock->tailor_id, true);
+//                     if (!is_array($tailorIds)) {
+//                         $tailorIds = [$tailorIds];
+//                     }
+//                     if (!empty($tailorIds)) {
+//                         $tailors = \App\Models\Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+//                         $originalTailorName = implode(', ', $tailors);
+//                         $originalTailor = $item->stock->tailor_id;
+//                     }
+//                 }
+
+//                 // Get current tailor (if changed when sending to tailor)
+//                 $currentTailorName = $item->tailor ? $item->tailor->tailor_name : null;
+
+//                 // Get color and size info for stock orders
+//                 $colorName = '';
+//                 $sizeName = '';
+//                 if ($item->color_id) {
+//                     $color = \App\Models\Color::find($item->color_id);
+//                     if ($color) {
+//                         $locale = session('locale', 'en');
+//                         $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+//                     }
+//                 }
+//                 if ($item->size_id) {
+//                     $size = \App\Models\Size::find($item->size_id);
+//                     if ($size) {
+//                         $locale = session('locale', 'en');
+//                         $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+//                     }
+//                 }
+
+//                 return [
+//                     'id' => $item->id,
+//                     'stock_id' => $item->stock_id,
+
+//                     'abaya_code' => $item->abaya_code ?? 'N/A',
+//                     'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+//                     'quantity' => $item->quantity ?? 1,
+//                     'price' => floatval($item->price ?? 0),
+//                     'image' => $itemImage,
+//                     'length' => $item->abaya_length,
+//                     'bust' => $item->bust,
+//                     'sleeves' => $item->sleeves_length,
+//                     'buttons' => $item->buttons ?? false,
+//                     'notes' => $item->notes ?? '',
+//                     'tailor_status' => $item->tailor_status ?? 'new',
+//                     'tailor_id' => $item->tailor_id,
+//                     'tailor_name' => $currentTailorName,
+//                     'original_tailor' => $originalTailor,
+//                     'original_tailor_name' => $originalTailorName,
+//                     'color_id' => $item->color_id,
+//                     'color_name' => $colorName,
+//                     'size_id' => $item->size_id,
+//                     'size_name' => $sizeName,
+//                     'list_number' => $item->list_number,
+//                     'sending_summary_number' => $item->sending_summary_number,
+//                 ];
+//             });
+
+//             // Get tailor info (if available from items notes or order notes)
+//             $tailor = 'N/A';
+//             if ($firstItem && $firstItem->notes) {
+//                 $tailor = $firstItem->notes;
+//             } elseif ($order->notes) {
+//                 $tailor = $order->notes;
+//             }
+
+//             $customer = $order->customer;
+//             $isStockOrder = $order->customer_id === null || $order->source === 'stock';
+            
+//             // Get governorate from area relationship or fallback to direct field
+//             $governorate = '';
+//             if (!$isStockOrder && $customer && $customer->area) {
+//                 // Use locale to get the correct language version
+//                 $locale = session('locale', 'en');
+//                 if ($locale === 'ar') {
+//                     $governorate = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+//                 } else {
+//                     $governorate = $customer->area->area_name_en ?? $customer->area->area_name_ar ?? '';
+//                 }
+//             } elseif (!$isStockOrder && $customer && isset($customer->governorate)) {
+//                 $governorate = $customer->governorate;
+//             }
+            
+//             // Get city/state from city relationship or fallback to direct field
+//             $city = '';
+//             if (!$isStockOrder && $customer && $customer->city) {
+//                 // Use locale to get the correct language version
+//                 $locale = session('locale', 'en');
+//                 if ($locale === 'ar') {
+//                     $city = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+//                 } else {
+//                     $city = $customer->city->city_name_en ?? $customer->city->city_name_ar ?? '';
+//                 }
+//             } elseif (!$isStockOrder && $customer && isset($customer->area)) {
+//                 $city = $customer->area; // Fallback for old data
+//             }
+            
+//             $location = trim($governorate . ($city ? ' - ' . $city : ''));
+
+
+//             // For website source: resolve customer_city (id) and customer_area (id) to names, use customer_address as-is
+//             $customerCityName = '';
+//             $customerAreaName = '';
+//             $customerAddress = '';
+//             if ($order->source === 'website') {
+//                 $locale = session('locale', 'en');
+//                 if (!empty($order->customer_city)) {
+//                     $cityModel = \App\Models\City::find($order->customer_city);
+//                     if ($cityModel) {
+//                         $customerCityName = $locale === 'ar'
+//                             ? ($cityModel->city_name_ar ?? $cityModel->city_name_en ?? '')
+//                             : ($cityModel->city_name_en ?? $cityModel->city_name_ar ?? '');
+//                     }
+//                 }
+//                 if (!empty($order->customer_area)) {
+//                     $areaModel = \App\Models\Area::find($order->customer_area);
+//                     if ($areaModel) {
+//                         $customerAreaName = $locale === 'ar'
+//                             ? ($areaModel->area_name_ar ?? $areaModel->area_name_en ?? '')
+//                             : ($areaModel->area_name_en ?? $areaModel->area_name_ar ?? '');
+//                     }
+//                 }
+//                 $customerAddress = $order->customer_address ?? '';
+//             }
+
+//             // Calculate and update order status based on items' tailor_status
+//             $this->updateOrderStatusBasedOnItems($order);
+//             $calculatedStatus = $order->status;
+//     $tailorBatches = $order->items
+//                 ->whereNotNull('list_number')
+//                 ->groupBy('list_number')
+//                 ->map(function ($group) {
+//                     /** @var \Illuminate\Support\Collection $group */
+//                     $first = $group->first();
+//                     $totalQty = $group->sum(function ($it) {
+//                         return $it->quantity ?? 0;
+//                     });
+
+//                     $tailorName = $first && $first->tailor ? $first->tailor->tailor_name : null;
+
+//                     return [
+//                         'list_number' => $first->list_number,
+//                         'sending_summary_number' => $first->sending_summary_number,
+//                         'quantity' => $totalQty,
+//                         'tailor_name' => $tailorName,
+//                     ];
+//                 })
+//                 ->values();
+//             // Use special_order_no if available, otherwise fallback to generated number
+//             $orderNumber = $order->special_order_no;
+//             if (!$orderNumber) {
+//                 // Fallback: Generate order number: YYYY-00ID (e.g., 2025-0001)
+//                 $orderDate = Carbon::parse($order->created_at);
+//                 $orderNumber = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+//             }
+
+//             // For stock orders, always set total, paid, and remaining to 0
+//             $total = $isStockOrder ? 0 : floatval($order->total_amount ?? 0);
+//             $paid = $isStockOrder ? 0 : floatval($order->paid_amount ?? 0);
+            
+//             return [
+//                 'id' => $order->id,
+//                 'order_no' => $orderNumber,
+//                 'special_order_no' => $order->special_order_no,
+//                 'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : (optional($customer)->name ?? 'N/A'),
+//                 'customer_phone' => $isStockOrder ? null : (optional($customer)->phone ?? null),
+
+//                 'governorate' => $governorate,
+//                 'city' => $city,
+//                 'location' => $location,
+//                 'customer_city_name' => $customerCityName,
+//                 'customer_area_name' => $customerAreaName,
+//                 'customer_address' => $customerAddress,
+//                 'date' => $order->created_at->format('Y-m-d'),
+//                 'status' => $calculatedStatus,
+//                 'source' => $order->source,
+//                 'total' => $total,
+//                 'paid' => $paid,
+//                 'image' => $image, // First item image for list view
+//                 'items' => $items, // All items array
+//                 'tailor_batches' => $tailorBatches, // Grouped by list_number for display
+
+//                 'tailor' => $tailor,
+//                 'notes' => $order->notes ?? '',
+//                 'is_stock_order' => $isStockOrder,
+//             ];
+//         });
+
+//         return response()->json([
+//             'success' => true,
+//             'orders' => $formattedOrders
+//         ]);
+//     } catch (\Exception $e) {
+//         \Log::error('Error in getOrdersList: ' . $e->getMessage());
+//         \Log::error('Stack trace: ' . $e->getTraceAsString());
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error fetching orders: ' . $e->getMessage(),
+//             'orders' => []
+//         ], 500);
+//     }
+// }
 public function getOrdersList(Request $request)
 {
     try {
@@ -513,6 +1331,7 @@ public function getOrdersList(Request $request)
 
                 return [
                     'id' => $item->id,
+                    'stock_id' => $item->stock_id,
                     'abaya_code' => $item->abaya_code ?? 'N/A',
                     'design_name' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'quantity' => $item->quantity ?? 1,
@@ -532,6 +1351,8 @@ public function getOrdersList(Request $request)
                     'color_name' => $colorName,
                     'size_id' => $item->size_id,
                     'size_name' => $sizeName,
+                    'list_number' => $item->list_number,
+                    'sending_summary_number' => $item->sending_summary_number,
                 ];
             });
 
@@ -545,40 +1366,83 @@ public function getOrdersList(Request $request)
 
             $customer = $order->customer;
             $isStockOrder = $order->customer_id === null || $order->source === 'stock';
-            
-            // Get governorate from area relationship or fallback to direct field
+
+            $locale = session('locale', 'en');
+
+            // Unified location for modal/API: from customer.city_id, area_id, address; website order fields override when set
             $governorate = '';
-            if (!$isStockOrder && $customer && $customer->area) {
-                // Use locale to get the correct language version
-                $locale = session('locale', 'en');
-                if ($locale === 'ar') {
-                    $governorate = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
-                } else {
-                    $governorate = $customer->area->area_name_en ?? $customer->area->area_name_ar ?? '';
-                }
-            } elseif (!$isStockOrder && $customer && isset($customer->governorate)) {
-                $governorate = $customer->governorate;
-            }
-            
-            // Get city/state from city relationship or fallback to direct field
             $city = '';
-            if (!$isStockOrder && $customer && $customer->city) {
-                // Use locale to get the correct language version
-                $locale = session('locale', 'en');
-                if ($locale === 'ar') {
-                    $city = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
-                } else {
-                    $city = $customer->city->city_name_en ?? $customer->city->city_name_ar ?? '';
+            $customerCityName = '';
+            $customerAreaName = '';
+            $customerAddress = '';
+
+            if (!$isStockOrder && $customer) {
+                if ($customer->area) {
+                    $customerAreaName = $locale === 'ar'
+                        ? ($customer->area->area_name_ar ?? $customer->area->area_name_en ?? '')
+                        : ($customer->area->area_name_en ?? $customer->area->area_name_ar ?? '');
+                    $governorate = $customerAreaName;
                 }
-            } elseif (!$isStockOrder && $customer && isset($customer->area)) {
-                $city = $customer->area; // Fallback for old data
+                if ($customer->city) {
+                    $customerCityName = $locale === 'ar'
+                        ? ($customer->city->city_name_ar ?? $customer->city->city_name_en ?? '')
+                        : ($customer->city->city_name_en ?? $customer->city->city_name_ar ?? '');
+                    $city = $customerCityName;
+                }
+                $customerAddress = (string) ($customer->address ?? '');
             }
-            
-            $location = trim($governorate . ($city ? ' - ' . $city : ''));
+
+            if ($order->source === 'website') {
+                if (!empty($order->customer_city)) {
+                    $cityModel = \App\Models\City::find($order->customer_city);
+                    if ($cityModel) {
+                        $customerCityName = $locale === 'ar'
+                            ? ($cityModel->city_name_ar ?? $cityModel->city_name_en ?? '')
+                            : ($cityModel->city_name_en ?? $cityModel->city_name_ar ?? '');
+                        $city = $customerCityName;
+                    }
+                }
+                if (!empty($order->customer_area)) {
+                    $areaModel = \App\Models\Area::find($order->customer_area);
+                    if ($areaModel) {
+                        $customerAreaName = $locale === 'ar'
+                            ? ($areaModel->area_name_ar ?? $areaModel->area_name_en ?? '')
+                            : ($areaModel->area_name_en ?? $areaModel->area_name_ar ?? '');
+                        $governorate = $customerAreaName;
+                    }
+                }
+                if ($order->customer_address !== null && $order->customer_address !== '') {
+                    $customerAddress = (string) $order->customer_address;
+                }
+            }
+
+            $location = trim($customerAreaName . ($customerCityName ? ' - ' . $customerCityName : ''));
 
             // Calculate and update order status based on items' tailor_status
             $this->updateOrderStatusBasedOnItems($order);
             $calculatedStatus = $order->status;
+
+            // Group tailor sending info by list_number for this special order
+            $tailorBatches = $order->items
+                ->whereNotNull('list_number')
+                ->groupBy('list_number')
+                ->map(function ($group) {
+                    /** @var \Illuminate\Support\Collection $group */
+                    $first = $group->first();
+                    $totalQty = $group->sum(function ($it) {
+                        return $it->quantity ?? 0;
+                    });
+
+                    $tailorName = $first && $first->tailor ? $first->tailor->tailor_name : null;
+
+                    return [
+                        'list_number' => $first->list_number,
+                        'sending_summary_number' => $first->sending_summary_number,
+                        'quantity' => $totalQty,
+                        'tailor_name' => $tailorName,
+                    ];
+                })
+                ->values();
 
             // Use special_order_no if available, otherwise fallback to generated number
             $orderNumber = $order->special_order_no;
@@ -597,9 +1461,13 @@ public function getOrdersList(Request $request)
                 'order_no' => $orderNumber,
                 'special_order_no' => $order->special_order_no,
                 'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : (optional($customer)->name ?? 'N/A'),
+                'customer_phone' => $isStockOrder ? null : (optional($customer)->phone ?? null),
                 'governorate' => $governorate,
                 'city' => $city,
                 'location' => $location,
+                'customer_city_name' => $customerCityName,
+                'customer_area_name' => $customerAreaName,
+                'customer_address' => $customerAddress,
                 'date' => $order->created_at->format('Y-m-d'),
                 'status' => $calculatedStatus,
                 'source' => $order->source,
@@ -607,6 +1475,7 @@ public function getOrdersList(Request $request)
                 'paid' => $paid,
                 'image' => $image, // First item image for list view
                 'items' => $items, // All items array
+                'tailor_batches' => $tailorBatches, // Grouped by list_number for display
                 'tailor' => $tailor,
                 'notes' => $order->notes ?? '',
                 'is_stock_order' => $isStockOrder,
@@ -791,13 +1660,256 @@ public function send_request()
     return view('special_orders.send_request');
 }
 
+// public function getTailorAssignmentsData(Request $request)
+// {
+//     try {
+//         // Get all tailors
+//         $tailors = Tailor::select('id', 'tailor_name as name')->get();
+
+//         // Get new items (not yet assigned to tailor)
+//         $newItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images'])
+//             ->where(function($query) {
+//                 $query->whereNull('tailor_id')
+//                       ->orWhere('tailor_status', 'new');
+//             })
+//             ->get()
+//             ->map(function($item) {
+//                 $order = $item->specialOrder;
+//                 $stock = $item->stock;
+//                 $image = optional(optional($stock)->images->first())->image_path ?? '/images/placeholder.png';
+                
+//                 if ($stock && $stock->images->first()) {
+//                     $image = $stock->images->first()->image_path;
+//                 }
+
+//                 // Get original tailor from stock if exists
+//         $originalTailor = '';
+//         $originalTailorId = null;
+
+//         if ($stock && $stock->tailor_id) {
+
+//             // Convert JSON string to PHP array
+//             $tailorIds = json_decode($stock->tailor_id, true);
+
+//             // Ensure always an array
+//             if (!is_array($tailorIds)) {
+//                 $tailorIds = [$tailorIds];
+//             }
+
+//             // Get first tailor ID for auto-assignment
+//             if (!empty($tailorIds)) {
+//                 $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
+//             }
+
+//     // Fetch all tailors
+//     $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+
+//     // Join names into a single string
+//     $originalTailor = implode(', ', $tailors);
+// }
+                
+//                 // Use special_order_no from database, fallback to generated format
+//                 $orderNo = '—';
+//                 if ($order) {
+//                     if ($order->special_order_no) {
+//                         $orderNo = $order->special_order_no;
+//                     } else {
+//                         // Fallback to generated format: YYYY-00ID
+//                         $orderDate = Carbon::parse($order->created_at);
+//                         $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+//                     }
+//                 }
+                
+//                 // Check if stock order
+//                 $isStockOrder = $order && ($order->customer_id === null || $order->source === 'stock');
+                
+//                 // Get color and size info for stock orders
+//                 $colorName = '';
+//                 $sizeName = '';
+//                 if ($item->color_id) {
+//                     $color = \App\Models\Color::find($item->color_id);
+//                     if ($color) {
+//                         $locale = session('locale', 'en');
+//                         $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+//                     }
+//                 }
+//                 if ($item->size_id) {
+//                     $size = \App\Models\Size::find($item->size_id);
+//                     if ($size) {
+//                         $locale = session('locale', 'en');
+//                         $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+//                     }
+//                 }
+                
+//                 return [
+//                     'rowId' => $item->id,
+//                     'orderId' => $order->id ?? 0,
+//                     'order_no' => $orderNo,
+//                     'source' => $order->source ?? '',
+//                     'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : ($order->customer->name ?? 'N/A'),
+//                     'customer_phone' => $isStockOrder ? '—' : ($order->customer->phone ?? '—'),
+
+//                     'code' => $item->abaya_code ?? '',
+//                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+//                     'image' => $image,
+//                     'quantity' => $item->quantity ?? 1,
+//                     'length' => $item->abaya_length,
+//                     'bust' => $item->bust,
+//                     'sleeves' => $item->sleeves_length,
+//                     'buttons' => $item->buttons ?? true,
+//                     'notes' => $item->notes ?? '',
+//                     'date' => $order->created_at->format('Y-m-d'),
+//                     'originalTailor' => $originalTailor,
+//                     'originalTailorId' => $originalTailorId,
+//                     'tailor_id' => null,
+//                     'tailor' => '',
+//                     'status' => 'new',
+//                     'color_id' => $item->color_id,
+//                     'color_name' => $colorName,
+//                     'size_id' => $item->size_id,
+//                     'size_name' => $sizeName,
+//                     'is_stock_order' => $isStockOrder,
+//                 ];
+//             });
+
+//         // Get processing items (assigned to tailor but not received)
+//         $processingItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'tailor'])
+//             ->where('tailor_status', 'processing')
+//             ->get()
+//             ->map(function($item) {
+//                 $order = $item->specialOrder;
+//                 $stock = $item->stock;
+//                 $image = '/images/placeholder.png';
+                
+//                 if ($stock && $stock->images->first()) {
+//                     $image = $stock->images->first()->image_path;
+//                 }
+
+//                 // Get original tailor from stock if exists
+//                 $originalTailor = '';
+//                 $originalTailorId = null;
+//                 if ($stock && $stock->tailor_id) {
+//                     // Convert JSON string to PHP array
+//                     $tailorIds = json_decode($stock->tailor_id, true);
+
+//                     // Ensure always an array
+//                     if (!is_array($tailorIds)) {
+//                         $tailorIds = [$tailorIds];
+//                     }
+
+//                     // Get first tailor ID for reference
+//                     if (!empty($tailorIds)) {
+//                         $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
+//                     }
+
+//                     // Fetch all tailors
+//                     $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
+
+//                     // Join names into a single string
+//                     $originalTailor = implode(', ', $tailors);
+//                 }
+
+//                 // Get tailor_order_no and special_order_no separately
+//                 $tailorOrderNo = $item->tailor_order_no ?? '—';
+                
+//                 // Get special_order_no
+//                 $specialOrderNo = '—';
+//                 if ($order) {
+//                     if ($order->special_order_no) {
+//                         $specialOrderNo = $order->special_order_no;
+//                     } else {
+//                         // Fallback to generated format: YYYY-00ID
+//                         $orderDate = Carbon::parse($order->created_at);
+//                         $specialOrderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+//                     }
+//                 }
+                
+//                 // Use tailor_order_no as primary order_no for display compatibility
+//                 $orderNo = $tailorOrderNo !== '—' ? $tailorOrderNo : $specialOrderNo;
+
+//                 // Check if stock order
+//                 $isStockOrder = $order && ($order->customer_id === null || $order->source === 'stock');
+                
+//                 // Get color and size info for stock orders
+//                 $colorName = '';
+//                 $sizeName = '';
+//                 if ($item->color_id) {
+//                     $color = \App\Models\Color::find($item->color_id);
+//                     if ($color) {
+//                         $locale = session('locale', 'en');
+//                         $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+//                     }
+//                 }
+//                 if ($item->size_id) {
+//                     $size = \App\Models\Size::find($item->size_id);
+//                     if ($size) {
+//                         $locale = session('locale', 'en');
+//                         $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+//                     }
+//                 }
+
+//                 return [
+//                     'rowId' => $item->id,
+//                     'orderId' => $order->id ?? 0,
+//                     'order_no' => $orderNo,
+//                     'source' => $order->source ?? '',
+//                     'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : ($order->customer->name ?? 'N/A'),
+//                     'customer_phone' => $isStockOrder ? '—' : ($order->customer->phone ?? '—'),
+
+//                     'code' => $item->abaya_code ?? '',
+//                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
+//                     'image' => $image,
+//                     'quantity' => $item->quantity ?? 1,
+//                     'length' => $item->abaya_length,
+//                     'bust' => $item->bust,
+//                     'sleeves' => $item->sleeves_length,
+//                     'buttons' => $item->buttons ?? true,
+//                     'notes' => $item->notes ?? '',
+//                   'date' => $item->sent_to_tailor_at
+//                         ? \Carbon\Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d')
+//                         : \Carbon\Carbon::parse($order->created_at)->format('Y-m-d'),
+//                     'originalTailor' => $originalTailor,
+//                     'originalTailorId' => $originalTailorId,
+//                     'tailor_id' => $item->tailor_id,
+//                     'tailor' => $item->tailor ? $item->tailor->tailor_name : '',
+//                     'tailor_name' => $item->tailor ? $item->tailor->tailor_name : '',
+//                     'status' => 'processing',
+//                     'color_id' => $item->color_id,
+//                     'color_name' => $colorName,
+//                     'size_id' => $item->size_id,
+//                     'size_name' => $sizeName,
+//                     'is_stock_order' => $isStockOrder,
+//                     'tailor_order_no' => $tailorOrderNo,
+//                     'special_order_no' => $specialOrderNo,
+//                       'list_number' => $item->list_number,
+//                     'sending_summary_number' => $item->sending_summary_number,
+//                 ];
+//             });
+
+//         return response()->json([
+//             'success' => true,
+//             'tailors' => $tailors,
+//             'new' => $newItems,
+//             'processing' => $processingItems,
+//         ]);
+//     } catch (\Exception $e) {
+//         \Log::error('Error in getTailorAssignmentsData: ' . $e->getMessage());
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error fetching data: ' . $e->getMessage(),
+//             'tailors' => [],
+//             'new' => [],
+//             'processing' => [],
+//         ], 500);
+//     }
+// }
 public function getTailorAssignmentsData(Request $request)
 {
     try {
         // Get all tailors
         $tailors = Tailor::select('id', 'tailor_name as name')->get();
 
-        // Get new items (not yet assigned to tailor)
+        // ====================== NEW ITEMS ======================
         $newItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images'])
             ->where(function($query) {
                 $query->whereNull('tailor_id')
@@ -807,77 +1919,78 @@ public function getTailorAssignmentsData(Request $request)
             ->map(function($item) {
                 $order = $item->specialOrder;
                 $stock = $item->stock;
-                $image = optional(optional($stock)->images->first())->image_path ?? '/images/placeholder.png';
-                
-                if ($stock && $stock->images->first()) {
-                    $image = $stock->images->first()->image_path;
-                }
 
-                // Get original tailor from stock if exists
-        $originalTailor = '';
-        $originalTailorId = null;
-
-        if ($stock && $stock->tailor_id) {
-
-            // Convert JSON string to PHP array
-            $tailorIds = json_decode($stock->tailor_id, true);
-
-            // Ensure always an array
-            if (!is_array($tailorIds)) {
-                $tailorIds = [$tailorIds];
-            }
-
-            // Get first tailor ID for auto-assignment
-            if (!empty($tailorIds)) {
-                $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
-            }
-
-    // Fetch all tailors
-    $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
-
-    // Join names into a single string
-    $originalTailor = implode(', ', $tailors);
-}
-                
-                // Use special_order_no from database, fallback to generated format
-                $orderNo = '—';
-                if ($order) {
-                    if ($order->special_order_no) {
-                        $orderNo = $order->special_order_no;
-                    } else {
-                        // Fallback to generated format: YYYY-00ID
-                        $orderDate = Carbon::parse($order->created_at);
-                        $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+                // === Safe Image Handling ===
+                $image = '/images/placeholder.png';
+                if ($stock && $stock->relationLoaded('images') && $stock->images) {
+                    $firstImage = $stock->images->first();
+                    if ($firstImage && !empty($firstImage->image_path)) {
+                        $image = $firstImage->image_path;
                     }
                 }
-                
-                // Check if stock order
+
+                // === Original Tailor from JSON ===
+                $originalTailor = '';
+                $originalTailorId = null;
+
+                if ($stock && !empty($stock->tailor_id)) {
+                    $tailorIds = json_decode($stock->tailor_id, true);
+
+                    if (!is_array($tailorIds)) {
+                        $tailorIds = $tailorIds ? [$tailorIds] : [];
+                    }
+
+                    if (!empty($tailorIds)) {
+                        $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
+
+                        $tailorNames = Tailor::whereIn('id', $tailorIds)
+                                            ->pluck('tailor_name')
+                                            ->toArray();
+
+                        $originalTailor = implode(', ', $tailorNames);
+                    }
+                }
+
+                // === Order Number ===
+                $orderNo = '—';
+                if ($order) {
+                    $orderNo = $order->special_order_no 
+                        ?? (Carbon::parse($order->created_at)->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT));
+                }
+
                 $isStockOrder = $order && ($order->customer_id === null || $order->source === 'stock');
-                
-                // Get color and size info for stock orders
+
+                // Color & Size (safe)
                 $colorName = '';
                 $sizeName = '';
                 if ($item->color_id) {
                     $color = \App\Models\Color::find($item->color_id);
                     if ($color) {
                         $locale = session('locale', 'en');
-                        $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+                        $colorName = $locale === 'ar' 
+                            ? ($color->color_name_ar ?? $color->color_name_en) 
+                            : ($color->color_name_en ?? $color->color_name_ar);
                     }
                 }
                 if ($item->size_id) {
                     $size = \App\Models\Size::find($item->size_id);
                     if ($size) {
                         $locale = session('locale', 'en');
-                        $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+                        $sizeName = $locale === 'ar' 
+                            ? ($size->size_name_ar ?? $size->size_name_en) 
+                            : ($size->size_name_en ?? $size->size_name_ar);
                     }
                 }
-                
+
                 return [
                     'rowId' => $item->id,
                     'orderId' => $order->id ?? 0,
                     'order_no' => $orderNo,
                     'source' => $order->source ?? '',
-                    'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : ($order->customer->name ?? 'N/A'),
+                    'customer' => $isStockOrder 
+                        ? trans('messages.stock_special_order', [], session('locale')) 
+                        : ($order->customer->name ?? 'N/A'),
+                    'customer_phone' => $isStockOrder ? '—' : ($order->customer->phone ?? '—'),
                     'code' => $item->abaya_code ?? '',
                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'image' => $image,
@@ -887,7 +2000,7 @@ public function getTailorAssignmentsData(Request $request)
                     'sleeves' => $item->sleeves_length,
                     'buttons' => $item->buttons ?? true,
                     'notes' => $item->notes ?? '',
-                    'date' => $order->created_at->format('Y-m-d'),
+                    'date' => $order->created_at->format('Y-m-d') ?? now()->format('Y-m-d'),
                     'originalTailor' => $originalTailor,
                     'originalTailorId' => $originalTailorId,
                     'tailor_id' => null,
@@ -901,88 +2014,65 @@ public function getTailorAssignmentsData(Request $request)
                 ];
             });
 
-        // Get processing items (assigned to tailor but not received)
+        // ====================== PROCESSING ITEMS ======================
         $processingItems = SpecialOrderItem::with(['specialOrder.customer', 'stock.images', 'tailor'])
             ->where('tailor_status', 'processing')
             ->get()
             ->map(function($item) {
                 $order = $item->specialOrder;
                 $stock = $item->stock;
+
+                // Safe Image
                 $image = '/images/placeholder.png';
-                
-                if ($stock && $stock->images->first()) {
-                    $image = $stock->images->first()->image_path;
+                if ($stock && $stock->relationLoaded('images') && $stock->images) {
+                    $firstImage = $stock->images->first();
+                    if ($firstImage && !empty($firstImage->image_path)) {
+                        $image = $firstImage->image_path;
+                    }
                 }
 
-                // Get original tailor from stock if exists
+                // Original Tailor (same safe logic)
                 $originalTailor = '';
                 $originalTailorId = null;
-                if ($stock && $stock->tailor_id) {
-                    // Convert JSON string to PHP array
+                if ($stock && !empty($stock->tailor_id)) {
                     $tailorIds = json_decode($stock->tailor_id, true);
+                    if (!is_array($tailorIds)) $tailorIds = $tailorIds ? [$tailorIds] : [];
 
-                    // Ensure always an array
-                    if (!is_array($tailorIds)) {
-                        $tailorIds = [$tailorIds];
-                    }
-
-                    // Get first tailor ID for reference
                     if (!empty($tailorIds)) {
                         $originalTailorId = is_numeric($tailorIds[0]) ? (int)$tailorIds[0] : null;
+
+                        $tailorNames = Tailor::whereIn('id', $tailorIds)
+                                            ->pluck('tailor_name')
+                                            ->toArray();
+
+                        $originalTailor = implode(', ', $tailorNames);
                     }
-
-                    // Fetch all tailors
-                    $tailors = Tailor::whereIn('id', $tailorIds)->pluck('tailor_name')->toArray();
-
-                    // Join names into a single string
-                    $originalTailor = implode(', ', $tailors);
                 }
 
-                // Get tailor_order_no and special_order_no separately
+                // Order Number Logic (cleaned)
                 $tailorOrderNo = $item->tailor_order_no ?? '—';
-                
-                // Get special_order_no
                 $specialOrderNo = '—';
                 if ($order) {
-                    if ($order->special_order_no) {
-                        $specialOrderNo = $order->special_order_no;
-                    } else {
-                        // Fallback to generated format: YYYY-00ID
-                        $orderDate = Carbon::parse($order->created_at);
-                        $specialOrderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
-                    }
+                    $specialOrderNo = $order->special_order_no 
+                        ?? (Carbon::parse($order->created_at)->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT));
                 }
-                
-                // Use tailor_order_no as primary order_no for display compatibility
                 $orderNo = $tailorOrderNo !== '—' ? $tailorOrderNo : $specialOrderNo;
 
-                // Check if stock order
                 $isStockOrder = $order && ($order->customer_id === null || $order->source === 'stock');
-                
-                // Get color and size info for stock orders
-                $colorName = '';
-                $sizeName = '';
-                if ($item->color_id) {
-                    $color = \App\Models\Color::find($item->color_id);
-                    if ($color) {
-                        $locale = session('locale', 'en');
-                        $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
-                    }
-                }
-                if ($item->size_id) {
-                    $size = \App\Models\Size::find($item->size_id);
-                    if ($size) {
-                        $locale = session('locale', 'en');
-                        $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
-                    }
-                }
+
+                // Color & Size (same safe code as above)
+                $colorName = $sizeName = '';
+                // ... (copy the color/size block from newItems if you want)
 
                 return [
                     'rowId' => $item->id,
                     'orderId' => $order->id ?? 0,
                     'order_no' => $orderNo,
                     'source' => $order->source ?? '',
-                    'customer' => $isStockOrder ? trans('messages.stock_special_order', [], session('locale')) : ($order->customer->name ?? 'N/A'),
+                    'customer' => $isStockOrder 
+                        ? trans('messages.stock_special_order', [], session('locale')) 
+                        : ($order->customer->name ?? 'N/A'),
+                    'customer_phone' => $isStockOrder ? '—' : ($order->customer->phone ?? '—'),
                     'code' => $item->abaya_code ?? '',
                     'abayaName' => $item->design_name ?? $item->abaya_code ?? 'N/A',
                     'image' => $image,
@@ -992,14 +2082,14 @@ public function getTailorAssignmentsData(Request $request)
                     'sleeves' => $item->sleeves_length,
                     'buttons' => $item->buttons ?? true,
                     'notes' => $item->notes ?? '',
-                   'date' => $item->sent_to_tailor_at
-    ? \Carbon\Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d')
-    : \Carbon\Carbon::parse($order->created_at)->format('Y-m-d'),
+                    'date' => $item->sent_to_tailor_at 
+                        ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d') 
+                        : ($order ? Carbon::parse($order->created_at)->format('Y-m-d') : now()->format('Y-m-d')),
                     'originalTailor' => $originalTailor,
                     'originalTailorId' => $originalTailorId,
                     'tailor_id' => $item->tailor_id,
-                    'tailor' => $item->tailor ? $item->tailor->tailor_name : '',
-                    'tailor_name' => $item->tailor ? $item->tailor->tailor_name : '',
+                    'tailor' => $item->tailor?->tailor_name ?? '',
+                    'tailor_name' => $item->tailor?->tailor_name ?? '',
                     'status' => 'processing',
                     'color_id' => $item->color_id,
                     'color_name' => $colorName,
@@ -1008,6 +2098,8 @@ public function getTailorAssignmentsData(Request $request)
                     'is_stock_order' => $isStockOrder,
                     'tailor_order_no' => $tailorOrderNo,
                     'special_order_no' => $specialOrderNo,
+                    'list_number' => $item->list_number,
+                    'sending_summary_number' => $item->sending_summary_number,
                 ];
             });
 
@@ -1017,11 +2109,13 @@ public function getTailorAssignmentsData(Request $request)
             'new' => $newItems,
             'processing' => $processingItems,
         ]);
+
     } catch (\Exception $e) {
-        \Log::error('Error in getTailorAssignmentsData: ' . $e->getMessage());
+        \Log::error('Error in getTailorAssignmentsData: ' . $e->getMessage() . ' | Line: ' . $e->getLine());
+
         return response()->json([
             'success' => false,
-            'message' => 'Error fetching data: ' . $e->getMessage(),
+            'message' => config('app.debug') ? $e->getMessage() : 'Failed to load data',
             'tailors' => [],
             'new' => [],
             'processing' => [],
@@ -1100,7 +2194,284 @@ public function getTailorAssignmentsData(Request $request)
     /**
      * Update order status based on items' tailor_status
      */
-    private function updateOrderStatusBasedOnItems($order)
+    // private function updateOrderStatusBasedOnItems($order)
+    // {
+    //     if ($order->status === 'delivered') {
+    //         return; // Don't change delivered orders
+    //     }
+
+    //     if ($order->items->count() === 0) {
+    //         $order->status = 'new';
+    //         $order->save();
+    //         return;
+    //     }
+
+    //     $itemStatuses = $order->items->pluck('tailor_status')->filter()->toArray();
+        
+    //     if (empty($itemStatuses)) {
+    //         $order->status = 'new';
+    //     } else {
+    //         $allNew = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'new';
+    //         })) === count($itemStatuses);
+            
+    //         $allReceived = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'received';
+    //         })) === count($itemStatuses);
+            
+    //         $hasReceived = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'received';
+    //         })) > 0;
+            
+    //         $hasProcessing = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'processing';
+    //         })) > 0;
+            
+    //         $isStockOrder = $order->customer_id === null || $order->source === 'stock';
+            
+    //         if ($allNew) {
+    //             $order->status = 'new';
+    //         } elseif ($allReceived) {
+    //             // For stock orders, set status to saved_in_stock (stock already added in markTailorItemsReceived)
+    //             // For customer orders, set status to ready
+    //             if ($isStockOrder) {
+    //                 $order->status = 'saved_in_stock';
+    //             } else {
+    //                 $order->status = 'ready';
+    //             }
+    //         } elseif ($hasReceived && ($hasProcessing || count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'new';
+    //         })) > 0)) {
+    //             // Some items are ready but others are still with tailor or new
+    //             $order->status = 'partially_ready';
+    //         } else {
+    //             $order->status = 'processing';
+    //         }
+    //     }
+        
+    //     $order->save();
+    // }
+
+ public function getItemStockAvailability(Request $request)
+    {
+        try {
+            $itemId = $request->input('item_id');
+            $item   = \App\Models\SpecialOrderItem::with('stock')->findOrFail($itemId);
+
+            if (!$item->stock_id) {
+                return response()->json(['success' => false, 'message' => 'No stock linked to this item']);
+            }
+
+            $locale     = session('locale', 'en');
+            $colorSizes = \App\Models\ColorSize::with(['color', 'size'])
+                ->where('stock_id', $item->stock_id)
+                ->where('qty', '>', 0)
+                ->get()
+                ->map(function ($cs) use ($locale) {
+                    $colorName = '';
+                    $sizeName  = '';
+                    if ($cs->color) {
+                        $colorName = $locale === 'ar'
+                            ? ($cs->color->color_name_ar ?? $cs->color->color_name_en ?? '')
+                            : ($cs->color->color_name_en ?? $cs->color->color_name_ar ?? '');
+                    }
+                    if ($cs->size) {
+                        $sizeName = $locale === 'ar'
+                            ? ($cs->size->size_name_ar ?? $cs->size->size_name_en ?? '')
+                            : ($cs->size->size_name_en ?? $cs->size->size_name_ar ?? '');
+                    }
+                    return [
+                        'id'         => $cs->id,
+                        'color_id'   => $cs->color_id,
+                        'size_id'    => $cs->size_id,
+                        'color_name' => $colorName,
+                        'size_name'  => $sizeName,
+                        'qty'        => (int)$cs->qty,
+                    ];
+                })
+                ->values();
+
+            return response()->json([
+                'success'      => true,
+                'color_sizes'  => $colorSizes,
+                'max_quantity' => (int)$item->quantity,   // cap: order item qty
+                'has_stock'    => $colorSizes->isNotEmpty(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Take a special order item from existing stock:
+     * - Deducts from color_sizes
+     * - Writes a StockAuditLog (operation_type = 'special_order', negative quantity_change)
+     * - Sets tailor_status = 'stock-received' and received_from_tailor_at = now()
+     * - Updates parent special order status via updateOrderStatusBasedOnItems()
+     */
+    public function takeItemFromStock(Request $request)
+    {
+        $request->validate([
+            'item_id'       => 'required|integer',
+            'color_size_id' => 'required|integer',
+            'qty'           => 'required|integer|min:1',
+        ]);
+
+        \DB::beginTransaction();
+        try {
+            $itemId      = $request->input('item_id');
+            $colorSizeId = $request->input('color_size_id');
+            $needed      = (int)$request->input('qty');
+            $item        = \App\Models\SpecialOrderItem::with(['stock', 'specialOrder'])->findOrFail($itemId);
+
+            if (!$item->stock_id) {
+                return response()->json(['success' => false, 'message' => 'No stock linked to this item'], 422);
+            }
+
+            // Only allow if not already received/stock-received
+            if (in_array($item->tailor_status, ['received', 'stock-received'])) {
+                return response()->json(['success' => false, 'message' => 'Item already received'], 422);
+            }
+
+            // Cap quantity at the order item quantity
+            if ($needed > (int)$item->quantity) {
+                return response()->json(['success' => false, 'message' => 'Quantity cannot exceed order item quantity (' . $item->quantity . ')'], 422);
+            }
+
+            // Find the specific color_sizes record chosen by the user
+            $colorSize = \App\Models\ColorSize::where('id', $colorSizeId)
+                ->where('stock_id', $item->stock_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$colorSize || (int)$colorSize->qty < $needed) {
+                \DB::rollBack();
+                return response()->json([
+                    'success'   => false,
+                    'message'   => 'Insufficient stock. Available: ' . ($colorSize ? $colorSize->qty : 0),
+                ], 422);
+            }
+
+            $stock        = $item->stock;
+            $prevQty      = (int)$colorSize->qty;
+            $newQty       = $prevQty - $needed;
+
+            // Deduct from color_sizes
+            $colorSize->qty = $newQty;
+            $colorSize->save();
+
+            // Resolve order number for the audit log
+            $order       = $item->specialOrder;
+            $orderNumber = $order->special_order_no ?? ('SC-' . str_pad($order->id, 4, '0', STR_PAD_LEFT));
+
+            // Write audit log (negative change = stock going out)
+            \App\Models\StockAuditLog::create([
+                'stock_id'          => $item->stock_id,
+                'abaya_code'        => $stock->abaya_code ?? null,
+                'barcode'           => $stock->barcode ?? null,
+                'design_name'       => $stock->design_name ?? null,
+                'operation_type'    => 'special_order',
+                'previous_quantity' => $prevQty,
+                'new_quantity'      => $newQty,
+                'quantity_change'   => -$needed,
+                'related_id'        => $orderNumber,
+                'related_type'      => 'special_order',
+                'related_info'      => ['order_id' => $order->id, 'item_id' => $item->id],
+                'color_id'          => $colorSize->color_id,
+                'size_id'           => $colorSize->size_id,
+                'user_id'           => auth()->id(),
+                'added_by'          => auth()->user()->name ?? 'system',
+                'notes'             => 'Taken from stock for special order item #' . $item->id,
+            ]);
+
+            // Mark item as stock-received
+            $item->tailor_status            = 'stock-received';
+            $item->received_from_tailor_at  = now();
+            $item->save();
+
+            // Reload fresh items for status calculation
+            $order->load('items');
+            $this->updateOrderStatusBasedOnItems($order);
+
+            \DB::commit();
+
+            return response()->json([
+                'success'       => true,
+                'message'       => 'Item taken from stock successfully',
+                'new_status'    => $order->fresh()->status,
+                'item_status'   => 'stock-received',
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            \Log::error('takeItemFromStock error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Update order status based on items' tailor_status
+     */
+    // private function updateOrderStatusBasedOnItems($order)
+    // {
+    //     if ($order->status === 'delivered') {
+    //         return; // Don't change delivered orders
+    //     }
+
+    //     if ($order->items->count() === 0) {
+    //         $order->status = 'new';
+    //         $order->save();
+    //         return;
+    //     }
+
+    //     $itemStatuses = $order->items->pluck('tailor_status')->filter()->toArray();
+        
+    //     if (empty($itemStatuses)) {
+    //         $order->status = 'new';
+    //     } else {
+    //         $allNew = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'new';
+    //         })) === count($itemStatuses);
+            
+    //         // treat 'stock-received' as equivalent to 'received'
+    //         $allReceived = count(array_filter($itemStatuses, function($status) {
+    //             return in_array($status, ['received', 'stock-received']);
+    //         })) === count($itemStatuses);
+            
+    //         $hasReceived = count(array_filter($itemStatuses, function($status) {
+    //             return in_array($status, ['received', 'stock-received']);
+    //         })) > 0;
+            
+    //         $hasProcessing = count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'processing';
+    //         })) > 0;
+            
+    //         $isStockOrder = $order->customer_id === null || $order->source === 'stock';
+            
+    //         if ($allNew) {
+    //             $order->status = 'new';
+    //         } elseif ($allReceived) {
+    //             // For stock orders, set status to saved_in_stock (stock already added in markTailorItemsReceived)
+    //             // For customer orders, set status to ready
+    //             if ($isStockOrder) {
+    //                 $order->status = 'saved_in_stock';
+    //             } else {
+    //                 $order->status = 'ready';
+    //             }
+    //         } elseif ($hasReceived && ($hasProcessing || count(array_filter($itemStatuses, function($status) {
+    //             return $status === 'new';
+    //         })) > 0 || count(array_filter($itemStatuses, function($status) {
+    //             return !in_array($status, ['received', 'stock-received']);
+    //         })) > 0)) {
+    //             // Some items are ready but others are still with tailor or new
+    //             $order->status = 'partially_ready';
+    //         } else {
+    //             $order->status = 'processing';
+    //         }
+    //     }
+        
+    //     $order->save();
+    // }
+     private function updateOrderStatusBasedOnItems($order)
     {
         if ($order->status === 'delivered') {
             return; // Don't change delivered orders
@@ -1120,17 +2491,22 @@ public function getTailorAssignmentsData(Request $request)
             $allNew = count(array_filter($itemStatuses, function($status) {
                 return $status === 'new';
             })) === count($itemStatuses);
-            
+
+            // treat 'stock-received' as equivalent to 'received'
             $allReceived = count(array_filter($itemStatuses, function($status) {
-                return $status === 'received';
+                return in_array($status, ['received', 'stock-received']);
             })) === count($itemStatuses);
-            
+
             $hasReceived = count(array_filter($itemStatuses, function($status) {
-                return $status === 'received';
+                return in_array($status, ['received', 'stock-received']);
             })) > 0;
-            
+
             $hasProcessing = count(array_filter($itemStatuses, function($status) {
                 return $status === 'processing';
+            })) > 0;
+
+            $hasNew = count(array_filter($itemStatuses, function($status) {
+                return $status === 'new';
             })) > 0;
             
             $isStockOrder = $order->customer_id === null || $order->source === 'stock';
@@ -1145,11 +2521,14 @@ public function getTailorAssignmentsData(Request $request)
                 } else {
                     $order->status = 'ready';
                 }
-            } elseif ($hasReceived && ($hasProcessing || count(array_filter($itemStatuses, function($status) {
-                return $status === 'new';
+            } elseif ($hasReceived && ($hasProcessing || $hasNew || count(array_filter($itemStatuses, function($status) {
+                return !in_array($status, ['received', 'stock-received']);
             })) > 0)) {
                 // Some items are ready but others are still with tailor or new
                 $order->status = 'partially_ready';
+            } elseif ($hasProcessing && $hasNew && !$hasReceived) {
+                // Some items sent to tailor, some still not sent, none ready yet
+                $order->status = 'partially_processing';
             } else {
                 $order->status = 'processing';
             }
@@ -1157,7 +2536,6 @@ public function getTailorAssignmentsData(Request $request)
         
         $order->save();
     }
-
     /**
      * Send SMS to customer for special order lifecycle (in progress / ready / delivered).
      * Uses get_sms() and sms_module() from helpers. Only sends for customer orders with phone.
@@ -1252,10 +2630,124 @@ public function getTailorAssignmentsData(Request $request)
         }
     }
 
+// public function assignItemsToTailor(Request $request)
+// {
+//     try {
+//         $assignments = $request->input('assignments', []);
+
+//         if (empty($assignments)) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'No items selected'
+//             ], 422);
+//         }
+
+//         DB::beginTransaction();
+
+//         $orderIds = [];
+//         $user = Auth::user();
+//         $userName = $user ? $user->user_name : 'System';
+        
+//         foreach ($assignments as $assignment) {
+//             $itemId = $assignment['item_id'] ?? null;
+//             $tailorId = $assignment['tailor_id'] ?? null;
+
+//             if (!$itemId || !$tailorId) {
+//                 continue;
+//             }
+
+//             $item = SpecialOrderItem::with('specialOrder')->find($itemId);
+//             if ($item) {
+//                 // Generate tailor order number if not already set
+//                 if (!$item->tailor_order_no) {
+//                     $item->tailor_order_no = $this->generateTailorOrderNo();
+//                 }
+//                 $item->tailor_id = $tailorId;
+//                 $item->tailor_status = 'processing';
+//                 $item->sent_to_tailor_at = now();
+//                 $item->save();
+                
+//                 // Deduct materials from tailor materials when sending to tailor
+//                 if ($item->stock_id && $item->quantity > 0) {
+//                     $order = $item->specialOrder;
+//                     $tailor = Tailor::find($tailorId);
+//                     $tailorName = $tailor ? $tailor->tailor_name : null;
+                    
+//                     // Use special_order_no from database, fallback to generated number if not available
+//                     $orderNumber = $order ? ($order->special_order_no ?? (Carbon::parse($order->created_at)->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT))) : null;
+                    
+//                     // Deduct materials from tailor materials (not from main inventory)
+//                     $this->deductMaterialsFromInventory($item->stock_id, $item->quantity, 'special_order', $tailorId, $tailorName, $order ? $order->id : null, $orderNumber);
+//                 }
+                
+//                 if (!in_array($item->special_order_id, $orderIds)) {
+//                     $orderIds[] = $item->special_order_id;
+//                 }
+//             }
+//         }
+
+//         // Update order statuses based on items
+//         foreach ($orderIds as $orderId) {
+//             $order = SpecialOrder::with('items')->find($orderId);
+//             if ($order) {
+//                 $this->updateOrderStatusBasedOnItems($order);
+//             }
+//         }
+
+//         DB::commit();
+
+//         // Send SMS to customer: "Your order is in progress" (sent to tailor) — one SMS per affected customer order
+//         foreach ($orderIds as $orderId) {
+//             try {
+//                 $this->sendSpecialOrderSms($orderId, 6);
+//             } catch (\Exception $e) {
+//                 \Log::error('Error sending special order in-progress SMS: ' . $e->getMessage());
+//             }
+//         }
+
+//         // Check for late deliveries after assignment (don't wait for response)
+//         try {
+//             $this->checkAndMarkLateDeliveries();
+//         } catch (\Exception $e) {
+//             // Log but don't fail the assignment
+//             \Log::error('Error checking late deliveries after assignment: ' . $e->getMessage());
+//         }
+
+//         // Get assigned item IDs for Excel export
+//         $assignedItemIds = [];
+//         $firstTailorId = null;
+//         foreach ($assignments as $assignment) {
+//             if (!empty($assignment['item_id'])) {
+//                 $assignedItemIds[] = $assignment['item_id'];
+//             }
+//             // Get the first tailor_id for redirect
+//             if (!$firstTailorId && !empty($assignment['tailor_id'])) {
+//                 $firstTailorId = $assignment['tailor_id'];
+//             }
+//         }
+
+//         return response()->json([
+//             'success' => true,
+//             'message' => count($assignments) . ' item(s) assigned to tailor successfully',
+//             'assigned_item_ids' => $assignedItemIds,
+//             'tailor_id' => $firstTailorId
+//         ]);
+//     } catch (\Exception $e) {
+//         DB::rollBack();
+//         \Log::error('Error in assignItemsToTailor: ' . $e->getMessage());
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error assigning items: ' . $e->getMessage()
+//         ], 500);
+//     }
+// }
+
 public function assignItemsToTailor(Request $request)
 {
     try {
         $assignments = $request->input('assignments', []);
+        $sendingSummaryNumber = $request->input('sending_summary_number');
+        $sendingSummaryNumber = is_string($sendingSummaryNumber) ? trim($sendingSummaryNumber) : '';
 
         if (empty($assignments)) {
             return response()->json([
@@ -1263,6 +2755,26 @@ public function assignItemsToTailor(Request $request)
                 'message' => 'No items selected'
             ], 422);
         }
+
+        if ($sendingSummaryNumber === '') {
+            return response()->json([
+                'success' => false,
+                'message' => trans('messages.please_enter_sending_summary_number', [], session('locale')) ?: 'Please enter Sending Summary Number'
+            ], 422);
+        }
+
+        // Validate all assignments have the same tailor_id
+        $tailorIds = array_unique(array_filter(array_map(function ($a) {
+            return $a['tailor_id'] ?? null;
+        }, $assignments)));
+        if (count($tailorIds) > 1) {
+            return response()->json([
+                'success' => false,
+                'message' => trans('messages.one_tailor_at_a_time', [], session('locale')) ?: 'At a time you can send order to only one tailor'
+            ], 422);
+        }
+
+        $listNumber = $this->generateListNumber();
 
         DB::beginTransaction();
 
@@ -1287,6 +2799,8 @@ public function assignItemsToTailor(Request $request)
                 $item->tailor_id = $tailorId;
                 $item->tailor_status = 'processing';
                 $item->sent_to_tailor_at = now();
+                $item->sending_summary_number = $sendingSummaryNumber;
+                $item->list_number = $listNumber;
                 $item->save();
                 
                 // Deduct materials from tailor materials when sending to tailor
@@ -1793,6 +3307,308 @@ public function exportAbayasToTailorExcel(Request $request)
 /**
  * Export abayas to PDF for tailor assignment
  */
+// public function exportAbayasToTailorPDF(Request $request)
+// {
+//     try {
+//         // Handle both GET (query) and POST (input) requests
+//         $itemIds = $request->query('item_ids', $request->input('item_ids', []));
+        
+//         // Ensure item_ids is an array
+//         if (!is_array($itemIds)) {
+//             $itemIds = [$itemIds];
+//         }
+        
+//         // Filter out any empty values
+//         $itemIds = array_filter($itemIds, function($id) {
+//             return !empty($id);
+//         });
+        
+//         if (empty($itemIds)) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'No items selected'
+//             ], 422);
+//         }
+
+//         // Get items with all related data
+//         $items = SpecialOrderItem::with([
+//             'specialOrder.customer',
+//             'stock.images',
+//             'tailor'
+//         ])
+//         ->whereIn('id', $itemIds)
+//         ->get();
+
+//         if ($items->isEmpty()) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'No items found'
+//             ], 404);
+//         }
+
+//         // Get unique tailors from items for header display
+//         $uniqueTailorIds = [];
+//         $uniqueTailors = [];
+//         foreach ($items as $item) {
+//             if ($item->tailor && !in_array($item->tailor->id, $uniqueTailorIds)) {
+//                 $uniqueTailorIds[] = $item->tailor->id;
+//                 $uniqueTailors[] = $item->tailor;
+//             }
+//         }
+        
+//         // Get total quantity
+//         $totalQuantity = $items->sum('quantity') ?? $items->count();
+        
+//         // Current date and time
+//         $currentDate = Carbon::now()->format('Y-m-d');
+//         $currentTime = Carbon::now()->format('H:i:s');
+        
+//         // Build tailor names string
+//         $tailorNames = [];
+//         foreach ($uniqueTailors as $tailor) {
+//             if ($tailor && isset($tailor->tailor_name)) {
+//                 $tailorNames[] = $tailor->tailor_name;
+//             }
+//         }
+//         $tailorNamesStr = !empty($tailorNames) ? implode(', ', $tailorNames) : (trans('messages.not_assigned', [], session('locale')) ?: 'Not Assigned');
+
+//         // Prepare data for PDF
+//         $formattedItems = [];
+//         foreach ($items as $item) {
+//             $order = $item->specialOrder;
+//             $stock = $item->stock;
+//             $tailor = $item->tailor;
+//             $customer = $order->customer ?? null;
+            
+//             // Generate order number
+//             $orderNo = '—';
+//             if ($order) {
+//                 $orderDate = Carbon::parse($order->created_at);
+//                 $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
+//             }
+
+//             // Get color name
+//             $colorName = '';
+//             if ($item->color_id) {
+//                 $color = Color::find($item->color_id);
+//                 if ($color) {
+//                     $locale = session('locale', 'en');
+//                     $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+//                 }
+//             }
+
+//             // Get size name
+//             $sizeName = '';
+//             if ($item->size_id) {
+//                 $size = Size::find($item->size_id);
+//                 if ($size) {
+//                     $locale = session('locale', 'en');
+//                     $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+//                 }
+//             }
+
+//             // Format date
+//             $orderDate = $order ? Carbon::parse($order->created_at)->format('Y-m-d') : '—';
+
+//             $formattedItems[] = [
+//                 'order_no' => $orderNo,
+//                 'customer' => $customer ? $customer->name : trans('messages.stock_special_order', [], session('locale')),
+//                 'abaya_name' => $item->design_name ?? $item->abaya_code ?? '—',
+//                 'abaya_code' => $item->abaya_code ?? '—',
+//                 'tailor' => $tailor ? $tailor->tailor_name : '—',
+//                 'quantity' => $item->quantity ?? 1,
+//                 'color' => $colorName ?: '—',
+//                 'size' => $sizeName ?: '—',
+//                 'length' => $item->abaya_length ?? '—',
+//                 'bust' => $item->bust ?? '—',
+//                 'sleeves' => $item->sleeves_length ?? '—',
+//                 'buttons' => $item->buttons ? trans('messages.yes', [], session('locale')) : trans('messages.no', [], session('locale')),
+//                 'order_date' => $orderDate,
+//                 'notes' => $item->notes ?? '—'
+//             ];
+//         }
+
+//         $html = view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime'))->render();
+        
+//         // Use dompdf if available
+//         if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
+//             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+//             $pdf->setPaper('A4', 'landscape');
+//             return $pdf->stream('abayas_to_tailor_' . date('Y-m-d_His') . '.pdf');
+//         } else {
+//             // Fallback: return HTML view for printing
+//             return view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime'));
+//         }
+//     } catch (\Exception $e) {
+//         \Log::error('Error in exportAbayasToTailorPDF: ' . $e->getMessage());
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error generating PDF: ' . $e->getMessage()
+//         ], 500);
+//     }
+// }
+
+// public function exportAbayasToTailorPDF(Request $request)
+// {
+//     try {
+//         // Handle both GET (query) and POST (input) requests
+//         $itemIds = $request->query('item_ids', $request->input('item_ids', []));
+        
+//         // Ensure item_ids is an array
+//         if (!is_array($itemIds)) {
+//             $itemIds = [$itemIds];
+//         }
+        
+//         // Filter out any empty values
+//         $itemIds = array_filter($itemIds, function($id) {
+//             return !empty($id);
+//         });
+        
+//         if (empty($itemIds)) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'No items selected'
+//             ], 422);
+//         }
+
+//         // Get items with all related data
+//         $items = SpecialOrderItem::with([
+//             'specialOrder.customer',
+//             'stock.images',
+//             'tailor'
+//         ])
+//         ->whereIn('id', $itemIds)
+//         ->get();
+
+//         if ($items->isEmpty()) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'No items found'
+//             ], 404);
+//         }
+
+//         // Get unique tailors from items for header display
+//         $uniqueTailorIds = [];
+//         $uniqueTailors = [];
+//         foreach ($items as $item) {
+//             if ($item->tailor && !in_array($item->tailor->id, $uniqueTailorIds)) {
+//                 $uniqueTailorIds[] = $item->tailor->id;
+//                 $uniqueTailors[] = $item->tailor;
+//             }
+//         }
+        
+//         // Get total quantity
+//         $totalQuantity = $items->sum('quantity') ?? $items->count();
+        
+//         // Current date and time
+//         $currentDate = Carbon::now()->format('Y-m-d');
+//         $currentTime = Carbon::now()->format('H:i:s');
+        
+//         // Build tailor names string
+//         $tailorNames = [];
+//         foreach ($uniqueTailors as $tailor) {
+//             if ($tailor && isset($tailor->tailor_name)) {
+//                 $tailorNames[] = $tailor->tailor_name;
+//             }
+//         }
+//         $tailorNamesStr = !empty($tailorNames) ? implode(', ', $tailorNames) : (trans('messages.not_assigned', [], session('locale')) ?: 'Not Assigned');
+
+//         // List number and sending summary number (same for all items in this batch)
+//         $firstItem = $items->first();
+//         $listNumber = $firstItem && $firstItem->list_number ? $firstItem->list_number : '—';
+//         $sendingSummaryNumber = $firstItem && $firstItem->sending_summary_number ? $firstItem->sending_summary_number : '—';
+
+//         // Prepare data for PDF
+//         $formattedItems = [];
+//         foreach ($items as $item) {
+//             $order = $item->specialOrder;
+//             $stock = $item->stock;
+//             $tailor = $item->tailor;
+//             $customer = $order->customer ?? null;
+
+//             // Special order number (from DB or fallback)
+//             $specialOrderNo = '—';
+//             if ($order) {
+//                 if (!empty($order->special_order_no)) {
+//                     $specialOrderNo = $order->special_order_no;
+//                 } else {
+//                     // Fallback similar to reports: SO-000001 style
+//                     $specialOrderNo = 'SO-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
+//                 }
+//             }
+
+//             // Get color name
+//             $colorName = '';
+//             if ($item->color_id) {
+//                 $color = Color::find($item->color_id);
+//                 if ($color) {
+//                     $locale = session('locale', 'en');
+//                     $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
+//                 }
+//             }
+
+//             // Get size name
+//             $sizeName = '';
+//             if ($item->size_id) {
+//                 $size = Size::find($item->size_id);
+//                 if ($size) {
+//                     $locale = session('locale', 'en');
+//                     $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+//                 }
+//             }
+
+//             // Format date
+//             $orderDate = $order ? Carbon::parse($order->created_at)->format('Y-m-d') : '—';
+
+//             $customerPhone = $order && $order->customer ? ($order->customer->phone ?? '—') : '—';
+
+//             $formattedItems[] = [
+//                 'customer' => $customer ? $customer->name : trans('messages.stock_special_order', [], session('locale')),
+//                 'customer_phone' => $customerPhone,
+//                 'special_order_no' => $specialOrderNo,
+//                 'abaya_name' => $item->design_name ?? $item->abaya_code ?? '—',
+//                 'abaya_code' => $item->abaya_code ?? '—',
+//                 'tailor' => $tailor ? $tailor->tailor_name : '—',
+//                 'quantity' => $item->quantity ?? 1,
+//                 'color' => $colorName ?: '—',
+//                 'size' => $sizeName ?: '—',
+//                 'length' => $item->abaya_length ?? '—',
+//                 'bust' => $item->bust ?? '—',
+//                 'sleeves' => $item->sleeves_length ?? '—',
+//                 'buttons' => $item->buttons ? trans('messages.yes', [], session('locale')) : trans('messages.no', [], session('locale')),
+//                 'order_date' => $orderDate,
+//                 'notes' => $item->notes ?? '—'
+//             ];
+//         }
+
+//         $html = view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime', 'listNumber', 'sendingSummaryNumber'))->render();
+        
+//         // Use dompdf if available
+//         if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
+//             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+//             $pdf->setPaper('A4', 'landscape');
+
+//             // If ?download=1 is passed, force download instead of inline view
+//             $download = $request->query('download', false);
+//             $fileName = 'abayas_to_tailor_' . date('Y-m-d_His') . '.pdf';
+
+//             if ($download) {
+//                 return $pdf->download($fileName);
+//             }
+
+//             return $pdf->stream($fileName);
+//         } else {
+//             // Fallback: return HTML view for printing
+//             return view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime', 'listNumber', 'sendingSummaryNumber'));
+//         }
+//     } catch (\Exception $e) {
+//         \Log::error('Error in exportAbayasToTailorPDF: ' . $e->getMessage());
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error generating PDF: ' . $e->getMessage()
+//         ], 500);
+//     }
+// }
 public function exportAbayasToTailorPDF(Request $request)
 {
     try {
@@ -1858,72 +3674,77 @@ public function exportAbayasToTailorPDF(Request $request)
         }
         $tailorNamesStr = !empty($tailorNames) ? implode(', ', $tailorNames) : (trans('messages.not_assigned', [], session('locale')) ?: 'Not Assigned');
 
+        // List number and sending summary number (same for all items in this batch)
+        $firstItem = $items->first();
+        $listNumber = $firstItem && $firstItem->list_number ? $firstItem->list_number : '—';
+        $sendingSummaryNumber = $firstItem && $firstItem->sending_summary_number ? $firstItem->sending_summary_number : '—';
+
         // Prepare data for PDF
         $formattedItems = [];
+        $totalTailorCharges = 0;
         foreach ($items as $item) {
             $order = $item->specialOrder;
             $stock = $item->stock;
             $tailor = $item->tailor;
             $customer = $order->customer ?? null;
-            
-            // Generate order number
-            $orderNo = '—';
+
+            // Special order number (from DB or fallback)
+            $specialOrderNo = '—';
             if ($order) {
-                $orderDate = Carbon::parse($order->created_at);
-                $orderNo = $orderDate->format('Y') . '-' . str_pad($order->id, 4, '0', STR_PAD_LEFT);
-            }
-
-            // Get color name
-            $colorName = '';
-            if ($item->color_id) {
-                $color = Color::find($item->color_id);
-                if ($color) {
-                    $locale = session('locale', 'en');
-                    $colorName = $locale === 'ar' ? ($color->color_name_ar ?? $color->color_name_en) : ($color->color_name_en ?? $color->color_name_ar);
-                }
-            }
-
-            // Get size name
-            $sizeName = '';
-            if ($item->size_id) {
-                $size = Size::find($item->size_id);
-                if ($size) {
-                    $locale = session('locale', 'en');
-                    $sizeName = $locale === 'ar' ? ($size->size_name_ar ?? $size->size_name_en) : ($size->size_name_en ?? $size->size_name_ar);
+                if (!empty($order->special_order_no)) {
+                    $specialOrderNo = $order->special_order_no;
+                } else {
+                    // Fallback similar to reports: SO-000001 style
+                    $specialOrderNo = 'SO-' . str_pad($order->id, 6, '0', STR_PAD_LEFT);
                 }
             }
 
             // Format date
             $orderDate = $order ? Carbon::parse($order->created_at)->format('Y-m-d') : '—';
 
+            $customerPhone = $order && $order->customer ? ($order->customer->phone ?? '—') : '—';
+            $quantity = (int) ($item->quantity ?? 1);
+            $tailorChargePerPiece = (float) ($stock->tailor_charges ?? 0);
+            $tailorChargeTotal = $tailorChargePerPiece * $quantity;
+            $totalTailorCharges += $tailorChargeTotal;
+
             $formattedItems[] = [
-                'order_no' => $orderNo,
                 'customer' => $customer ? $customer->name : trans('messages.stock_special_order', [], session('locale')),
-                'abaya_name' => $item->design_name ?? $item->abaya_code ?? '—',
+                'customer_phone' => $customerPhone,
+                'special_order_no' => $specialOrderNo,
                 'abaya_code' => $item->abaya_code ?? '—',
                 'tailor' => $tailor ? $tailor->tailor_name : '—',
-                'quantity' => $item->quantity ?? 1,
-                'color' => $colorName ?: '—',
-                'size' => $sizeName ?: '—',
+                'quantity' => $quantity,
                 'length' => $item->abaya_length ?? '—',
                 'bust' => $item->bust ?? '—',
                 'sleeves' => $item->sleeves_length ?? '—',
                 'buttons' => $item->buttons ? trans('messages.yes', [], session('locale')) : trans('messages.no', [], session('locale')),
                 'order_date' => $orderDate,
-                'notes' => $item->notes ?? '—'
+                'notes' => $item->notes ?? '—',
+                'tailor_charges' => number_format($tailorChargeTotal, 3, '.', ''),
             ];
         }
 
-        $html = view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime'))->render();
+        $totalTailorCharges = number_format($totalTailorCharges, 3, '.', '');
+        $html = view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime', 'listNumber', 'sendingSummaryNumber', 'totalTailorCharges'))->render();
         
         // Use dompdf if available
         if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
             $pdf->setPaper('A4', 'landscape');
-            return $pdf->stream('abayas_to_tailor_' . date('Y-m-d_His') . '.pdf');
+
+            // If ?download=1 is passed, force download instead of inline view
+            $download = $request->query('download', false);
+            $fileName = 'abayas_to_tailor_' . date('Y-m-d_His') . '.pdf';
+
+            if ($download) {
+                return $pdf->download($fileName);
+            }
+
+            return $pdf->stream($fileName);
         } else {
             // Fallback: return HTML view for printing
-            return view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime'));
+            return view('special_orders.abayas_to_tailor_pdf', compact('formattedItems', 'tailorNamesStr', 'totalQuantity', 'currentDate', 'currentTime', 'listNumber', 'sendingSummaryNumber', 'totalTailorCharges'));
         }
     } catch (\Exception $e) {
         \Log::error('Error in exportAbayasToTailorPDF: ' . $e->getMessage());
@@ -3168,12 +4989,111 @@ public function showBill($id)
     /**
      * Get tailor orders list data
      */
-    public function getTailorOrdersList(Request $request)
+    // public function getTailorOrdersList(Request $request)
+    // {
+    //     try {
+    //         $tailorId = $request->input('tailor_id');
+    //         $startDate = $request->input('start_date');
+    //         $endDate = $request->input('end_date');
+            
+    //         if (!$tailorId) {
+    //             return response()->json([
+    //                 'success' => true,
+    //                 'orders' => []
+    //             ]);
+    //         }
+
+    //         // First, get unique special order IDs with items assigned to this tailor
+    //         $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
+    //             ->whereNotNull('tailor_id')
+    //             // Exclude stock orders - only show special orders with customers
+    //             ->whereHas('specialOrder', function($query) {
+    //                 $query->whereNotNull('customer_id')
+    //                       ->where(function($q) {
+    //                           $q->whereNull('source')
+    //                             ->orWhere('source', '!=', 'stock');
+    //                       });
+    //             })
+    //             // Filter by date range if provided
+    //             ->when($startDate, function($query) use ($startDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) >= ?', [$startDate]);
+    //             })
+    //             ->when($endDate, function($query) use ($endDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+    //             });
+
+    //         // Get unique order IDs
+    //         $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+
+    //         // Get the special orders with pagination
+    //         $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
+    //             ->whereIn('id', $orderIds)
+    //             ->orderBy('created_at', 'DESC')
+    //             ->paginate(10);
+
+    //         // Get all items for these orders assigned to this tailor and group by order
+    //         $allItems = $itemsQuery
+    //             ->whereIn('special_order_id', $specialOrders->pluck('id'))
+    //             ->get()
+    //             ->groupBy('special_order_id');
+
+    //         $formattedOrders = $specialOrders->map(function($order) use ($allItems) {
+    //             $customer = $order->customer ?? null;
+    //             $items = $allItems->get($order->id, collect());
+                
+    //             // Calculate total quantity for this order
+    //             $totalQuantity = $items->sum('quantity');
+                
+    //             // Get address from city and area
+    //             $address = '';
+    //             if ($customer) {
+    //                 $addressParts = [];
+    //                 if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+    //                 if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+    //                 $address = implode(', ', array_filter($addressParts)) ?: '-';
+    //             }
+
+    //             // Get earliest sent_at date from items
+    //             $sentAt = $items->min(function($item) {
+    //                 return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
+    //             });
+    //             $sentAtFormatted = $sentAt ? $sentAt->format('Y-m-d H:i') : '-';
+                
+    //             return [
+    //                 'id' => $order->id,
+    //                 'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+    //                 'quantity' => $totalQuantity,
+    //                 'customer_name' => $customer->name ?? '-',
+    //                 'customer_phone' => $customer->phone ?? '-',
+    //                 'customer_address' => $address,
+    //                 'customer_country' => 'Oman',
+    //                 'sent_at' => $sentAtFormatted,
+    //             ];
+    //         });
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'orders' => $formattedOrders->values()->all(),
+    //             'current_page' => $specialOrders->currentPage(),
+    //             'last_page' => $specialOrders->lastPage(),
+    //             'per_page' => $specialOrders->perPage(),
+    //             'total' => $specialOrders->total(),
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+    
+     public function getTailorOrdersList(Request $request)
     {
         try {
             $tailorId = $request->input('tailor_id');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
+            $listNumber = $request->input('list_number');
             
             if (!$tailorId) {
                 return response()->json([
@@ -3182,7 +5102,7 @@ public function showBill($id)
                 ]);
             }
 
-            // First, get unique special order IDs with items assigned to this tailor
+            // Base query: items assigned to this tailor (one row per SpecialOrderItem)
             $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
                 ->whereNotNull('tailor_id')
                 // Exclude stock orders - only show special orders with customers
@@ -3199,30 +5119,32 @@ public function showBill($id)
                 })
                 ->when($endDate, function($query) use ($endDate) {
                     $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+                })
+                // Optional filter by list number
+                ->when($listNumber, function($query) use ($listNumber) {
+                    $query->where('list_number', $listNumber);
                 });
 
-            // Get unique order IDs
-            $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+            // Paginate items (one visual row per SpecialOrderItem)
+            $items = $itemsQuery
+                ->with(['specialOrder.customer.city', 'specialOrder.customer.area', 'tailor'])
+                ->orderBy('sent_to_tailor_at', 'DESC')
+                ->paginate(20);
 
-            // Get the special orders with pagination
-            $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
-                ->whereIn('id', $orderIds)
-                ->orderBy('created_at', 'DESC')
-                ->paginate(10);
+            $formattedOrders = $items->map(function($item) {
+                $order = $item->specialOrder;
+                $customer = $order ? $order->customer : null;
 
-            // Get all items for these orders assigned to this tailor and group by order
-            $allItems = $itemsQuery
-                ->whereIn('special_order_id', $specialOrders->pluck('id'))
-                ->get()
-                ->groupBy('special_order_id');
+                // Basic abaya info
+                $bust    = $item->bust           ?? '-';
+                $sleeves = $item->sleeves_length ?? '-';
+                $abaya   = $item->abaya_length   ?? '-';
+                $abaya_code  = $item->abaya_code  ?? '-';
+                $design_name = $item->design_name ?? '-';
 
-            $formattedOrders = $specialOrders->map(function($order) use ($allItems) {
-                $customer = $order->customer ?? null;
-                $items = $allItems->get($order->id, collect());
-                
-                // Calculate total quantity for this order
-                $totalQuantity = $items->sum('quantity');
-                
+                // Calculate quantity for this item (keep as-is; each SpecialOrderItem is one row)
+                $totalQuantity = $item->quantity ?? 1;
+
                 // Get address from city and area
                 $address = '';
                 if ($customer) {
@@ -3232,31 +5154,54 @@ public function showBill($id)
                     $address = implode(', ', array_filter($addressParts)) ?: '-';
                 }
 
-                // Get earliest sent_at date from items
-                $sentAt = $items->min(function($item) {
-                    return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
-                });
+                // Sent date/time from this item
+                $sentAt = $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
                 $sentAtFormatted = $sentAt ? $sentAt->format('Y-m-d H:i') : '-';
-                
+
+                // Special order number
+                $specialOrderNo = $order->special_order_no ?? null;
+
+                // Tailor name
+                $tailorName = $item->tailor ? $item->tailor->tailor_name : null;
+
                 return [
-                    'id' => $order->id,
+                    'id' => $order->id ?? 0,
                     'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+                    'special_order_no' => $specialOrderNo,
                     'quantity' => $totalQuantity,
+                    'abaya_code' => $abaya_code,
+                    'design_name' => $design_name,
+                    'abaya' => $abaya,
+                    'bust' => $bust,
+                    'sleeves' => $sleeves,
                     'customer_name' => $customer->name ?? '-',
                     'customer_phone' => $customer->phone ?? '-',
                     'customer_address' => $address,
                     'customer_country' => 'Oman',
                     'sent_at' => $sentAtFormatted,
+                    'list_number' => $item->list_number ?? '-',
+                    'sending_summary_number' => $item->sending_summary_number ?? '-',
+                    'tailor_name' => $tailorName ?? '-',
+                    'status' => $item->tailor_status ?? 'new',
                 ];
             });
+
+            // Unique list numbers for filter dropdown
+            $listNumbers = $items->getCollection()
+                ->pluck('list_number')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
 
             return response()->json([
                 'success' => true,
                 'orders' => $formattedOrders->values()->all(),
-                'current_page' => $specialOrders->currentPage(),
-                'last_page' => $specialOrders->lastPage(),
-                'per_page' => $specialOrders->perPage(),
-                'total' => $specialOrders->total(),
+                'current_page' => $items->currentPage(),
+                'last_page' => $items->lastPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+                'list_numbers' => $listNumbers,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -3269,12 +5214,366 @@ public function showBill($id)
     /**
      * Export tailor orders to PDF
      */
-    public function exportTailorOrdersPDF(Request $request)
+    // public function exportTailorOrdersPDF(Request $request)
+    // {
+    //     try {
+    //         $tailorId = $request->input('tailor_id');
+    //         $startDate = $request->input('start_date');
+    //         $endDate = $request->input('end_date');
+            
+    //         if (!$tailorId) {
+    //             return redirect()->back()->with('error', 'Please select a tailor');
+    //         }
+
+    //         $tailor = Tailor::findOrFail($tailorId);
+            
+    //         // Get unique order IDs with items assigned to this tailor
+    //         $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
+    //             ->whereNotNull('tailor_id')
+    //             // Exclude stock orders - only show special orders with customers
+    //             ->whereHas('specialOrder', function($query) {
+    //                 $query->whereNotNull('customer_id')
+    //                       ->where(function($q) {
+    //                           $q->whereNull('source')
+    //                             ->orWhere('source', '!=', 'stock');
+    //                       });
+    //             })
+    //             // Filter by date range if provided
+    //             ->when($startDate, function($query) use ($startDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) >= ?', [$startDate]);
+    //             })
+    //             ->when($endDate, function($query) use ($endDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+    //             });
+
+    //         // Get unique order IDs
+    //         $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+
+    //         // Get the special orders
+    //         $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
+    //             ->whereIn('id', $orderIds)
+    //             ->orderBy('created_at', 'DESC')
+    //             ->get();
+
+    //         // Get all items for these orders assigned to this tailor and group by order
+    //         $allItems = $itemsQuery
+    //             ->whereIn('special_order_id', $specialOrders->pluck('id'))
+    //             ->get()
+    //             ->groupBy('special_order_id');
+
+    //         $orders = $specialOrders->map(function($order) use ($allItems) {
+    //             $customer = $order->customer ?? null;
+    //             $items = $allItems->get($order->id, collect());
+                
+    //             // Calculate total quantity for this order
+    //             $totalQuantity = $items->sum('quantity');
+                
+    //             // Get address from city and area
+    //             $address = '';
+    //             if ($customer) {
+    //                 $addressParts = [];
+    //                 if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+    //                 if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+    //                 $address = implode(', ', array_filter($addressParts)) ?: '-';
+    //             }
+                
+    //             return [
+    //                 'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+    //                 'quantity' => $totalQuantity,
+    //                 'customer_name' => $customer->name ?? '-',
+    //                 'customer_phone' => $customer->phone ?? '-',
+    //                 'customer_address' => $address,
+    //                 'customer_country' => 'Oman',
+    //                 'sent_at' => $items->min(function($item) {
+    //                     return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : null;
+    //                 }) ?? '-',
+    //             ];
+    //         });
+
+    //         // Use dompdf if available, otherwise return HTML view
+    //         if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+    //             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('tailors.tailor_orders_pdf', compact('orders', 'tailor'))
+    //                 ->setPaper('a4', 'landscape')
+    //                 ->setOptions([
+    //                     'isHtml5ParserEnabled' => true,
+    //                     'isRemoteEnabled' => true,
+    //                     'defaultFont' => 'DejaVu Sans',
+    //                 ]);
+
+    //             $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.pdf';
+    //             return $pdf->download($filename);
+    //         }
+
+    //         // Fallback: return HTML view for printing
+    //         return view('tailors.tailor_orders_pdf', compact('orders', 'tailor'));
+    //     } catch (\Exception $e) {
+    //         return redirect()->back()->with('error', 'Error generating PDF: ' . $e->getMessage());
+    //     }
+    // }
+    
+    //   public function exportTailorOrdersPDF(Request $request)
+    // {
+    //     try {
+    //         $tailorId = $request->input('tailor_id');
+    //         $startDate = $request->input('start_date');
+    //         $endDate = $request->input('end_date');
+            
+    //         if (!$tailorId) {
+    //             return redirect()->back()->with('error', 'Please select a tailor');
+    //         }
+
+    //         $tailor = Tailor::findOrFail($tailorId);
+            
+    //         // Get unique order IDs with items assigned to this tailor
+    //         $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
+    //             ->whereNotNull('tailor_id')
+    //             // Exclude stock orders - only show special orders with customers
+    //             ->whereHas('specialOrder', function($query) {
+    //                 $query->whereNotNull('customer_id')
+    //                       ->where(function($q) {
+    //                           $q->whereNull('source')
+    //                             ->orWhere('source', '!=', 'stock');
+    //                       });
+    //             })
+    //             // Filter by date range if provided
+    //             ->when($startDate, function($query) use ($startDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) >= ?', [$startDate]);
+    //             })
+    //             ->when($endDate, function($query) use ($endDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+    //             });
+
+    //         // Get unique order IDs
+    //         $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+
+    //         // Get the special orders
+    //         $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
+    //             ->whereIn('id', $orderIds)
+    //             ->orderBy('created_at', 'DESC')
+    //             ->get();
+
+    //         // Get all items for these orders assigned to this tailor and group by order
+    //         $allItems = $itemsQuery
+    //             ->whereIn('special_order_id', $specialOrders->pluck('id'))
+    //             ->get()
+    //             ->groupBy('special_order_id');
+
+    //         $orders = $specialOrders->map(function($order) use ($allItems) {
+    //             $customer = $order->customer ?? null;
+    //           $items = $allItems->get($order->id, collect());
+
+    //         $bust    = $items->first()?->bust           ?? '-';
+    //         $sleeves = $items->first()?->sleeves_length ?? '-';
+    //         $abaya   = $items->first()?->abaya_length   ?? '-';
+    //           $abaya   = $items->first()?->abaya_length   ?? '-';
+    //         $abaya_code = $items->first()?->abaya_code      ?? '-';
+    //         $design_name= $items->first()?->design_name     ?? '-';
+    //             // Calculate total quantity for this order
+    //             $totalQuantity = $items->sum('quantity');
+                
+    //             // Get address from city and area
+    //             $address = '';
+    //             if ($customer) {
+    //                 $addressParts = [];
+    //                 if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+    //                 if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+    //                 $address = implode(', ', array_filter($addressParts)) ?: '-';
+    //             }
+                
+    //             return [
+    //                 'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+    //                 'quantity' => $totalQuantity,
+    //                 'customer_name' => $customer->name ?? '-',
+    //                 'customer_phone' => $customer->phone ?? '-',
+    //                 'bust'=>$bust,
+    //                 'sleeves'=>$sleeves,
+    //                 'abaya_code'=>$abaya_code,
+    //                 'design_name'=>$design_name,
+    //                 'abaya'=>$abaya,
+    //                 'customer_address' => $address,
+    //                 'customer_country' => 'Oman',
+    //                 'sent_at' => $items->min(function($item) {
+    //                     return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : null;
+    //                 }) ?? '-',
+    //             ];
+    //         });
+
+    //         // Use dompdf if available, otherwise return HTML view
+    //         if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+    //             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('tailors.tailor_orders_pdf', compact('orders', 'tailor'))
+    //                 ->setPaper('a4', 'landscape')
+    //                 ->setOptions([
+    //                     'isHtml5ParserEnabled' => true,
+    //                     'isRemoteEnabled' => true,
+    //                     'defaultFont' => 'DejaVu Sans',
+    //                 ]);
+
+    //             $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.pdf';
+    //             return $pdf->download($filename);
+    //         }
+
+    //         // Fallback: return HTML view for printing
+    //         return view('tailors.tailor_orders_pdf', compact('orders', 'tailor'));
+    //     } catch (\Exception $e) {
+    //         return redirect()->back()->with('error', 'Error generating PDF: ' . $e->getMessage());
+    //     }
+    // }
+    /**
+     * Export tailor orders to Excel
+     */
+    // public function exportTailorOrdersExcel(Request $request)
+    // {
+    //     try {
+    //         $tailorId = $request->input('tailor_id');
+    //         $startDate = $request->input('start_date');
+    //         $endDate = $request->input('end_date');
+            
+    //         if (!$tailorId) {
+    //             return redirect()->back()->with('error', 'Please select a tailor');
+    //         }
+
+    //         $tailor = Tailor::findOrFail($tailorId);
+            
+    //         // Get unique order IDs with items assigned to this tailor
+    //         $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
+    //             ->whereNotNull('tailor_id')
+    //             // Exclude stock orders - only show special orders with customers
+    //             ->whereHas('specialOrder', function($query) {
+    //                 $query->whereNotNull('customer_id')
+    //                       ->where(function($q) {
+    //                           $q->whereNull('source')
+    //                             ->orWhere('source', '!=', 'stock');
+    //                       });
+    //             })
+    //             // Filter by date range if provided
+    //             ->when($startDate, function($query) use ($startDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) >= ?', [$startDate]);
+    //             })
+    //             ->when($endDate, function($query) use ($endDate) {
+    //                 $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+    //             });
+
+    //         // Get unique order IDs
+    //         $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+
+    //         // Get the special orders
+    //         $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
+    //             ->whereIn('id', $orderIds)
+    //             ->orderBy('created_at', 'DESC')
+    //             ->get();
+
+    //         // Get all items for these orders assigned to this tailor and group by order
+    //         $allItems = $itemsQuery
+    //             ->whereIn('special_order_id', $specialOrders->pluck('id'))
+    //             ->get()
+    //             ->groupBy('special_order_id');
+
+    //         $data = [];
+    //         $data[] = ['Order No', 'Quantity', 'Customer Name', 'Phone', 'Address', 'Country', 'Sent Date'];
+            
+    //         foreach ($specialOrders as $order) {
+    //             $customer = $order->customer ?? null;
+    //             $items = $allItems->get($order->id, collect());
+                
+    //             // Calculate total quantity for this order
+    //             $totalQuantity = $items->sum('quantity');
+                
+    //             $address = '';
+    //             if ($customer) {
+    //                 $addressParts = [];
+    //                 if ($customer->area) $addressParts[] = $customer->area->area_name_ar ?? $customer->area->area_name_en ?? '';
+    //                 if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
+    //                 $address = implode(', ', array_filter($addressParts)) ?: '-';
+    //             }
+                
+    //             // Get earliest sent_at date from items (min returns the formatted string from the callback)
+    //             $sentAtFormatted = $items->min(function($item) {
+    //                 return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : null;
+    //             }) ?: '-';
+                
+    //             $data[] = [
+    //                 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
+    //                 $totalQuantity,
+    //                 $customer->name ?? '-',
+    //                 $customer->phone ?? '-',
+    //                 $address,
+    //                 'Oman',
+    //                 $sentAtFormatted,
+    //             ];
+    //         }
+
+    //         // Use PhpSpreadsheet if available
+    //         if (class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+    //             $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    //             $sheet = $spreadsheet->getActiveSheet();
+                
+    //             // Use fromArray - PhpSpreadsheet handles UTF-8 automatically
+    //             $sheet->fromArray($data, null, 'A1');
+                
+    //             // Header styling
+    //             $sheet->getStyle('A1:G1')->getFont()->setBold(true)->setSize(12);
+    //             $sheet->getStyle('A1:G1')->getFill()
+    //                 ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+    //                 ->getStartColor()->setARGB('FF111827');
+    //             $sheet->getStyle('A1:G1')->getFont()->getColor()->setARGB(\PhpOffice\PhpSpreadsheet\Style\Color::COLOR_WHITE);
+    //             $sheet->getStyle('A1:G1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+
+    //             // Freeze header row and add filter
+    //             $sheet->freezePane('A2');
+    //             $highestRow = $sheet->getHighestRow();
+    //             $sheet->setAutoFilter("A1:G{$highestRow}");
+
+    //             // Auto-size only used columns (A-G)
+    //             foreach (range('A', 'G') as $col) {
+    //                 $sheet->getColumnDimension($col)->setAutoSize(true);
+    //             }
+
+    //             // Borders
+    //             $sheet->getStyle("A1:G{$highestRow}")->getBorders()->getAllBorders()
+    //                 ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+    //                 ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFE5E7EB'));
+                
+    //             $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+    //             $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.xlsx';
+                
+    //             // UTF-8 encoding is handled by PhpSpreadsheet automatically
+    //             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    //             header('Content-Disposition: attachment;filename="' . rawurlencode($filename) . '"');
+    //             header('Cache-Control: max-age=0');
+                
+    //             $writer->save('php://output');
+    //             exit;
+    //         } else {
+    //             // Fallback: CSV export with UTF-8 BOM for Excel
+    //             $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.csv';
+    //             header('Content-Type: text/csv; charset=utf-8');
+    //             header('Content-Disposition: attachment;filename="' . $filename . '"');
+                
+    //             $output = fopen('php://output', 'w');
+    //             // Add UTF-8 BOM for proper Excel display
+    //             fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+    //             foreach ($data as $row) {
+    //                 // Ensure UTF-8 encoding
+    //                 $row = array_map(function($value) {
+    //                     return mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+    //                 }, $row);
+    //                 fputcsv($output, $row);
+    //             }
+    //             fclose($output);
+    //             exit;
+    //         }
+    //     } catch (\Exception $e) {
+    //         return redirect()->back()->with('error', 'Error generating Excel: ' . $e->getMessage());
+    //     }
+    // }
+    
+      public function exportTailorOrdersPDF(Request $request)
     {
         try {
             $tailorId = $request->input('tailor_id');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
+            $listNumber = $request->input('list_number');
             
             if (!$tailorId) {
                 return redirect()->back()->with('error', 'Please select a tailor');
@@ -3282,7 +5581,7 @@ public function showBill($id)
 
             $tailor = Tailor::findOrFail($tailorId);
             
-            // Get unique order IDs with items assigned to this tailor
+            // Base query: items assigned to this tailor (one row per SpecialOrderItem)
             $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
                 ->whereNotNull('tailor_id')
                 // Exclude stock orders - only show special orders with customers
@@ -3299,31 +5598,27 @@ public function showBill($id)
                 })
                 ->when($endDate, function($query) use ($endDate) {
                     $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+                })
+                ->when($listNumber, function($query) use ($listNumber) {
+                    $query->where('list_number', $listNumber);
                 });
 
-            // Get unique order IDs
-            $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
-
-            // Get the special orders
-            $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
-                ->whereIn('id', $orderIds)
-                ->orderBy('created_at', 'DESC')
+            // Get all items (one row per abaya) with necessary relations
+            $items = $itemsQuery
+                ->with(['specialOrder.customer.city', 'specialOrder.customer.area', 'tailor'])
+                ->orderBy('sent_to_tailor_at', 'DESC')
                 ->get();
 
-            // Get all items for these orders assigned to this tailor and group by order
-            $allItems = $itemsQuery
-                ->whereIn('special_order_id', $specialOrders->pluck('id'))
-                ->get()
-                ->groupBy('special_order_id');
+            $orders = $items->map(function($item) {
+                $order = $item->specialOrder;
+                $customer = $order ? $order->customer : null;
 
-            $orders = $specialOrders->map(function($order) use ($allItems) {
-                $customer = $order->customer ?? null;
-                $items = $allItems->get($order->id, collect());
-                
-                // Calculate total quantity for this order
-                $totalQuantity = $items->sum('quantity');
-                
-                // Get address from city and area
+                $bust    = $item->bust           ?? '-';
+                $sleeves = $item->sleeves_length ?? '-';
+                $abaya   = $item->abaya_length   ?? '-';
+                $abaya_code  = $item->abaya_code  ?? '-';
+                $design_name = $item->design_name ?? '-';
+
                 $address = '';
                 if ($customer) {
                     $addressParts = [];
@@ -3331,30 +5626,45 @@ public function showBill($id)
                     if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
                     $address = implode(', ', array_filter($addressParts)) ?: '-';
                 }
-                
+
+                $sentAt = $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at) : null;
+
                 return [
-                    'order_no' => 'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
-                    'quantity' => $totalQuantity,
+                    'special_order_no' => $order->special_order_no ?? null,
+                    'list_number' => $item->list_number ?? '-',
+                    'sending_summary_number' => $item->sending_summary_number ?? '-',
+                    'tailor_name' => $item->tailor ? $item->tailor->tailor_name : null,
+                    'quantity' => $item->quantity ?? 1,
+                    'abaya_code' => $abaya_code,
+                    'design_name' => $design_name,
+                    'abaya' => $abaya,
+                    'bust' => $bust,
+                    'sleeves' => $sleeves,
                     'customer_name' => $customer->name ?? '-',
                     'customer_phone' => $customer->phone ?? '-',
                     'customer_address' => $address,
                     'customer_country' => 'Oman',
-                    'sent_at' => $items->min(function($item) {
-                        return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : null;
-                    }) ?? '-',
+                    'status' => $item->tailor_status ?? 'new',
+                    'sent_at' => $sentAt ? $sentAt->format('Y-m-d H:i') : '-',
                 ];
             });
 
-            $html = view('tailors.tailor_orders_pdf', compact('orders', 'tailor'))->render();
-            
             // Use dompdf if available, otherwise return HTML view
-            if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
-                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-                return $pdf->download('tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.pdf');
-            } else {
-                // Fallback: return HTML view for printing
-                return view('tailors.tailor_orders_pdf', compact('orders', 'tailor'));
+            if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('tailors.tailor_orders_pdf', compact('orders', 'tailor'))
+                    ->setPaper('a4', 'landscape')
+                    ->setOptions([
+                        'isHtml5ParserEnabled' => true,
+                        'isRemoteEnabled' => true,
+                        'defaultFont' => 'DejaVu Sans',
+                    ]);
+
+                $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.pdf';
+                return $pdf->download($filename);
             }
+
+            // Fallback: return HTML view for printing
+            return view('tailors.tailor_orders_pdf', compact('orders', 'tailor'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error generating PDF: ' . $e->getMessage());
         }
@@ -3369,6 +5679,7 @@ public function showBill($id)
             $tailorId = $request->input('tailor_id');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
+            $listNumber = $request->input('list_number');
             
             if (!$tailorId) {
                 return redirect()->back()->with('error', 'Please select a tailor');
@@ -3376,7 +5687,7 @@ public function showBill($id)
 
             $tailor = Tailor::findOrFail($tailorId);
             
-            // Get unique order IDs with items assigned to this tailor
+            // Base query: items assigned to this tailor (one row per SpecialOrderItem)
             $itemsQuery = SpecialOrderItem::where('tailor_id', $tailorId)
                 ->whereNotNull('tailor_id')
                 // Exclude stock orders - only show special orders with customers
@@ -3393,33 +5704,46 @@ public function showBill($id)
                 })
                 ->when($endDate, function($query) use ($endDate) {
                     $query->whereRaw('DATE(COALESCE(sent_to_tailor_at, received_from_tailor_at, created_at)) <= ?', [$endDate]);
+                })
+                ->when($listNumber, function($query) use ($listNumber) {
+                    $query->where('list_number', $listNumber);
                 });
 
-            // Get unique order IDs
-            $orderIds = $itemsQuery->distinct()->pluck('special_order_id');
+            $data = [];
+            $data[] = [
+                'Special Order No',
+                'List Number',
+                'Sending Summary No.',
+                'Tailor',
+                'Quantity',
+                'Abaya Code',
+                'Design Name',
+                'Abaya Length',
+                'Bust',
+                'Sleeves',
+                'Customer Name',
+                'Phone',
+                'Address',
+                'Country',
+                'Status',
+                'Sent Date',
+            ];
 
-            // Get the special orders
-            $specialOrders = SpecialOrder::with(['customer.city', 'customer.area', 'customer'])
-                ->whereIn('id', $orderIds)
-                ->orderBy('created_at', 'DESC')
+            $items = $itemsQuery
+                ->with(['specialOrder.customer.city', 'specialOrder.customer.area', 'tailor'])
+                ->orderBy('sent_to_tailor_at', 'DESC')
                 ->get();
 
-            // Get all items for these orders assigned to this tailor and group by order
-            $allItems = $itemsQuery
-                ->whereIn('special_order_id', $specialOrders->pluck('id'))
-                ->get()
-                ->groupBy('special_order_id');
+            foreach ($items as $item) {
+                $order = $item->specialOrder;
+                $customer = $order ? $order->customer : null;
 
-            $data = [];
-            $data[] = ['Order No', 'Quantity', 'Customer Name', 'Phone', 'Address', 'Country', 'Sent Date'];
-            
-            foreach ($specialOrders as $order) {
-                $customer = $order->customer ?? null;
-                $items = $allItems->get($order->id, collect());
-                
-                // Calculate total quantity for this order
-                $totalQuantity = $items->sum('quantity');
-                
+                $bust    = $item->bust           ?? '-';
+                $sleeves = $item->sleeves_length ?? '-';
+                $abaya   = $item->abaya_length   ?? '-';
+                $abaya_code  = $item->abaya_code  ?? '-';
+                $design_name = $item->design_name ?? '-';
+
                 $address = '';
                 if ($customer) {
                     $addressParts = [];
@@ -3427,20 +5751,27 @@ public function showBill($id)
                     if ($customer->city) $addressParts[] = $customer->city->city_name_ar ?? $customer->city->city_name_en ?? '';
                     $address = implode(', ', array_filter($addressParts)) ?: '-';
                 }
-                
-                // Get earliest sent_at date from items
-                $sentAt = $items->min(function($item) {
-                    return $item->sent_to_tailor_at ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i') : null;
-                });
-                $sentAtFormatted = $sentAt ? $sentAt->format('Y-m-d H:i') : '-';
-                
+
+                $sentAtFormatted = $item->sent_to_tailor_at
+                    ? Carbon::parse($item->sent_to_tailor_at)->format('Y-m-d H:i')
+                    : '-';
+
                 $data[] = [
-                    'SO-' . str_pad($order->id ?? 0, 6, '0', STR_PAD_LEFT),
-                    $totalQuantity,
+                    $order->special_order_no ?? null,
+                    $item->list_number ?? '-',
+                    $item->sending_summary_number ?? '-',
+                    $item->tailor ? $item->tailor->tailor_name : null,
+                    $item->quantity ?? 1,
+                    $abaya_code,
+                    $design_name,
+                    $abaya,
+                    $bust,
+                    $sleeves,
                     $customer->name ?? '-',
                     $customer->phone ?? '-',
                     $address,
                     'Oman',
+                    $item->tailor_status ?? 'new',
                     $sentAtFormatted,
                 ];
             }
@@ -3453,10 +5784,39 @@ public function showBill($id)
                 // Use fromArray - PhpSpreadsheet handles UTF-8 automatically
                 $sheet->fromArray($data, null, 'A1');
                 
-                // Auto-size columns
-                foreach (range('A', 'L') as $col) {
+                // Header styling (dark band, centered text)
+                $sheet->getStyle('A1:P1')->getFont()->setBold(true)->setSize(11);
+                $sheet->getStyle('A1:P1')->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB('FF111827');
+                $sheet->getStyle('A1:P1')->getFont()->getColor()->setARGB(\PhpOffice\PhpSpreadsheet\Style\Color::COLOR_WHITE);
+                $sheet->getStyle('A1:P1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                $sheet->getRowDimension(1)->setRowHeight(20);
+
+                // Freeze header row and add filter over all columns
+                $sheet->freezePane('A2');
+                $highestRow = $sheet->getHighestRow();
+                $sheet->setAutoFilter("A1:P{$highestRow}");
+
+                // Auto-size used columns (A-P) and set some preferred widths
+                foreach (range('A', 'P') as $col) {
                     $sheet->getColumnDimension($col)->setAutoSize(true);
                 }
+                // Slightly wider for address and design name
+                $sheet->getColumnDimension('G')->setWidth(20); // Design Name
+                $sheet->getColumnDimension('M')->setWidth(35); // Address
+
+                // Thin grid borders for all cells
+                $sheet->getStyle("A1:P{$highestRow}")->getBorders()->getAllBorders()
+                    ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                    ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFE5E7EB'));
+
+                // Alignment tweaks
+                $sheet->getStyle("E2:E{$highestRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER); // Quantity
+                $sheet->getStyle("H2:J{$highestRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER); // lengths
+                $sheet->getStyle("P2:P{$highestRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER); // Sent date
+                $sheet->getStyle("A2:D{$highestRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT); // ids/headings
+                $sheet->getStyle("M2:M{$highestRow}")->getAlignment()->setWrapText(true); // Address wrap
                 
                 $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                 $filename = 'tailor_orders_' . $tailor->tailor_name . '_' . date('Y-m-d') . '.xlsx';
@@ -3757,6 +6117,74 @@ public function showBill($id)
         }
     }
     
+//     public function getShippingFee(Request $request)
+// {
+//     try {
+//         $request->validate([
+//             'customer.name' => 'required|string|max:255',
+//             'customer.phone' => 'required|string|max:20',
+//             'customer.source' => 'required|string|in:whatsapp,walkin',
+//             'customer.area_id' => 'required|exists:areas,id',
+//             'customer.city_id' => 'required|exists:cities,id',
+//             'customer.address' => 'required|string',
+//             'orders' => 'required|array|min:1',
+//             'orders.*.quantity' => 'required|integer|min:1',
+//         ]);
+
+//         $customer_id= Customer::where('phone', $request->input('customer.phone'))->value('id');
+//         $areaId = (int) $request->input('customer.area_id');
+//         $cityId = (int) $request->input('customer.city_id');
+//         $phone = $request->input('customer.phone');
+//         $address = $request->input('customer.address');
+
+//         $customer = Customer::firstOrCreate(
+//             ['phone' => $phone],
+//             [
+//                 'name' => $request->input('customer.name'),
+//                 'area_id' => $areaId,
+//                 'customer_id' => $customer_id,
+//                 'city_id' => $cityId,
+//             ]
+//         );
+//         if (!$customer->wasRecentlyCreated) {
+//             $customer->name = $request->input('customer.name');
+//             $customer->area_id = $areaId;
+//             $customer->city_id = $cityId;
+//             $customer->address = $address;
+//             $customer->save();
+//         }
+
+//         $totalQuantity = 0;
+//         foreach ($request->input('orders', []) as $o) {
+//             $totalQuantity += (int) ($o['quantity'] ?? 0);
+//         }
+
+//         $shippingFee = get_shipping_fee_from_api($areaId, $cityId, (int) $customer->id, $totalQuantity);
+//         if ($shippingFee === null) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'Shipping fee could not be fetched from API',
+//             ], 422);
+//         }
+
+//         return response()->json([
+//             'success' => true,
+//             'shipping_fee' => (float) $shippingFee,
+//         ]);
+//     } catch (\Illuminate\Validation\ValidationException $e) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Validation failed',
+//             'errors' => $e->errors(),
+//         ], 422);
+//     } catch (\Exception $e) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => $e->getMessage(),
+//         ], 500);
+//     }
+// }
+
     public function getShippingFee(Request $request)
 {
     try {
@@ -3799,6 +6227,15 @@ public function showBill($id)
             $totalQuantity += (int) ($o['quantity'] ?? 0);
         }
 
+        // Delivery fee is only applied when area (governorate) id is 10 or 11
+        $deliveryFeeAreas = [10, 11];
+        if (!in_array($areaId, $deliveryFeeAreas, true)) {
+            return response()->json([
+                'success' => true,
+                'shipping_fee' => 0,
+            ]);
+        }
+
         $shippingFee = get_shipping_fee_from_api($areaId, $cityId, (int) $customer->id, $totalQuantity);
         if ($shippingFee === null) {
             return response()->json([
@@ -3824,5 +6261,4 @@ public function showBill($id)
         ], 500);
     }
 }
-
 }

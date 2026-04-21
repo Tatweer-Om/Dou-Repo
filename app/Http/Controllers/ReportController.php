@@ -682,7 +682,7 @@ class ReportController extends Controller
             $page = $request->input('page', 1);
 
             $query = SpecialOrder::with(['customer', 'items.stock'])
-                ->where('status', 'delivered')
+                //
                 ->whereNotNull('customer_id')
                 ->where(function($q) {
                     $q->whereNull('source')
@@ -748,11 +748,14 @@ class ReportController extends Controller
                 
                 // Calculate total amount and paid amount without delivery charges
                 $shippingFee = (float)($order->shipping_fee ?? 0);
+                $discount = (float)($order->discount ?? 0);
                 $totalAmountWithShipping = (float)($order->total_amount ?? 0);
                 $paidAmountWithShipping = (float)($order->paid_amount ?? 0);
                 
-                // Subtract delivery charges from total and paid amounts
-                $totalAmountWithoutShipping = max(0, $totalAmountWithShipping - $shippingFee);
+                // total_amount is stored already discounted; add back discount to get true total before discount
+                $trueTotal = $totalAmountWithShipping + $discount;
+                // Subtract delivery charges to show items-only total
+                $totalAmountWithoutShipping = max(0, $trueTotal - $shippingFee);
                 $paidAmountWithoutShipping = max(0, $paidAmountWithShipping - $shippingFee);
                 
                 return [
@@ -765,6 +768,7 @@ class ReportController extends Controller
                     'total_amount' => $totalAmountWithoutShipping,
                     'paid_amount' => $paidAmountWithoutShipping,
                     'delivery_charges' => $shippingFee,
+                    'discount' => $discount,
                     'profit' => $orderProfit,
                     'created_at' => $createdAt,
                 ];
@@ -772,7 +776,7 @@ class ReportController extends Controller
 
             // Calculate totals - recalculate profit from all orders
             $totalQuery = SpecialOrder::with(['items.stock'])
-                ->where('status', 'delivered')
+                //
                 ->whereNotNull('customer_id')
                 ->where(function($q) {
                     $q->whereNull('source')
@@ -811,13 +815,16 @@ class ReportController extends Controller
             
             // Calculate totals excluding delivery charges
             $totalShippingFee = (float)$allOrdersForTotals->sum('shipping_fee');
+            $totalDiscount = (float)$allOrdersForTotals->sum('discount');
             $totalAmountWithShipping = (float)$allOrdersForTotals->sum('total_amount');
             $paidAmountWithShipping = (float)$allOrdersForTotals->sum('paid_amount');
             
+            // total_amount is stored after discount; add back discount to get true total before discount
             $totals = [
-                'total_amount' => max(0, $totalAmountWithShipping - $totalShippingFee),
+                'total_amount' => max(0, $totalAmountWithShipping + $totalDiscount - $totalShippingFee),
                 'paid_amount' => max(0, $paidAmountWithShipping - $totalShippingFee),
                 'delivery_charges' => $totalShippingFee,
+                'total_discount' => $totalDiscount,
                 'profit' => $totalProfit,
                 'count' => $allOrdersForTotals->count(),
             ];
@@ -849,7 +856,7 @@ class ReportController extends Controller
             $toDate = $request->input('to_date');
 
             $query = SpecialOrder::with(['customer', 'items.stock'])
-                ->where('status', 'delivered')
+               
                 ->whereNotNull('customer_id')
                 ->where(function($q) {
                     $q->whereNull('source')
@@ -1028,7 +1035,7 @@ class ReportController extends Controller
             $toDate = $request->input('to_date');
 
             $query = SpecialOrder::with(['customer', 'items.stock'])
-                ->where('status', 'delivered')
+               
                 ->whereNotNull('customer_id')
                 ->where(function($q) {
                     $q->whereNull('source')
@@ -1775,7 +1782,7 @@ class ReportController extends Controller
             }
 
             $specialOrders = SpecialOrder::with(['items.stock'])
-                ->where('status', 'delivered')
+               
                 ->whereNotNull('customer_id')
                 ->where(function ($q) { $q->whereNull('source')->orWhere('source', '!=', 'stock'); })
                 ->whereBetween('created_at', [$start, $end])
@@ -1926,7 +1933,7 @@ class ReportController extends Controller
 
             // Special Orders: delivered only. Group by created_at date -> orders count, items (sum quantity), sales (sum total_amount)
             $soQuery = SpecialOrder::with(['items.stock'])
-                ->where('status', 'delivered')
+               
                 ->whereBetween('created_at', [$start, $end])
                 ->get();
             $soByDate = [];

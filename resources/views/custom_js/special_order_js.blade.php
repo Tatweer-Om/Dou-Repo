@@ -31,6 +31,9 @@ document.addEventListener('alpine:init', () => {
     paymentProcessing: false,
     paymentError: '',
     orderSubmitted: false,
+    discount: 0,
+    editOrderId: null,
+    editOrderNo: '',
     customer: { 
       source: '', 
       name: '', 
@@ -58,12 +61,99 @@ document.addEventListener('alpine:init', () => {
     }],
 
     async init() {
+      this.editOrderId = window.__specialOrderEditId || null;
       await this.fetchAreas();
       // Fallback to static map keys if API returns empty
       if (this.governorates.length === 0) {
         this.governorates = Object.keys(this.areaCityMap).map(name => ({id: name, name}));
       }
       await this.loadAccounts();
+      if (this.editOrderId) {
+        await this.loadEditOrder();
+      }
+    },
+
+    async loadEditOrder() {
+      if (!this.editOrderId) return;
+      this.loading = true;
+      try {
+        const formData = new FormData();
+        formData.append('id', this.editOrderId);
+        formData.append('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+        const response = await fetch('{{ route('edit_spcialorder') }}', {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        });
+        const data = await response.json();
+        if (!data.success && data.message) {
+          throw new Error(data.message);
+        }
+        if (data.success === false) throw new Error(data.message || 'Failed to load order');
+
+        this.editOrderNo = data.special_order_no || '';
+        this.activeMainTab = data.order_type === 'stock' ? 'stock' : 'customer';
+        this.customer = {
+          source: data.customer?.source || '',
+          name: data.customer?.name || '',
+          phone: data.customer?.phone || '',
+          governorate_id: String(data.customer?.area_id || ''),
+          city_id: String(data.customer?.city_id || ''),
+          address: data.customer?.address || '',
+          is_gift: data.customer?.is_gift || 'no',
+          gift_message: data.customer?.gift_message || ''
+        };
+        this.shipping_fee = parseFloat(data.shipping_fee) || 0;
+        this.discount = parseFloat(data.discount) || 0;
+        if (this.customer.governorate_id) {
+          await this.updateCitiesAsync(this.customer.governorate_id);
+          await this.$nextTick();
+          this.customer.city_id = String(data.customer?.city_id || '');
+          this.selectCity(this.customer.city_id);
+          this.shipping_fee = parseFloat(data.shipping_fee) || 0;
+        }
+
+        if (data.order_type === 'stock') {
+          this.orders = (data.items || []).map((row, idx) => ({
+            id: idx + 1,
+            stock_id: row.stock_id,
+            abaya_code: row.abaya_code || '',
+            design_name: row.design_name || '',
+            quantity: 1,
+            price: parseFloat(row.price) || 0,
+            length: '', bust: '', sleeves: '', buttons: 'yes',
+            notes: row.notes || '',
+            colorSizes: (row.colorSizes || []).map(cs => ({
+              color_id: cs.color_id,
+              size_id: cs.size_id,
+              qty: parseInt(cs.qty) || 1
+            }))
+          }));
+        } else {
+          this.orders = (data.items || []).map((row, idx) => ({
+            id: idx + 1,
+            stock_id: row.stock_id || null,
+            abaya_code: row.abaya_code || '',
+            design_name: row.design_name || '',
+            quantity: parseInt(row.quantity) || 1,
+            price: parseFloat(row.price) || 0,
+            length: row.length != null && row.length !== '' ? String(row.length) : '',
+            bust: row.bust != null && row.bust !== '' ? String(row.bust) : '',
+            sleeves: row.sleeves != null && row.sleeves !== '' ? String(row.sleeves) : '',
+            buttons: row.buttons || 'yes',
+            notes: row.notes || '',
+            image: row.image || '/images/placeholder.png',
+            colorSizes: []
+          }));
+        }
+      } catch (e) {
+        console.error('Load edit order error:', e);
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: e.message || 'Failed to load order' });
+        } else alert(e.message || 'Failed to load order');
+      } finally {
+        this.loading = false;
+      }
     },
 
     async loadAccounts() {
@@ -111,7 +201,9 @@ document.addEventListener('alpine:init', () => {
       this.orders.forEach(order => {
         subtotal += (parseFloat(order.price) || 0) * (parseInt(order.quantity) || 1);
       });
-      return subtotal + (parseFloat(this.shipping_fee) || 0);
+      const discountAmt = Math.max(0, parseFloat(this.discount) || 0);
+      const total = subtotal + (parseFloat(this.shipping_fee) || 0) - discountAmt;
+      return Math.max(0, total);
     },
 
     updateCities(areaId) {
@@ -566,6 +658,148 @@ document.addEventListener('alpine:init', () => {
       
       this.showModal = true;
     },
+
+    async submitUpdate() {
+      if (!this.editOrderId || this.loading) return;
+      const isStockOrder = this.activeMainTab === 'stock';
+      if (!isStockOrder) {
+        if (!this.customer.name || this.customer.name.trim() === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.customer_name', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.customer_name', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+        if (!this.customer.source || this.customer.source.trim() === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.order_source', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.order_source', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+        if (!this.customer.phone || this.customer.phone.trim() === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.phone_number', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.phone_number', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+        if (!this.customer.governorate_id || this.customer.governorate_id === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.governorate', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.governorate', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+        if (!this.customer.city_id || this.customer.city_id === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.state_area', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.state_area', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+        if (!this.customer.address || this.customer.address.trim() === '') {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.address', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}' });
+          else alert('{{ trans('messages.address', [], session('locale')) }} {{ trans('messages.is_required', [], session('locale')) ?: 'is required' }}');
+          return;
+        }
+      }
+      if (this.orders.length === 0) {
+        if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.add_new_abaya', [], session('locale')) }}' });
+        else alert('{{ trans('messages.add_new_abaya', [], session('locale')) }}');
+        return;
+      }
+      if (isStockOrder) {
+        for (let o of this.orders) {
+          if (!o.stock_id) {
+            if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.select_abaya_from_stock', [], session('locale')) }}' });
+            else alert('{{ trans('messages.select_abaya_from_stock', [], session('locale')) }}');
+            return;
+          }
+          if (!o.colorSizes || o.colorSizes.length === 0) {
+            if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.add_color_size_quantity', [], session('locale')) ?: 'Please add at least one color, size, and quantity' }}' });
+            else alert('{{ trans('messages.add_color_size_quantity', [], session('locale')) ?: 'Please add at least one color, size, and quantity' }}');
+            return;
+          }
+          const invalid = o.colorSizes.some(cs => !cs.qty || parseInt(cs.qty) <= 0 || !cs.color_id || !cs.size_id);
+          if (invalid) {
+            if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.quantity_must_be_greater_than_zero', [], session('locale')) ?: 'Quantity must be greater than zero' }}' });
+            else alert('{{ trans('messages.quantity_must_be_greater_than_zero', [], session('locale')) ?: 'Quantity must be greater than zero' }}');
+            return;
+          }
+        }
+      } else {
+        const invalidOrders = this.orders.filter(o => !o.stock_id || !o.price || parseFloat(o.price) <= 0);
+        if (invalidOrders.length > 0) {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: '{{ trans('messages.select_abaya_from_stock', [], session('locale')) }} / {{ trans('messages.price_is_required_for_all_items', [], session('locale')) ?: 'Price is required for all items' }}' });
+          else alert('{{ trans('messages.select_abaya_from_stock', [], session('locale')) }}');
+          return;
+        }
+      }
+      this.loading = true;
+      try {
+        const formData = {
+          order_type: isStockOrder ? 'stock' : 'customer',
+          special_order_id: this.editOrderId,
+          customer: isStockOrder ? {} : {
+            name: this.customer.name,
+            phone: this.customer.phone,
+            source: this.customer.source,
+            area_id: this.customer.governorate_id,
+            city_id: this.customer.city_id,
+            address: this.customer.address,
+            is_gift: this.customer.is_gift,
+            gift_message: this.customer.gift_message
+          },
+          orders: isStockOrder ?
+            this.orders.flatMap(order => {
+              if (!order.colorSizes || order.colorSizes.length === 0) return [];
+              return order.colorSizes.filter(cs => cs.qty > 0 && cs.color_id && cs.size_id).map(cs => ({
+                stock_id: order.stock_id,
+                abaya_code: order.abaya_code,
+                design_name: order.design_name,
+                color_id: cs.color_id,
+                size_id: cs.size_id,
+                quantity: parseInt(cs.qty) || 1,
+                price: parseFloat(order.price) || 0,
+                notes: order.notes || null
+              }));
+            }) :
+            this.orders.map(order => ({
+              stock_id: order.stock_id,
+              abaya_code: order.abaya_code,
+              design_name: order.design_name,
+              quantity: parseInt(order.quantity) || 1,
+              price: parseFloat(order.price) || 0,
+              length: order.length || null,
+              bust: order.bust || null,
+              sleeves: order.sleeves || null,
+              buttons: order.buttons || 'yes',
+              notes: order.notes || null
+            })),
+          shipping_fee: isStockOrder ? 0 : this.shipping_fee,
+          discount: isStockOrder ? 0 : (parseFloat(this.discount) || 0),
+          notes: ''
+        };
+        const response = await fetch('{{ url('update_spcialorder') }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(formData)
+        });
+        const data = await response.json();
+        if (data.success) {
+          const msg = data.message || '{{ trans('messages.order_updated_successfully', [], session('locale')) ?: 'Order updated successfully' }}';
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'success', title: '{{ trans('messages.success', [], session('locale')) }}', text: msg, timer: 2000, showConfirmButton: false }).then(() => { window.location.href = '{{ route('view_special_order') }}'; });
+          } else {
+            alert(msg);
+            window.location.href = '{{ route('view_special_order') }}';
+          }
+        } else {
+          if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: data.message || '{{ trans('messages.error_saving_order', [], session('locale')) ?: 'Error saving order' }}' });
+          else alert(data.message || 'Error');
+        }
+      } catch (e) {
+        if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: '{{ trans('messages.error', [], session('locale')) }}', text: e.message || '{{ trans('messages.error_saving_order', [], session('locale')) ?: 'Error saving order' }}' });
+        else alert(e.message || 'Error');
+      } finally {
+        this.loading = false;
+      }
+    },
     
     async submitOrders() {
       if (this.loading || this.orderSubmitted) return;
@@ -583,14 +817,13 @@ document.addEventListener('alpine:init', () => {
             name: this.customer.name,
             phone: this.customer.phone,
             source: this.customer.source,
-            area_id: this.customer.governorate_id, // Governorate ID
-            city_id: this.customer.city_id, // State/Area ID
+            area_id: this.customer.governorate_id,
+            city_id: this.customer.city_id,
             address: this.customer.address,
             is_gift: this.customer.is_gift,
             gift_message: this.customer.gift_message
           },
-          orders: isStockOrder ? 
-            // For stock orders, create one item per color/size combination
+          orders: isStockOrder ?
             this.orders.flatMap(order => {
               if (!order.colorSizes || order.colorSizes.length === 0) return [];
               return order.colorSizes
@@ -606,7 +839,6 @@ document.addEventListener('alpine:init', () => {
                   notes: order.notes || null
                 }));
             }) :
-            // For customer orders
             this.orders.map(order => ({
               stock_id: order.stock_id,
               abaya_code: order.abaya_code,
@@ -620,12 +852,15 @@ document.addEventListener('alpine:init', () => {
               notes: order.notes || null
             })),
           shipping_fee: isStockOrder ? 0 : this.shipping_fee,
+          discount: isStockOrder ? 0 : (parseFloat(this.discount) || 0),
           notes: ''
         };
+        if (this.editOrderId) {
+          formData.special_order_id = this.editOrderId;
+        }
 
-        console.log('Submitting order:', formData);
-
-        const response = await fetch('{{ url('add_spcialorder') }}', {
+        const url = this.editOrderId ? '{{ url('update_spcialorder') }}' : '{{ url('add_spcialorder') }}';
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -640,15 +875,31 @@ document.addEventListener('alpine:init', () => {
         console.log('Response data:', data);
 
         if (data.success) {
-          // Keep loading true until form is reset (prevents multiple submissions)
           this.showModal = false;
           this.loading = false;
-          
-          // Store order ID
+
+          if (this.editOrderId) {
+            const msg = data.message || '{{ trans('messages.order_updated_successfully', [], session('locale')) ?: 'Order updated successfully' }}';
+            if (typeof Swal !== 'undefined') {
+              Swal.fire({
+                icon: 'success',
+                title: '{{ trans('messages.success', [], session('locale')) }}',
+                text: msg,
+                timer: 2000,
+                showConfirmButton: false
+              }).then(() => {
+                window.location.href = '{{ route('view_special_order') }}';
+              });
+            } else {
+              alert(msg);
+              window.location.href = '{{ route('view_special_order') }}';
+            }
+            return;
+          }
+
           if (data.special_order_id) {
             this.savedOrderId = data.special_order_id;
-            
-            // For stock orders, skip payment and redirect
+
             if (isStockOrder) {
               if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -666,11 +917,9 @@ document.addEventListener('alpine:init', () => {
                 window.location.href = '{{ route('view_special_order') }}';
               }
             } else {
-              // For customer orders, show payment modal
               this.paymentAmount = this.calculateTotal().toFixed(3);
               this.selectedAccountId = '';
               this.paymentError = '';
-              // Show payment modal
               this.showPaymentModal = true;
             }
           }
@@ -825,6 +1074,7 @@ document.addEventListener('alpine:init', () => {
                 colorSizes: [] // For stock orders
               }];
               this.shipping_fee = 0;
+              this.discount = 0;
             this.availableCities = [];
     }
   }));
@@ -834,6 +1084,18 @@ document.addEventListener('alpine:init', () => {
     selectedAbaya: null,
     abayas: [],
     loading: false,
+
+    init() {
+      if (order && order.stock_id && order.abaya_code) {
+        this.selectedAbaya = {
+          id: order.stock_id,
+          code: order.abaya_code,
+          name: order.design_name || order.abaya_code,
+          price: order.price != null ? Number(order.price) : 0,
+          image: order.image || '/images/placeholder.png'
+        };
+      }
+    },
     
     async searchAbayas() {
       if (this.search.length < 2) {
@@ -862,7 +1124,17 @@ document.addEventListener('alpine:init', () => {
       order.abaya_code = item.code;
       order.design_name = item.name;
       order.price = parseFloat(item.price) || 0;
-      this.abayas = []; // Clear results after selection
+      this.abayas = [];
+    },
+
+    clearAbaya() {
+      this.selectedAbaya = null;
+      this.search = '';
+      this.abayas = [];
+      order.stock_id = null;
+      order.abaya_code = '';
+      order.design_name = '';
+      order.price = 0;
     },
     
   }));

@@ -2,26 +2,34 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Carbon\Carbon;
-use App\Models\SpecialOrder;
-use App\Models\PosOrders;
-use App\Models\Settlement;
-use App\Models\SpecialOrderItem;
-use App\Models\Tailor;
-use App\Models\Stock;
-use App\Models\ColorSize;
-use App\Models\StockColor;
-use App\Models\StockSize;
 use App\Models\Boutique;
 use App\Models\BoutiqueInvo;
-use App\Models\Settings;
+use App\Models\ColorSize;
 use App\Models\Expense;
+use App\Models\PosOrders;
 use App\Models\PosOrdersDetail;
+use App\Models\Settings;
+use App\Models\Settlement;
+use App\Models\SpecialOrder;
+use App\Models\SpecialOrderItem;
+use App\Models\Stock;
+use App\Models\StockColor;
+use App\Models\StockSize;
+use App\Models\Tailor;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class HomeController extends Controller
 {
+
+
+
     public function index(){
+
+
+
+
         $today = Carbon::today();
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth = Carbon::now()->endOfMonth();
@@ -55,6 +63,9 @@ class HomeController extends Controller
         // Calculate monthly revenue and expenses for the current year
         $currentYear = Carbon::now()->year;
         $monthlyData = $this->calculateMonthlyData($currentYear);
+
+        // Gross sales (all time): POS + special orders + settlements only (matches POS income: goods excl. delivery; SO excludes POS-linked payments to avoid double count)
+        $channelSalesTotals = $this->calculateTotalSalesPosSpecialSettlementAllTime();
         
         return view('dashboard.dashboard', compact(
             'todayNetProfit',
@@ -66,8 +77,33 @@ class HomeController extends Controller
             'totalRevenue',
             'totalExpenses',
             'monthlyData',
-            'currentYear'
+            'currentYear',
+            'channelSalesTotals'
         ));
+    }
+
+    /**
+     * All-time gross sales from POS (standalone), special orders, and settlement records only.
+     * POS rows tied to special_order_id are excluded; their value is counted on the special order.
+     */
+    private function calculateTotalSalesPosSpecialSettlementAllTime(): array
+    {
+        $posSales = (float) PosOrders::whereNull('special_order_id')
+            ->selectRaw('COALESCE(SUM(COALESCE(total_amount, 0) - COALESCE(delivery_charges, 0)), 0) as aggregate')
+            ->value('aggregate');
+
+        $specialOrderSales = (float) SpecialOrder::query()->sum('total_amount');
+
+        $settlementSales = (float) Settlement::query()->sum('total_sales');
+
+        $combined = $posSales + $specialOrderSales + $settlementSales;
+
+        return [
+            'pos' => $posSales,
+            'special_orders' => $specialOrderSales,
+            'settlements' => $settlementSales,
+            'combined' => $combined,
+        ];
     }
     
     private function calculateTodayRevenue($date)
@@ -91,8 +127,12 @@ class HomeController extends Controller
         
         // Special Orders profit (delivered orders only)
         // Profit = (Price - Cost Price - Tailor Charges) × Quantity
-        $specialOrders = SpecialOrder::where('status', 'delivered')
-            ->whereDate('updated_at', $date)
+        // $specialOrders = SpecialOrder::where('status', 'delivered')
+        //     ->whereDate('updated_at', $date)
+        //     ->with(['items.stock'])
+        //     ->get();
+         $specialOrders = SpecialOrder::
+            whereDate('created_at', $date)
             ->with(['items.stock'])
             ->get();
         
@@ -214,8 +254,13 @@ class HomeController extends Controller
         
         // Special Orders profit (delivered orders only)
         // Profit = (Price - Cost Price - Tailor Charges) × Quantity
-        $specialOrders = SpecialOrder::where('status', 'delivered')
-            ->whereBetween('updated_at', [$startDate, $endDate])
+        // $specialOrders = SpecialOrder::where('status', 'delivered')
+        //     ->whereBetween('created_at', [$startDate, $endDate])
+        //     ->with(['items.stock'])
+        //     ->get();
+
+             $specialOrders = SpecialOrder::
+            whereBetween('created_at', [$startDate, $endDate])
             ->with(['items.stock'])
             ->get();
         

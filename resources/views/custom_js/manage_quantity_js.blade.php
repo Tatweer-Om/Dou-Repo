@@ -305,9 +305,12 @@ function transferPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
           },
           body: JSON.stringify({
+            _token: '{{ csrf_token() }}',
             mode: this.mode,
             from: this.fromChannel,
             to: this.toChannel,

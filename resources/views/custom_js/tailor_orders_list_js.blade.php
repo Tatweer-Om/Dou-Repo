@@ -9,6 +9,7 @@
         selectedTailorId = tailorId; // Store globally
         var startDate = $('#startDate').val();
         var endDate = $('#endDate').val();
+        var listNumber = $('#listNumberFilter').val();
         
         $.ajax({
             url: "{{ route('tailor_orders_list.data') }}",
@@ -17,6 +18,7 @@
                 tailor_id: tailorId,
                 start_date: startDate,
                 end_date: endDate,
+                list_number: listNumber,
                 page: page
             },
             success: function(res) {
@@ -25,17 +27,37 @@
                     res.orders.forEach(function(order) {
                         rows += `
                             <tr class="hover:bg-pink-50/50 transition-colors border-b">
-                                <td class="px-4 py-4 font-semibold text-[var(--text-primary)] whitespace-nowrap">${order.order_no}</td>
+                                <td class="px-4 py-4 font-semibold text-[var(--text-primary)] whitespace-nowrap">${order.special_order_no || '-'}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.list_number || '-'}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.sending_summary_number || '-'}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.tailor_name || '-'}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.quantity}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.abaya_code}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap">${order.design_name}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.abaya}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.bust}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.sleeves}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap">${order.customer_name}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap">${order.customer_phone}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap min-w-[200px]">${order.customer_address}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap">${order.customer_country}</td>
+                                <td class="px-4 py-4 text-[var(--text-primary)] text-center whitespace-nowrap">${order.status || '-'}</td>
                                 <td class="px-4 py-4 text-[var(--text-primary)] whitespace-nowrap">${order.sent_at || '-'}</td>
                             </tr>
                         `;
                     });
                     $('#ordersTableBody').html(rows);
+
+                    // Populate list number filter options (professional select)
+                    if (Array.isArray(res.list_numbers)) {
+                        const current = $('#listNumberFilter').val() || '';
+                        let options = '<option value=\"\">{{ trans('messages.all', [], session('locale')) ?: 'All' }}</option>';
+                        res.list_numbers.forEach(function(ln) {
+                            const selected = (ln === current) ? 'selected' : '';
+                            options += `<option value="${ln}" ${selected}>${ln}</option>`;
+                        });
+                        $('#listNumberFilter').html(options);
+                    }
                     
                     // Render pagination
                     if (res.last_page && res.last_page > 1) {
@@ -46,7 +68,7 @@
                 } else {
                     $('#ordersTableBody').html(`
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                            <td colspan="15" class="px-4 py-8 text-center text-gray-500">
                                 {{ trans('messages.no_orders_found', [], session('locale')) }}
                             </td>
                         </tr>
@@ -57,7 +79,7 @@
             error: function() {
                 $('#ordersTableBody').html(`
                     <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-red-500">
+                        <td colspan="15" class="px-4 py-8 text-center text-red-500">
                             {{ trans('messages.error_loading_orders', [], session('locale')) }}
                         </td>
                     </tr>
@@ -227,7 +249,15 @@
         });
 
         // Handle date changes - reload orders if tailor is selected
-        $('#startDate, #endDate').on('change', function() {
+                $('#startDate, #endDate').on('change', function() {
+            if (selectedTailorId) {
+                currentPage = 1;
+                loadOrders(selectedTailorId, currentPage);
+            }
+        });
+
+        // Handle list number filter change
+        $('#listNumberFilter').on('change', function() {
             if (selectedTailorId) {
                 currentPage = 1;
                 loadOrders(selectedTailorId, currentPage);
@@ -262,9 +292,11 @@
             if (!selectedTailorId) return;
             var startDate = $('#startDate').val();
             var endDate = $('#endDate').val();
+            var listNumber = $('#listNumberFilter').val();
             var params = 'tailor_id=' + selectedTailorId;
             if (startDate) params += '&start_date=' + startDate;
             if (endDate) params += '&end_date=' + endDate;
+            if (listNumber) params += '&list_number=' + encodeURIComponent(listNumber);
             window.open("{{ route('tailor_orders_list.export_pdf') }}?" + params, '_blank');
         });
 
@@ -273,9 +305,11 @@
             if (!selectedTailorId) return;
             var startDate = $('#startDate').val();
             var endDate = $('#endDate').val();
+            var listNumber = $('#listNumberFilter').val();
             var params = 'tailor_id=' + selectedTailorId;
             if (startDate) params += '&start_date=' + startDate;
             if (endDate) params += '&end_date=' + endDate;
+            if (listNumber) params += '&list_number=' + encodeURIComponent(listNumber);
             window.location.href = "{{ route('tailor_orders_list.export_excel') }}?" + params;
         });
     });

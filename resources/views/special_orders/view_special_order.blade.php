@@ -22,7 +22,7 @@
 
           <!-- بيانات أساسية للطلب -->
           <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
               <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.order_number', [], session('locale')) }}</p>
                 <p class="font-bold text-lg" x-text="viewOrder.special_order_no || viewOrder.order_no || viewOrder.id"></p>
@@ -32,6 +32,17 @@
                 <p class="font-semibold" x-text="viewOrder.customer"></p>
               </div>
               <div>
+                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.phone_number', [], session('locale')) }}</p>
+                <template x-if="viewOrder.customer_phone">
+                  <a :href="'tel:' + viewOrder.customer_phone"
+                     class="font-semibold text-indigo-600 hover:underline"
+                     x-text="viewOrder.customer_phone"></a>
+                </template>
+                <template x-if="!viewOrder.customer_phone">
+                  <p class="font-semibold text-gray-400">—</p>
+                </template>
+              </div>
+              <div>
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.source', [], session('locale')) }}</p>
                 <p class="font-semibold" x-text="sourceLabel(viewOrder.source)"></p>
               </div>
@@ -39,14 +50,23 @@
                 <p class="text-gray-500 text-xs mb-1">{{ trans('messages.date', [], session('locale')) }}</p>
                 <p class="font-semibold" x-text="formatDate(viewOrder.date)"></p>
               </div>
-              <div>
-                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.governorate', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.governorate || '—'"></p>
-              </div>
-              <div>
-                <p class="text-gray-500 text-xs mb-1">{{ trans('messages.state_area', [], session('locale')) }}</p>
-                <p class="font-semibold" x-text="viewOrder.city || '—'"></p>
-              </div>
+              <!-- City, area, address: customer module for all linked customers; website order fields override in API when set -->
+              <template x-if="!viewOrder.is_stock_order">
+                <div class="lg:col-span-3 space-y-2 md:col-span-2">
+                  <div>
+                    <p class="text-gray-500 text-xs mb-1">{{ trans('messages.city', [], session('locale')) ?: 'City' }}</p>
+                    <p class="font-semibold" x-text="viewOrder.customer_city_name || '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-gray-500 text-xs mb-1">{{ trans('messages.state_area', [], session('locale')) }}</p>
+                    <p class="font-semibold" x-text="viewOrder.customer_area_name || '—'"></p>
+                  </div>
+                  <div>
+                    <p class="text-gray-500 text-xs mb-1">{{ trans('messages.address', [], session('locale')) ?: 'Address' }}</p>
+                    <p class="font-semibold whitespace-pre-line" x-text="viewOrder.customer_address || '—'"></p>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -97,12 +117,41 @@
                             </template>
                           </div>
                           <!-- حالة الصنف -->
-                          <div class="flex flex-col items-end gap-1">
+                          <div class="flex flex-col items-end gap-2">
                             <span :class="itemStatusBadge(item.tailor_status)" 
                                   class="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
                                   x-text="itemStatusLabel(item.tailor_status)"></span>
                             <template x-if="item.tailor_name">
-                              <p class="text-xs text-gray-500 mt-1" x-text="item.tailor_name"></p>
+                              <p class="text-xs text-gray-500" x-text="item.tailor_name"></p>
+                            </template>
+                            <!-- Take from Stock button: visible for customer orders with a linked stock item -->
+                            <template x-if="!viewOrder.is_stock_order && item.stock_id">
+                              <div>
+                                <!-- Active: status is 'new' -->
+                                <template x-if="item.tailor_status === 'new'">
+                                  <button @click="takeItemFromStock(item, viewOrder)"
+                                          class="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow transition">
+                                    <span class="material-symbols-outlined text-sm">inventory</span>
+                                    {{ trans('messages.take_from_stock', [], session('locale')) }}
+                                  </button>
+                                </template>
+                                <!-- Disabled: item is with tailor (processing) -->
+                                <template x-if="item.tailor_status === 'processing'">
+                                  <button disabled
+                                          :title="'{{ trans('messages.cannot_take_with_tailor', [], session('locale')) }}'"
+                                          class="flex items-center gap-1 px-3 py-1.5 bg-gray-200 text-gray-400 text-xs font-semibold rounded-lg cursor-not-allowed opacity-60">
+                                    <span class="material-symbols-outlined text-sm">inventory</span>
+                                    {{ trans('messages.take_from_stock', [], session('locale')) }}
+                                  </button>
+                                </template>
+                                <!-- Already done: received or stock-received -->
+                                <template x-if="['received','stock-received'].includes(item.tailor_status)">
+                                  <span class="flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-600 text-xs font-semibold rounded-lg border border-teal-200">
+                                    <span class="material-symbols-outlined text-sm">check_circle</span>
+                                    {{ trans('messages.taken_from_stock', [], session('locale')) }}
+                                  </span>
+                                </template>
+                              </div>
                             </template>
                           </div>
                         </div>
@@ -468,45 +517,56 @@
   <!-- ======================= MAIN CONTAINER ======================= -->
   <div class="w-full mx-auto bg-white shadow-xl rounded-3xl p-4 md:p-6" x-show="!loading">
 
-    <!-- 📊 البوكسات العلوية -->
+    <!-- 📊 البوكسات العلوية (Orders + Abayas per status + Total abayas) -->
     <div class="grid md:grid-cols-3 gap-4 mb-8">
 
-      <!-- جديد -->
+      <!-- New -->
       <div class="group bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-2xl p-5 
                   flex items-center gap-4 hover:shadow-lg transition cursor-pointer">
-        <div class="bg-amber-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md">
+        <div class="bg-amber-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0">
           <span class="material-symbols-outlined text-3xl">fiber_new</span>
         </div>
-        <div>
+        <div class="min-w-0 flex-1">
           <p class="text-sm text-amber-600">{{ trans('messages.new_orders', [], session('locale')) }}</p>
           <h3 class="text-3xl font-extrabold text-amber-800" x-text="countStatus('new')"></h3>
+          <p class="text-xs text-amber-600/80 mt-1 font-medium" x-text="countAbayasByStatus('new') + ' {{ trans('messages.abayas', [], session('locale')) ?: 'abayas' }}'"></p>
         </div>
       </div>
 
-      <!-- قيد التفصيل -->
+      <!-- In progress -->
       <div class="group bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-2xl p-5 
                   flex items-center gap-4 hover:shadow-lg transition cursor-pointer">
-        <div class="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md">
+        <div class="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0">
           <span class="material-symbols-outlined text-3xl">content_cut</span>
         </div>
-        <div>
+        <div class="min-w-0 flex-1">
           <p class="text-sm text-blue-600">{{ trans('messages.in_progress', [], session('locale')) }}</p>
           <h3 class="text-3xl font-extrabold text-blue-800" x-text="countStatus('processing')"></h3>
+          <p class="text-xs text-blue-600/80 mt-1 font-medium" x-text="countAbayasByStatus('processing') + ' {{ trans('messages.abayas', [], session('locale')) ?: 'abayas' }}'"></p>
         </div>
       </div>
 
-      <!-- تم التسليم -->
+      <!-- Delivered -->
       <div class="group bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-2xl p-5 
                   flex items-center gap-4 hover:shadow-lg transition cursor-pointer">
-        <div class="bg-emerald-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md">
+        <div class="bg-emerald-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0">
           <span class="material-symbols-outlined text-3xl">check_circle</span>
         </div>
-        <div>
+        <div class="min-w-0 flex-1">
           <p class="text-sm text-emerald-600">{{ trans('messages.delivered', [], session('locale')) }}</p>
           <h3 class="text-3xl font-extrabold text-emerald-800" x-text="countStatus('delivered')"></h3>
+          <p class="text-xs text-emerald-600/80 mt-1 font-medium" x-text="countAbayasByStatus('delivered') + ' {{ trans('messages.abayas', [], session('locale')) ?: 'abayas' }}'"></p>
         </div>
       </div>
 
+    </div>
+
+    <!-- Total abayas (all statuses) -->
+    <div class="flex justify-center mb-6">
+      <p class="text-sm text-gray-500 font-medium">
+        {{ trans('messages.total_abayas', [], session('locale')) ?: 'Total abayas' }}:
+        <span class="font-bold text-gray-700" x-text="totalAbayas()"></span>
+      </p>
     </div>
 
     <!-- 🔎 البحث + زر طلب جديد + تسليم المحدد -->
@@ -548,6 +608,7 @@
         <button @click="sourceFilter='all'" :class="tabClass2('all')">{{ trans('messages.all_sources', [], session('locale')) }}</button>
         <button @click="sourceFilter='whatsapp'" :class="tabClass2('whatsapp')">{{ trans('messages.whatsapp', [], session('locale')) }}</button>
         <button @click="sourceFilter='walkin'" :class="tabClass2('walkin')">{{ trans('messages.walk_in', [], session('locale')) }}</button>
+        <button @click="sourceFilter='website'" :class="tabClass2('website')">{{ trans('messages.website', [], session('locale')) }}</button>
       </div>
 
     </div>
@@ -565,6 +626,7 @@
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[120px]">{{ trans('messages.source', [], session('locale')) }}</th>
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[110px]">{{ trans('messages.date', [], session('locale')) }}</th>
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.ago', [], session('locale')) }}</th>
+            <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[140px]">{{ trans('messages.list_number', [], session('locale')) ?: 'List / Summary' }}</th>
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.total', [], session('locale')) }}</th>
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[100px]">{{ trans('messages.paid', [], session('locale')) }}</th>
             <th class="py-3 px-3 sm:px-4 md:px-6 text-right whitespace-nowrap min-w-[110px]">{{ trans('messages.remaining', [], session('locale')) }}</th>
@@ -588,7 +650,14 @@
               </td>
 
               <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-indigo-600 whitespace-nowrap" x-text="order.order_no || '—'"></td>
-              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="order.customer"></td>
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap">
+                <div class="font-medium" x-text="order.customer"></div>
+                <template x-if="order.customer_phone">
+                  <a :href="'tel:' + order.customer_phone"
+                     class="text-xs text-indigo-500 hover:underline"
+                     x-text="order.customer_phone"></a>
+                </template>
+              </td>
 
               <!-- مصدر الطلب -->
               <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap">
@@ -601,6 +670,25 @@
               <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="formatDate(order.date)"></td>
               <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap" x-text="daysAgo(order.date)"></td>
 
+              <!-- List numbers & sending summaries per special order -->
+              <td class="py-3 px-3 sm:px-4 md:px-6 whitespace-nowrap align-top">
+                <template x-if="order.tailor_batches && order.tailor_batches.length">
+                  <div class="text-[11px] text-gray-700 leading-4">
+                    <template x-for="batch in order.tailor_batches" :key="batch.list_number + '-' + (batch.sending_summary_number || '')">
+                      <div class="mb-1">
+                        <span class="font-semibold" x-text="batch.list_number"></span>
+                        <span x-text="' (×' + (batch.quantity || 0) + ')'"></span>
+                        <br>
+                        <span x-text="batch.sending_summary_number || '—'"></span>
+                        <template x-if="batch.tailor_name">
+                          <span x-text="' - ' + batch.tailor_name"></span>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </td>
+
               <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-blue-700 whitespace-nowrap" x-text="order.total.toFixed(3) + ' ر.ع'"></td>
               <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-emerald-700 whitespace-nowrap" x-text="order.paid.toFixed(3) + ' ر.ع'"></td>
               <td class="py-3 px-3 sm:px-4 md:px-6 font-semibold text-red-600 whitespace-nowrap" x-text="(order.total - order.paid).toFixed(3) + ' ر.ع'"></td>
@@ -612,9 +700,17 @@
               <td class="py-3 px-3 sm:px-4 md:px-6 text-center whitespace-nowrap">
                 <div class="flex justify-center gap-2">
                   <button @click="openViewModal(order)"
-                          class="text-blue-600 hover:text-blue-800">
+                          class="text-blue-600 hover:text-blue-800"
+                          title="{{ trans('messages.view', [], session('locale')) ?: 'View' }}">
                     <span class="material-symbols-outlined text-base">visibility</span>
                   </button>
+
+                  <a x-show="order.status === 'new'"
+                     :href="'{{ url('special-order/edit') }}/' + order.id"
+                     class="text-amber-600 hover:text-amber-800 inline-flex"
+                     title="{{ trans('messages.edit', [], session('locale')) ?: 'Edit' }}">
+                    <span class="material-symbols-outlined text-base">edit</span>
+                  </a>
 
                   <button @click="printBill(order.id)"
                           class="text-purple-600 hover:text-purple-800"
@@ -677,7 +773,14 @@
             <div class="text-sm space-y-1 mb-3">
               <div class="flex justify-between">
                 <span class="text-gray-500">{{ trans('messages.customer', [], session('locale')) }}:</span>
-                <span class="font-medium" x-text="order.customer"></span>
+                <div class="text-right">
+                  <div class="font-medium" x-text="order.customer"></div>
+                  <template x-if="order.customer_phone">
+                    <a :href="'tel:' + order.customer_phone"
+                       class="text-xs text-indigo-500 hover:underline"
+                       x-text="order.customer_phone"></a>
+                  </template>
+                </div>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500">{{ trans('messages.source', [], session('locale')) }}:</span>
@@ -713,6 +816,11 @@
                       class="text-blue-600 hover:text-blue-800 text-xs">
                 <span class="material-symbols-outlined text-base">visibility</span>
               </button>
+              <a x-show="order.status === 'new'"
+                 :href="'{{ url('special-order/edit') }}/' + order.id"
+                 class="text-amber-600 hover:text-amber-800 text-xs inline-flex">
+                <span class="material-symbols-outlined text-base">edit</span>
+              </a>
               <button @click="printBill(order.id)"
                       class="text-purple-600 hover:text-purple-800 text-xs"
                       title="{{ trans('messages.print_bill', [], session('locale')) ?: 'Print Bill' }}">
@@ -749,7 +857,7 @@
 
     </div>
 
-    <!-- Pagination -->
+    <!-- Pagination (same as view_stock: Prev, 1 … 3 … 5, Next — window of buttons, not all pages) -->
     <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mt-6">
 
       <p class="text-sm text-gray-500">
@@ -760,29 +868,35 @@
         <span x-text="filteredOrders().length"></span>
       </p>
 
-      <div class="flex items-center gap-2 justify-end">
-        <button @click="prevPage()" 
-                class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
-                :disabled="page===1 || pageLoading">
-          {{ trans('messages.previous', [], session('locale')) }}
-        </button>
-
-        <template x-for="p in totalPages()" :key="p">
-          <button @click="goToPage(p)"
-                  :disabled="pageLoading"
-                  :class="page===p 
-                           ? 'px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm' 
-                           : 'px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm'">
-            <span x-text="p"></span>
+      <ul class="flex flex-wrap justify-center items-center gap-1.5 mt-4 list-none pl-0 max-w-full">
+        <li class="shrink-0">
+          <button @click="prevPage()"
+                  :disabled="page===1 || pageLoading"
+                  class="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg transition shrink-0 bg-white hover:bg-gray-100 border-gray-200 disabled:opacity-40 disabled:pointer-events-none disabled:bg-gray-200">
+            &laquo; {{ trans('messages.previous', [], session('locale')) }}
           </button>
+        </li>
+        <template x-for="(p, idx) in pageNumbers()" :key="typeof p === 'number' ? p : 'dot-' + idx">
+          <li class="shrink-0">
+            <span x-show="p === '...'" class="shrink-0 px-1 py-1.5 text-gray-400 text-sm">...</span>
+            <button x-show="p !== '...'"
+                    @click="goToPage(p)"
+                    :disabled="pageLoading"
+                    :class="page === p
+                      ? 'inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-md'
+                      : 'inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg bg-white hover:bg-gray-100 border-gray-200'"
+                    x-text="p">
+            </button>
+          </li>
         </template>
-
-        <button @click="nextPage()" 
-                class="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
-                :disabled="page===totalPages() || pageLoading">
-          {{ trans('messages.next', [], session('locale')) }}
-        </button>
-      </div>
+        <li class="shrink-0">
+          <button @click="nextPage()"
+                  :disabled="page >= totalPages() || pageLoading"
+                  class="inline-flex items-center justify-center min-w-[2.25rem] px-2 py-1.5 text-sm font-medium border rounded-lg transition shrink-0 bg-white hover:bg-gray-100 border-gray-200 disabled:opacity-40 disabled:pointer-events-none disabled:bg-gray-200">
+            {{ trans('messages.next', [], session('locale')) }} &raquo;
+          </button>
+        </li>
+      </ul>
 
     </div>
 

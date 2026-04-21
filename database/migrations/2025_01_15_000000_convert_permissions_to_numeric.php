@@ -2,15 +2,17 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        // Mapping of string permissions to numeric IDs
+        // Skip on fresh installs where the column does not exist
+        if (!Schema::hasColumn('users', 'permissions')) {
+            return;
+        }
+
         $permissionMap = [
             'user' => 1,
             'account' => 2,
@@ -26,7 +28,6 @@ return new class extends Migration
             'tailor' => 12,
         ];
 
-        // Get all users with permissions
         $users = DB::table('users')
             ->whereNotNull('permissions')
             ->where('permissions', '!=', '[]')
@@ -34,24 +35,21 @@ return new class extends Migration
 
         foreach ($users as $user) {
             $permissions = json_decode($user->permissions, true);
-            
+
             if (is_array($permissions)) {
                 $convertedPermissions = [];
-                
+
                 foreach ($permissions as $permission) {
-                    // Skip if already numeric (already converted)
                     if (is_numeric($permission)) {
-                        $convertedPermissions[] = (int)$permission;
+                        $convertedPermissions[] = (int) $permission;
                         continue;
                     }
-                    
-                    // Convert string to numeric ID
+
                     if (isset($permissionMap[$permission])) {
                         $convertedPermissions[] = $permissionMap[$permission];
                     }
                 }
-                
-                // Update user permissions
+
                 DB::table('users')
                     ->where('id', $user->id)
                     ->update([
@@ -61,12 +59,13 @@ return new class extends Migration
         }
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        // Mapping of numeric IDs back to string permissions
+        // Skip on fresh installs where the column does not exist
+        if (!Schema::hasColumn('users', 'permissions')) {
+            return;
+        }
+
         $reversePermissionMap = [
             1 => 'user',
             2 => 'account',
@@ -82,7 +81,6 @@ return new class extends Migration
             12 => 'tailor',
         ];
 
-        // Get all users with permissions
         $users = DB::table('users')
             ->whereNotNull('permissions')
             ->where('permissions', '!=', '[]')
@@ -90,23 +88,20 @@ return new class extends Migration
 
         foreach ($users as $user) {
             $permissions = json_decode($user->permissions, true);
-            
+
             if (is_array($permissions)) {
                 $convertedPermissions = [];
-                
+
                 foreach ($permissions as $permission) {
-                    // Convert numeric ID back to string
-                    $permissionId = is_numeric($permission) ? (int)$permission : $permission;
-                    
+                    $permissionId = is_numeric($permission) ? (int) $permission : $permission;
+
                     if (isset($reversePermissionMap[$permissionId])) {
                         $convertedPermissions[] = $reversePermissionMap[$permissionId];
                     } elseif (!is_numeric($permission)) {
-                        // If it's already a string, keep it
                         $convertedPermissions[] = $permission;
                     }
                 }
-                
-                // Update user permissions
+
                 DB::table('users')
                     ->where('id', $user->id)
                     ->update([
@@ -116,4 +111,3 @@ return new class extends Migration
         }
     }
 };
-
