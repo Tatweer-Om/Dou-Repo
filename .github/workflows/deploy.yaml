@@ -53,7 +53,12 @@ jobs:
           script: |
             set -e
             cd /opt/tatweersoft_clothing
+
             docker compose pull
             docker compose up -d
+
+            echo "Waiting for MySQL to become ready..."
+            sleep 30
+
             docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan optimize:clear
