@@ -7,14 +7,14 @@
 
 <main class="min-h-screen bg-surface" x-data="{ edit: false }">
     <header class="bg-[#f9f9f9] dark:bg-[#1a1c1c] flex justify-between items-center w-full px-8 py-4 sticky top-0 z-10">
-        {{-- <div class="flex items-center gap-6">
+        <div class="flex items-center gap-6">
             <button
                 type="button"
                 @click="$store.modals.saloonExpenseCategory = true; edit = false"
                 class="bg-gradient-to-br from-primary to-primary-container text-white px-6 py-2.5 rounded-full font-headline font-semibold text-sm transition-transform active:scale-95 duration-200">
                 {{ trans('messages.saloon_add_expense_category', [], session('locale')) }}
             </button>
-        </div> --}}
+        </div>
     </header>
 
     <div class="px-8 py-10 space-y-8">
